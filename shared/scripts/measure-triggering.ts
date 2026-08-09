@@ -29,7 +29,8 @@ import {
   type HeadlineMetric,
   type InstallState,
 } from "./lib/envelope.ts";
-import { parseFrontmatter, skillMdPath, type ParsedSkill } from "./lib/frontmatter.ts";
+import { parseFrontmatterBlock } from "../rules/lib.ts";
+import { FrontmatterError, parseFrontmatter, skillMdPath, type ParsedSkill } from "./lib/frontmatter.ts";
 import { mapWithConcurrency } from "./lib/pool.ts";
 import { ProgressReporter, type QueryProgress } from "./lib/progress.ts";
 import { runStreamingLines } from "./lib/subprocess.ts";
@@ -429,23 +430,47 @@ export async function resolveTargetFile(
   return skillMdPath(targetPath);
 }
 
+/** A frontmatter scalar as a string, matching `ParsedSkill`'s "empty when absent". */
+function stringField(value: unknown): string {
+  // `|` clips the block scalar to one trailing newline, which the write path would
+  // re-indent into a trailing blank line. The description does not end in one.
+  return typeof value === "string" ? value.trimEnd() : "";
+}
+
 /**
  * Read the artifact's `name`, `description` and full text.
  *
- * Uses the same hand-rolled reader `parseSkillMd` does, deliberately: an agent
- * definition is a markdown file with YAML frontmatter exactly as a SKILL.md is, so
- * a second reader would be a second set of quirks to keep in step. The one thing to
- * know when reading an agent this way is that a block-scalar description collapses
- * to a single space-joined line -- which is what the loop then feeds back as the
- * candidate, so an agent's `<example>` blocks survive as text but lose their line
- * breaks.
+ * Two readers, split by artifact type, because they answer to different masters. A
+ * skill or command goes through the hand-rolled reader `parseSkillMd` uses, which is
+ * bug-compatible with the Python original on purpose and whose flattening other
+ * callers depend on. An agent goes through the conformant YAML reader instead.
+ *
+ * The split exists because agent descriptions are block scalars containing blank
+ * lines -- between the opening paragraph and the `<example>` blocks that every
+ * `agents/*-reviewer.md` carries. The hand-rolled reader ends a block scalar at the
+ * first line not opening with two spaces or a tab, and a blank line opens with
+ * neither, so it stopped at the first paragraph break and returned about a fifth of
+ * the shipped description with every `<example>` missing. Measuring a fifth of a
+ * description and then writing that fifth back as the new one is the failure this
+ * split removes; it is not a style preference about line breaks.
  */
 export async function readTargetDefinition(
   targetPath: string,
   targetType: TargetType,
 ): Promise<ParsedSkill> {
   const file = await resolveTargetFile(targetPath, targetType);
-  return parseFrontmatter(await Bun.file(file).text());
+  const content = await Bun.file(file).text();
+  if (targetType !== "agent") return parseFrontmatter(content);
+
+  // Raised as the same error type the hand-rolled reader throws, so a caller's
+  // failure handling does not have to branch on which reader ran.
+  const outcome = parseFrontmatterBlock(content);
+  if (!outcome.ok) throw new FrontmatterError(`${file}: ${outcome.error}`);
+  return {
+    name: stringField(outcome.frontmatter["name"]),
+    description: stringField(outcome.frontmatter["description"]),
+    content,
+  };
 }
 
 /**

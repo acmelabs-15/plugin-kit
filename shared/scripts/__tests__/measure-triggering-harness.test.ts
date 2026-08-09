@@ -279,6 +279,57 @@ describe("resolving and reading a target definition", () => {
     // the improvement model as context about what the artifact does.
     expect(parsed.content).toContain("Body.");
   });
+
+  // The defect this pins: the hand-rolled reader ends a block scalar at the first line
+  // not opening with two spaces or a tab. A blank line opens with neither, so it stopped
+  // at the paragraph break and returned the opening sentence alone -- about a fifth of
+  // every `agents/*-reviewer.md` description, with all `<example>` blocks gone. Nothing
+  // asserted the tail survived, so a measurement of a fifth of a description looked fine,
+  // and an optimize run would have written that fifth back as the real one.
+  test("an agent description keeps everything after a blank line, examples included", async () => {
+    const file = `${root}/agents/blank-line.md`;
+    await Bun.write(
+      file,
+      [
+        "---",
+        "name: blank-line",
+        "description: |",
+        "  Use when the opening paragraph is only the first of several.",
+        "",
+        "  Do not use when a later paragraph would change the answer.",
+        "",
+        "  <example>",
+        "  user: 'a question'",
+        "  assistant: 'an answer'",
+        "  </example>",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+    );
+
+    const { description } = await readTargetDefinition(file, "agent");
+
+    expect(description).toContain("Use when the opening paragraph");
+    // Everything past the first blank line: the truncation dropped all of this.
+    expect(description).toContain("Do not use when a later paragraph");
+    expect(description).toContain("<example>");
+    expect(description).toContain("assistant: 'an answer'");
+    expect(description).toContain("</example>");
+    // The blank lines are structure, not padding -- they separate the paragraphs the
+    // router reads, so a reader that kept the text but flattened it is not a pass.
+    expect(description).toBe(
+      "Use when the opening paragraph is only the first of several.\n" +
+        "\n" +
+        "Do not use when a later paragraph would change the answer.\n" +
+        "\n" +
+        "<example>\n" +
+        "user: 'a question'\n" +
+        "assistant: 'an answer'\n" +
+        "</example>",
+    );
+  });
 });
 
 describe("trigger matching names the real skill", () => {
