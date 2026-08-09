@@ -43,3 +43,38 @@ alongside this note. Measurements taken after that fix are not comparable with t
 2026-08-08 baseline: they describe longer, differently-shaped strings. That is the
 correct outcome rather than a regression. The baseline measured what the harness
 could see; the harness can now see what ships.
+
+## The disclosure reproduction command is obsolete (2026-08-09)
+
+`MEASUREMENTS.md` reproduces the disclosure numbers with:
+
+```bash
+bun shared/scripts/optimize-disclosure.ts --skill-path skills/<name> \
+  --max-iterations 1 --holdout 0 ...
+```
+
+Those two flags were never optimizer settings. They were how the driver said "just
+measure": `--max-iterations 1` stops after the baseline sweep, `--holdout 0` stops
+the sweep splitting a set nothing is going to be selected on. Two callers arrived
+at the same workaround independently, which is the usual sign of a missing entry
+point rather than a shared preference.
+
+That entry point now exists — `shared/scripts/measure-disclosure.ts` — and
+`evals/drivers/run-measurement.ts` uses it. The sweep underneath is unchanged and
+shared: both scripts call `shared/scripts/lib/disclosure-measure.ts` for the run,
+the grading and the fold from runs into a file table, so a measurement pass and the
+optimizer's baseline cannot disagree.
+
+The command line in `MEASUREMENTS.md` is left exactly as it was. It records what was
+run on 2026-08-08 and it still works — `--max-iterations 1 --holdout 0` remains a
+valid way to drive the optimizer. Reproducing that record should use it. New
+measurements should use `measure-disclosure.ts`.
+
+Two shapes differ, so the outputs are not byte-comparable even where the numbers
+agree. `measure-disclosure.ts` writes a flat `MeasureOutput` — `body_tokens`,
+`context_tokens`, `pass_rate`, `files` — where the optimizer writes a selection:
+`baseline_*` against `best_*`, an `iterations` array, `applied_edits`. Under
+`--max-iterations 1` every one of those pairs held the same number twice, which
+invited a reader to compare them and conclude a restructure had been evaluated.
+The stored results under `evals/results/disclosure/` are in the optimizer's shape
+and stay that way.

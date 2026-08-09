@@ -29,7 +29,7 @@ const ALL_SKILLS = [
 
 const PHASES = {
   trigger: {
-    script: "skills/skill-creator/scripts/measure-triggering.ts",
+    script: "shared/scripts/measure-triggering.ts",
     defaultOut: "evals/results/baseline",
     // `--no-early-stop` is the one flag here that costs wall clock on purpose. The sweep
     // normally stops a query as soon as its verdict is settled, which never changes a
@@ -48,7 +48,7 @@ const PHASES = {
     ],
   },
   optimize: {
-    script: "skills/skill-creator/scripts/optimize-description.ts",
+    script: "shared/scripts/optimize-description.ts",
     defaultOut: "evals/results/optimize",
     args: (skill: string, out: string) => [
       "--eval-set", `evals/trigger/${skill}.json`,
@@ -65,20 +65,19 @@ const PHASES = {
     ],
   },
   disclosure: {
-    script: "skills/skill-creator/scripts/optimize-disclosure.ts",
+    script: "shared/scripts/measure-disclosure.ts",
     defaultOut: "evals/results/disclosure",
-    // --max-iterations 1 is the baseline sweep alone: it answers "which
-    // references actually get read" without paying for the restructure loop,
-    // which costs an order of magnitude more because every run does real work.
+    // The measurement entry point, not the optimizer driven with `--max-iterations 1
+    // --holdout 0`. Those flags used to mean "just measure" here, which worked but said it
+    // in the optimizer's vocabulary and left `--apply` and `--max-candidates` in reach of a
+    // driver that has no business with either. The sweep underneath is the same code.
     args: (skill: string, out: string) => [
       "--skill-path", `skills/${skill}`,
       "--scenarios", `evals/disclosure/${skill}.json`,
       "--model", "opus",
-      "--max-iterations", "1",
       "--runs-per-scenario", "1",
       "--num-workers", "5",
       "--timeout", "600",
-      "--holdout", "0",
       "--report", "none",
       "--results-dir", `${out}/${skill}`,
       "--verbose",

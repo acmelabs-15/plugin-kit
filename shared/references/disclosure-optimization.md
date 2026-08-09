@@ -4,6 +4,18 @@ Read this when a disclosure run has finished and you are deciding what to adopt,
 
 `../scripts/optimize-disclosure.ts` answers that by measuring it. It runs the skill on real evals, watches which bundled files get read and how often, counts what each run costs, and restructures the layout to cut the cost — with the expectation pass rate as the thing a restructure is not allowed to break.
 
+If you only want the numbers — which bundled files get pulled, at what rate, at what token cost — reach for `../scripts/measure-disclosure.ts` instead. Same sweep, same grading, same file table; no candidates, no selection, no `--apply`. It is the cheaper half of the run above, and the one to start with, because a table of pull rates usually tells you what to do without a loop proposing it.
+
+```bash
+bun ../scripts/measure-disclosure.ts \
+  --skill-path ../my-skill \
+  --scenarios ../my-skill/evals/evals.json \
+  --model opus \
+  --results-dir ./disclosure-runs/my-skill
+```
+
+Restructuring as well is the same command with the optimizer's name and its extra flags:
+
 ```bash
 bun ../scripts/optimize-disclosure.ts \
   --skill-path ../my-skill \
