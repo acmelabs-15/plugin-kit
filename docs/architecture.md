@@ -1,3 +1,9 @@
+---
+title: architecture
+type: note
+permalink: plugin-kit/architecture
+---
+
 # plugin-kit — Architecture & Runtime Notes
 
 Reference for the Claude Code plugin that creates, validates, benchmarks, and
@@ -13,7 +19,7 @@ optimizes agent artifacts.
 | command | ✓ | ✓ | — | — |
 | plugin | ✓ | ✓ | — | — |
 
-14 valid cells of 20.
+15 valid cells of 20.
 
 ---
 
@@ -43,7 +49,11 @@ plugin-kit/                              ← plugin root IS repo root (no build 
 │   └── plugin-creator/{SKILL.md, scripts/run.ts, references/}
 │
 ├── agents/                              ← auto-discovered
-│   └── artifact-reviewer.md
+│   ├── skill-reviewer.md                ← one reviewer per artifact kind, not merged
+│   ├── agent-reviewer.md
+│   ├── command-reviewer.md
+│   ├── mcp-reviewer.md
+│   └── plugin-reviewer.md
 │
 ├── bin/
 │   └── plugin-kit                       ← #!/usr/bin/env bun, chmod +x
@@ -109,7 +119,7 @@ plugin-kit/                              ← plugin root IS repo root (no build 
 │       ├── mcp/{valid, invalid-*}/
 │       └── plugin/{valid, invalid-*}/
 │
-├── package.json                         ← dev deps only (types, vitest)
+├── package.json                         ← dev deps only (types, tiktoken); tests are `bun test`
 ├── tsconfig.json
 ├── .gitignore
 ├── README.md
@@ -145,11 +155,13 @@ the docs note that "with version specifiers in `import` statements, even a
 `package.json` isn't necessary."
 
 ```ts
-import { z } from "zod@^4.1.0";
+import { z } from "zod@4.1.0";
 ```
 
 Without a pin, Bun resolves `latest` when no `package.json` is found up the tree,
-so the validator's behavior can change between runs with no commit.
+so the validator's behavior can change between runs with no commit. Pin the exact
+version rather than a range: `^4.1.0` still admits `4.9.x`, which reintroduces the
+same drift a commit apart.
 
 ### Verified: no `-i` flag needed
 
@@ -280,7 +292,7 @@ correctly if a URL is already in hand.
 
 ## 4. The permission pattern
 
-This is the detail that would otherwise prompt on every one of the 14 operation
+This is the detail that would otherwise prompt on every one of the 15 operation
 cells. From the Claude Code skills docs:
 
 ```yaml
@@ -464,11 +476,22 @@ at plugin root, but that safety is positional. Guard it:
 
 ```ts
 // shared/discover/__tests__/fixtures-not-discoverable.test.ts
-test("no fixture SKILL.md lives under skills/", async () => {
-  const found = [...new Glob("skills/**/SKILL.md").scanSync(pluginRoot())];
-  expect(found.filter((p) => p.includes("fixture"))).toEqual([]);
+test("discovery scan roots exclude shared/", () => {
+  expect(SCAN_ROOTS.some((r) => r === "shared" || r.startsWith("shared/"))).toBe(false);
+});
+
+test("the fixture corpus is non-empty", () => {
+  const corpus = [...new Glob("shared/fixtures/**/SKILL.md").scanSync(pluginRoot())];
+  expect(corpus.length).toBeGreaterThan(0);
 });
 ```
+
+Assert the **scan roots**, not the scan output. A test that globs `skills/**` and
+filters for `fixture` can never fail, because the corpus lives under `shared/` and
+never matches that glob in the first place — it passes by looking somewhere the
+thing it guards against cannot be. The corpus assertion is what stops the
+replacement going vacuous the same way: without it, an empty `shared/fixtures/`
+would satisfy the guard just as silently.
 
 **Do not gitignore `shared/`.** With no build step, source *is* the shipped
 artifact. The reflex to ignore anything outside `dist/` would break the plugin.

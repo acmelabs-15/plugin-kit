@@ -2,6 +2,8 @@
 
 Every script this plugin ships, and every script it teaches anyone to write, runs on Bun. One runtime, installed once, and nothing else assumed to be on the machine except git.
 
+One assumption beyond the runtime: a script that imports a pinned package needs a network on its **first** run. Bun auto-installs imported packages into a global cache during execution, so the first run on a cold cache fetches and a fully offline machine fails there. Every run after that is local. This is narrow enough not to justify a build step, but it is an assumption, so it is stated rather than left for a user to discover offline.
+
 This is a house rule rather than an ecosystem norm — Anthropic's own official plugins ship `python3` and shell hooks — so it is worth stating why rather than inheriting it:
 
 - **A plugin that mixes runtimes fails on whichever one the user is missing**, and it fails at invocation rather than at install. The user sees "the plugin is broken", not "install this first".
