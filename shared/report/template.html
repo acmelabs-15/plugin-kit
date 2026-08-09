@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run Report</title>
+  <!-- No palette here: tokens and components arrive with the app bar, exactly as
+       dashboard.html and run-page.html receive them. Local rules are page layout only. -->
+  <style>
+    .wrap{ max-width:960px; margin:0 auto; padding:0 20px 48px; }
+    section.sec:first-of-type{ border-top:0; padding-top:24px; }
+    .head-strip{ display:flex; justify-content:space-between; align-items:baseline; gap:14px;
+      flex-wrap:wrap; font-family:var(--mono); font-size:11px; color:var(--faint); margin:16px 0; }
+    .caps{ display:flex; flex-direction:column; gap:10px; margin:0; padding:0; list-style:none; }
+    .caps li{ border-left:3px solid var(--opus); background:var(--surface-2); border-radius:var(--r);
+      padding:14px 16px; font-size:13px; color:var(--muted); line-height:1.7; }
+    .findings{ display:flex; flex-direction:column; gap:10px; margin:0; padding:0; list-style:none; }
+    .findings li{ border:1px solid var(--border); background:var(--surface-2); border-radius:var(--r);
+      padding:14px 16px; font-size:14px; color:var(--text); line-height:1.6; }
+    /* The empty state is deliberately loud. A page whose narrative was never written must
+       read as unfinished, not as a page with nothing to say. */
+    .unwritten{ border:1px dashed var(--opus); background:transparent; border-radius:var(--r);
+      padding:18px 16px; font-size:13px; color:var(--opus); line-height:1.7; }
+    .tblwrap{ overflow-x:auto; }
+    .delta.up{ color:var(--good); } .delta.down{ color:var(--bad); }
+    .vt{ font-family:var(--mono); font-size:11px; }
+    .vt.good{ color:var(--good); } .vt.bad{ color:var(--bad); } .vt.warn{ color:var(--opus); }
+    .kv{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
+    .kv .k{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;
+      font-family:var(--mono); }
+    .kv .v{ font-family:var(--mono); font-size:13px; word-break:break-all; }
+    .kv > div{ border:1px solid var(--border); border-radius:var(--r); background:var(--surface-2);
+      padding:14px 16px; display:flex; flex-direction:column; gap:4px; }
+  </style>
+</head>
+<body>
+  <main class="wrap" id="root">
+    <div class="head-strip">
+      <span id="subtitle"></span>
+      <span id="clock"></span>
+    </div>
+
+    <section class="sec" id="sec-headline">
+      <h2>Headline</h2>
+      <p class="desc">The figures this run reports. Read them against the conditions below.</p>
+      <div class="g3" id="headline"></div>
+    </section>
+
+    <!--
+      THE ONE SLOT AN AGENT EDITS.
+
+      Replace the AGENT marker comment below with 3-5 <li> elements, one line each, saying
+      what this run shows. Nothing else on this page is hand-edited: every number arrived
+      embedded, so a half-finished edit here leaves an empty section rather than a page of
+      plausible figures. Leave the surrounding markup alone.
+    -->
+    <section class="sec" id="sec-findings">
+      <h2>What this run shows</h2>
+      <p class="desc">Written by hand, after reading the conditions and the caps.</p>
+      <ul class="findings" id="findings">
+        <!-- AGENT: findings -->
+      </ul>
+    </section>
+
+    <section class="sec" id="sec-run">
+      <h2>Run conditions</h2>
+      <p class="desc">What the numbers above are valid under. Two runs whose conditions
+        disagree are not a trend.</p>
+      <div class="kv" id="run"></div>
+    </section>
+
+    <section class="sec" id="sec-provenance">
+      <h2>Coverage and method</h2>
+      <p class="desc">How the numbers were arrived at, and what the run did not look at.</p>
+      <div class="kv" id="provenance"></div>
+      <h3 id="caps-heading">Coverage caps</h3>
+      <div id="caps"></div>
+    </section>
+
+    <section class="sec" id="sec-comparison" hidden>
+      <h2>Against the baseline</h2>
+      <p class="desc">Comparability is decided by the envelope's own check, never by
+        subtracting two numbers.</p>
+      <div id="comparison"></div>
+    </section>
+
+    <section class="sec" id="sec-rows" hidden>
+      <h2>Rows</h2>
+      <p class="desc">This operation's own table. Columns are whatever the rows carry.</p>
+      <div class="tblwrap"><table class="tbl" id="rows"></table></div>
+    </section>
+
+    <section class="sec" id="sec-verdicts" hidden>
+      <h2>Verdicts</h2>
+      <p class="desc">What the operation concluded, per subject, with its reason.</p>
+      <div class="tblwrap"><table class="tbl" id="verdicts"></table></div>
+    </section>
+  </main>
+
+  <script>
+    /*__EMBEDDED_DATA__*/
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    /** Values are rendered as text, never as markup: a row value is producer-supplied. */
+    function cell(value) {
+      if (value === null) return "null";
+      if (value === undefined) return "";
+      if (typeof value === "number") {
+        if (Number.isInteger(value)) return String(value);
+        return value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+      }
+      if (typeof value === "boolean") return value ? "yes" : "no";
+      if (typeof value === "string") return value;
+      return JSON.stringify(value);
+    }
+
+    /**
+     * A three-way tint from a vocabulary shared across every operation, with neutral as
+     * the default. Not keyed on the operation: `prune`, `pass` and `invalid` come from
+     * three different producers and are classified by the word, so a verdict this page has
+     * never seen renders plainly rather than being coloured by a guess.
+     */
+    const GOOD = new Set(["pass", "valid", "selected", "no-findings", "keep", "ok"]);
+    const BAD = new Set(["fail", "invalid", "unsound", "error", "failed"]);
+    const WARN = new Set(["warned", "not-checked", "unknown", "prune", "inline", "scored"]);
+    function verdictClass(verdict) {
+      const word = String(verdict).toLowerCase();
+      if (GOOD.has(word)) return "vt good";
+      if (BAD.has(word)) return "vt bad";
+      if (WARN.has(word)) return "vt warn";
+      return "vt";
+    }
+
+    function renderKeyValues(host, entries) {
+      host.replaceChildren();
+      for (const [key, value] of entries) {
+        const box = el("div");
+        box.append(el("span", "k", key), el("span", "v", cell(value)));
+        host.append(box);
+      }
+    }
+
+    function renderHeadline(host, metrics) {
+      host.replaceChildren();
+      if (metrics.length === 0) {
+        host.append(el("div", "unwritten", "This run reported no headline figures."));
+        return;
+      }
+      for (const metric of metrics) {
+        const box = el("div", "metric");
+        box.append(el("div", "ml", metric.label), el("div", "mv", cell(metric.value)));
+        const foot = el("div", "mf", metric.unit);
+        box.append(foot);
+        if (typeof metric.delta === "number") {
+          const sign = metric.delta > 0 ? "+" : "";
+          const tag = el("div", "mf delta " + (metric.delta >= 0 ? "up" : "down"),
+            sign + cell(metric.delta) + " vs baseline");
+          box.append(tag);
+        }
+        host.append(box);
+      }
+    }
+
+    function renderCaps(host, caps) {
+      host.replaceChildren();
+      if (caps.length === 0) {
+        // Said out loud. An empty caps list is a claim -- "the run looked at everything it
+        // was pointed at" -- and a blank space would read as the claim not having been made.
+        host.append(el("div", "note",
+          "No coverage caps were recorded. The run reports that it looked at everything it " +
+          "was pointed at, with nothing capped, skipped or stopped early."));
+        return;
+      }
+      const list = el("ul", "caps");
+      for (const cap of caps) list.append(el("li", undefined, cap));
+      host.append(list);
+    }
+
+    function renderTable(table, columns, rows) {
+      table.replaceChildren();
+      const head = el("thead");
+      const headRow = el("tr");
+      for (const column of columns) {
+        headRow.append(el("th", column.numeric ? "n" : undefined, column.label));
+      }
+      head.append(headRow);
+      const body = el("tbody");
+      for (const row of rows) {
+        const tr = el("tr");
+        for (const column of columns) {
+          tr.append(el("td", column.numeric ? "n" : undefined, cell(row[column.key])));
+        }
+        body.append(tr);
+      }
+      table.append(head, body);
+    }
+
+    function renderVerdicts(table, verdicts) {
+      table.replaceChildren();
+      const head = el("thead");
+      const headRow = el("tr");
+      for (const label of ["Subject", "Verdict", "Reason"]) headRow.append(el("th", undefined, label));
+      head.append(headRow);
+      const body = el("tbody");
+      for (const verdict of verdicts) {
+        const tr = el("tr");
+        tr.append(el("td", undefined, verdict.subject));
+        tr.append(el("td", verdictClass(verdict.verdict), verdict.verdict));
+        tr.append(el("td", undefined, verdict.reason));
+        body.append(tr);
+      }
+      table.append(head, body);
+    }
+
+    function renderComparison(host, comparison) {
+      host.replaceChildren();
+      const header = el("div", "head-strip");
+      header.append(el("span", undefined, "baseline " + comparison.baselineRunId));
+      header.append(el("span", undefined, comparison.baselineStartedAt));
+      host.append(header);
+      if (!comparison.comparable) {
+        const note = el("div", "note warn");
+        note.append(el("div", "nb", "no delta drawn"));
+        note.append(el("div", undefined, comparison.explanation));
+        host.append(note);
+        return;
+      }
+      if (comparison.advisory.length > 0) {
+        const note = el("div", "note");
+        note.append(el("div", "nb", "advisory"));
+        note.append(el("div", undefined,
+          "Comparable, but these differ between the runs: " + comparison.advisory.join(", ") + "."));
+        host.append(note);
+      }
+      const table = el("table", "tbl");
+      renderTable(table, [
+        { key: "label", label: "Metric", numeric: false },
+        { key: "baseline", label: "Baseline", numeric: true },
+        { key: "current", label: "This run", numeric: true },
+        { key: "delta", label: "Delta", numeric: true },
+      ], comparison.deltas);
+      const wrap = el("div", "tblwrap");
+      wrap.append(table);
+      host.append(wrap);
+    }
+
+    /**
+     * The findings slot is the one thing the script does not fill in. It only reports on
+     * it: an untouched slot renders as an unmistakable empty state rather than as a
+     * section that happens to look short.
+     */
+    function checkFindings() {
+      const host = document.getElementById("findings");
+      if (host.querySelector("li") !== null) return;
+      host.append(el("li", "unwritten",
+        "No findings written. This page's numbers are complete and its narrative is not — " +
+        "3-5 one-line items belong in the AGENT slot in the source."));
+    }
+
+    function render(data) {
+      document.title = data.run.operation + " — " + data.run.target;
+      document.getElementById("subtitle").textContent =
+        data.run.operation + " · " + data.run.artifact + " · " + data.run.target;
+      document.getElementById("clock").textContent = "rendered " + data.generatedAt;
+
+      renderHeadline(document.getElementById("headline"), data.headline);
+      renderKeyValues(document.getElementById("run"), data.runFields);
+      renderKeyValues(document.getElementById("provenance"), data.provenanceFields);
+      renderCaps(document.getElementById("caps"), data.provenance.caps);
+
+      if (data.comparison !== null) {
+        document.getElementById("sec-comparison").hidden = false;
+        renderComparison(document.getElementById("comparison"), data.comparison);
+      }
+      if (data.rows.length > 0) {
+        document.getElementById("sec-rows").hidden = false;
+        renderTable(document.getElementById("rows"), data.columns, data.rows);
+      }
+      if (data.verdicts.length > 0) {
+        document.getElementById("sec-verdicts").hidden = false;
+        renderVerdicts(document.getElementById("verdicts"), data.verdicts);
+      }
+      checkFindings();
+    }
+
+    render(EMBEDDED_DATA);
+  </script>
+</body>
+</html>
