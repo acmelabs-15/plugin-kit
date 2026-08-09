@@ -130,6 +130,28 @@ Six corrections applied across `docs/architecture.md` and `shared/references/pur
 - A regression test asserting an example block survives the read is part of the fix; the defect was invisible because nothing asserted it
 - Whether SKILL.md descriptions are affected the same way is being investigated but explicitly not acted on: widening to skills is a separate decision
 
+### Event 15 — agent read path fixed, commit `54dba23`
+
+- Agent branch of `readTargetDefinition` routed to the conformant reader already present at `shared/rules/lib.ts:72`; `shared/scripts/lib/frontmatter.ts` verified unchanged by diff
+- Read lengths restored: 1875, 2236, 2529, 2466, 2473, with `<example>` blocks present in all five
+- Write path verified a fixed point across two passes, so no separate guard was built
+- Regression test added and confirmed to fail against the old reader rather than merely pass against the new one; the defect survived because nothing asserted the tail
+- Suite 1,269 to 1,270 pass, 0 fail, typecheck clean
+
+### Event 16 — the same defect affects four of five skills
+
+- Verified independently, whitespace-collapsed so the newline-versus-space join is not miscounted as loss: `skill-creator` 947 to 567 (40%), `command-creator` 832 to 586 (30%), `plugin-creator` 891 to 688 (23%), `agent-creator` 942 to 735 (22%), `mcp-creator` 943 to 943 (0%)
+- Confirmed identical root cause rather than a lookalike: `skills/skill-creator/SKILL.md` carries `description: |` at line 9, content at 10, a blank line at 11, and a second paragraph at 12 the reader never reaches
+- Evidence-integrity consequence: the 2026-08-08 triggering table in `evals/MEASUREMENTS.md` is presented as executed measurement, and for four of five skills it measured a string 22 to 40 percent shorter than what ships. All five had paragraph breaks flattened to spaces, so even the unaffected skill was measured in a different shape than it ships
+
+### Event 17 — decision locked: same call-site fix for skills, plus a mapping note
+
+- Skill branch routed to the conformant reader on the same reasoning as agents; `parseSkillMd` and every other caller of the hand-rolled parser stay bug-compatible
+- `evals/MEASUREMENT-CAVEATS.md` records what the 2026-08-08 run actually measured, beside the record rather than inside it, because a measurement record is never edited to match a later reality
+- Accepted consequence: measurements taken after the fix are not comparable with the 2026-08-08 baseline. That baseline measured strings that do not ship, so the loss of comparability is the correct outcome rather than a regression
+- Rejected: reflowing the four SKILL.md descriptions to remove blank lines, which would contort authoring around a parser defect and let the next paragraph break silently reintroduce the truncation
+- Open and delegated for report only: whether the third target type, `command`, is affected. No `commands/` directory appears to exist, which would make that branch dead in practice
+
 ## Observations
 
 ### Session infrastructure
