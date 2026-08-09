@@ -9,8 +9,10 @@ bun ../scripts/optimize-disclosure.ts \
   --skill-path ../my-skill \
   --scenarios ../my-skill/evals/evals.json \
   --model opus \
-  --results-dir ../my-skill/evals/results/disclosure
+  --results-dir ./disclosure-runs/my-skill
 ```
+
+**`--results-dir` must point outside the skill.** The run scans the skill with `**/*` and excludes nothing, so results written inside it become bundled files the next run measures as part of the artifact — the tool would be measuring its own output. The winning layout is copied to `<results-dir>/best-layout/` by default, and a target that overlaps the skill in either direction is refused before the loop spends a model call, because that copy deletes its destination first.
 
 `--scenarios` is spelled that way on the command line but takes the `evals.json` you already have — `{skill_name, evals: [{id, prompt, expectations}]}` — or a bare array of the same rows; scenario and eval are the same thing here. Those `expectations` are the guardrail, and a set with none leaves the loop free to strip the skill to nothing and call it an improvement, which is why the run warns loudly when it finds none.
 

@@ -62,10 +62,12 @@ import {
   writeEnvelope,
 } from "../lib/envelope.ts";
 import {
+  applyTargetCollidesWithSource,
   buildDisclosureEnvelope,
   classifyRun,
   createRunTally,
   DEFAULT_GRADER_MODEL,
+  layoutDescription,
   materializeCandidate,
   measureWithGate,
   OPTIMIZE_FLAGS,
@@ -2052,5 +2054,93 @@ describe("classifyRun and createRunTally", () => {
     const taken = tally.snapshot();
     tally.record(run());
     expect(taken.measured).toBe(1);
+  });
+});
+
+describe("layoutDescription", () => {
+  let root = "";
+
+  beforeEach(async () => {
+    root = `${process.env["TMPDIR"] ?? "/tmp"}/disclosure-desc-${crypto.randomUUID().slice(0, 8)}`;
+    await Bun.write(`${root}/.keep`, "");
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  // The read this pins reaches every scenario copy the loop installs, so a truncated one
+  // makes the whole run describe an artifact nobody ships. It had no coverage because the
+  // sweep around it spawns `claude`; naming the read is what made it reachable.
+  test("keeps everything after a blank line, so scenarios install the shipped description", async () => {
+    const skill = `${root}/blank-line-skill`;
+    await Bun.write(
+      `${skill}/SKILL.md`,
+      [
+        "---",
+        "name: blank-line-skill",
+        "description: |",
+        "  Use when the first paragraph is only part of the trigger.",
+        "",
+        "  Do not use when the second paragraph rules the case out.",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+    );
+
+    expect(await layoutDescription(skill)).toBe(
+      "Use when the first paragraph is only part of the trigger.\n" +
+        "\n" +
+        "Do not use when the second paragraph rules the case out.",
+    );
+  });
+});
+
+describe("applyTargetCollidesWithSource", () => {
+  // `--apply <source>` used to `rm -rf` the skill under test and copy a workspace layout
+  // over it. The old guard compared `best_layout_path` to the source and never looked at
+  // the apply target at all, so every case below destroyed something.
+  test("the source skill itself is refused", () => {
+    expect(applyTargetCollidesWithSource("skills/skill-creator", "skills/skill-creator")).toBe(true);
+  });
+
+  test("an ancestor is refused, so --apply skills cannot remove every skill", () => {
+    expect(applyTargetCollidesWithSource("skills", "skills/skill-creator")).toBe(true);
+    expect(applyTargetCollidesWithSource(".", "skills/skill-creator")).toBe(true);
+    expect(applyTargetCollidesWithSource("/", "skills/skill-creator")).toBe(true);
+  });
+
+  // Four spellings of one directory. A string compare reads them as four different places
+  // and lets three of them through.
+  test("path form does not let the same directory through", () => {
+    const source = "skills/skill-creator";
+    expect(applyTargetCollidesWithSource("skills/skill-creator/", source)).toBe(true);
+    expect(applyTargetCollidesWithSource("./skills/skill-creator", source)).toBe(true);
+    expect(applyTargetCollidesWithSource(`${process.cwd()}/skills/skill-creator`, source)).toBe(true);
+    expect(applyTargetCollidesWithSource("skills/other/../skill-creator", source)).toBe(true);
+    // And the mirror: an absolute source named relatively by --apply.
+    expect(
+      applyTargetCollidesWithSource("skills/skill-creator", `${process.cwd()}/skills/skill-creator`),
+    ).toBe(true);
+  });
+
+  test("a directory inside the skill is refused, since that writes to the source too", () => {
+    expect(applyTargetCollidesWithSource("skills/skill-creator/references", "skills/skill-creator")).toBe(
+      true,
+    );
+  });
+
+  // The guard has to stay narrow enough to be useful: `rm -rf` on a genuine output
+  // directory is the normal case and the whole point of --apply.
+  test("a real output directory is allowed", () => {
+    const source = "skills/skill-creator";
+    expect(applyTargetCollidesWithSource("evals/results/2026-08-09/best-layout", source)).toBe(false);
+    expect(applyTargetCollidesWithSource("/tmp/best-layout", source)).toBe(false);
+    // A sibling whose name merely starts with the source's, which a prefix check without a
+    // separator would refuse.
+    expect(applyTargetCollidesWithSource("skills/skill-creator-out", source)).toBe(false);
+    expect(applyTargetCollidesWithSource("skills/skill-creator2", source)).toBe(false);
   });
 });

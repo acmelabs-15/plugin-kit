@@ -28,9 +28,9 @@
 
 import { cp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 
 import { ensureDashboard, openInBrowser } from "./lib/browser.ts";
-import { parseSkillMd } from "./lib/frontmatter.ts";
 import { mapWithConcurrency } from "./lib/pool.ts";
 import { ProgressReporter, projectRemainingMs } from "./lib/progress.ts";
 import { formatPercent } from "./lib/pyfloat.ts";
@@ -87,7 +87,7 @@ import {
   type TokenizerKind,
   type Verdict,
 } from "./lib/envelope.ts";
-import { installSkillForTrigger } from "./measure-triggering.ts";
+import { installSkillForTrigger, readTargetDefinition } from "./measure-triggering.ts";
 import { flagBoolean, flagNumber, flagString, parseCli, requireFlag } from "./measure-triggering.ts";
 
 // ---------------------------------------------------------------------------
@@ -542,6 +542,24 @@ export function setGraderBare(enabled: boolean): void {
 // Measuring a whole layout
 // ---------------------------------------------------------------------------
 
+/**
+ * The description every scenario copy of `skillDir` will be installed with.
+ *
+ * Named rather than inlined at its one call site so the loop's read is reachable from a
+ * test: the sweep around it spawns `claude`, so an inlined read had no coverage, and that
+ * is exactly how it came to be wrong.
+ *
+ * Through the conformant reader, not `parseSkillMd`. That one ends a block scalar at the
+ * first line not opening with two spaces or a tab, and a blank line opens with neither, so
+ * a description with a paragraph break was truncated there -- four of five shipped skills,
+ * losing 22-40%. This value flows into every scenario copy the loop installs, so the loop
+ * was reporting savings and pass rates for an artifact nobody ships.
+ */
+export async function layoutDescription(skillDir: string): Promise<string> {
+  const { description } = await readTargetDefinition(skillDir, "skill");
+  return description;
+}
+
 interface MeasureParams {
   readonly skillDir: string;
   readonly skillName: string;
@@ -577,7 +595,7 @@ async function measureLayout(params: MeasureParams): Promise<readonly ScenarioRu
   // Read once for the whole sweep. Every attempt installs its own throwaway copy of this
   // layout, but they all install the SAME description, so reading it per attempt was one
   // guaranteed-identical disk round trip per run.
-  const { description } = await parseSkillMd(params.skillDir);
+  const description = await layoutDescription(params.skillDir);
 
   return await mapWithConcurrency(
     attempts,
@@ -911,7 +929,10 @@ interface MeasuredLayout {
 
 export async function optimizeDisclosure(params: OptimizeParams): Promise<OptimizeOutput> {
   const counter = await loadTokenCounter();
-  const { name: skillName } = await parseSkillMd(params.skillPath);
+  // Same reader as the description read in `measureLayout`, for the same reason. `name` is
+  // a plain scalar so the two readers agree on every skill shipped today, but agreeing by
+  // luck is not a property worth keeping: a quoted or folded `name` would diverge silently.
+  const { name: skillName } = await readTargetDefinition(params.skillPath, "skill");
   const [trainScenarios, holdoutScenarios] = splitScenarios(params.scenarios, params.holdout);
   const trainIds = new Set(trainScenarios.map((scenario) => scenario.id));
   const hasHoldout = holdoutScenarios.length > 0;
@@ -2006,6 +2027,35 @@ export const OPTIMIZE_FLAGS: Spec = {
   help: { kind: "boolean", short: "h", help: "Show this message" },
 };
 
+/**
+ * Whether copying the selected layout to `applyTo` would destroy the source skill.
+ *
+ * `--apply` is destructive by construction: the target is `rm -rf`ed before the layout is
+ * copied into it, so a target that overlaps the source deletes the artifact under test.
+ * `--apply skills/skill-creator` removed the source; `--apply skills` removed every skill
+ * in the repository.
+ *
+ * Overlap is tested in BOTH directions on RESOLVED ABSOLUTE paths. Both directions because
+ * a target containing the source destroys it wholesale and a target inside the source
+ * destroys part of it, and the documented invariant -- the source is never written to --
+ * has to hold for both. Resolved because `skills/skill-creator`, `./skills/skill-creator`,
+ * `skills/skill-creator/` and the absolute spelling are one directory that a string compare
+ * reads as four.
+ *
+ * A genuine output directory is neither inside the skill nor above it, so the normal case
+ * -- the default `<results-dir>/best-layout` -- is untouched by this.
+ */
+export function applyTargetCollidesWithSource(applyTo: string, skillPath: string): boolean {
+  const target = resolve(applyTo);
+  const source = resolve(skillPath);
+  if (target === source) return true;
+  // Trailing separator so `/a/bc` is not read as living inside `/a/b`. `resolve` only ever
+  // returns a trailing slash for the filesystem root, where the guard still has to hold.
+  const contains = (parent: string, child: string): boolean =>
+    child.startsWith(parent.endsWith("/") ? parent : `${parent}/`);
+  return contains(target, source) || contains(source, target);
+}
+
 async function main(): Promise<void> {
   const { flags } = parseCli(OPTIMIZE_FLAGS, USAGE);
 
@@ -2027,6 +2077,21 @@ async function main(): Promise<void> {
 
   const resultsRoot = flagString(flags, "results-dir");
   const resultsDir = resultsRoot === undefined ? undefined : `${resultsRoot}/${timestamp("-")}`;
+
+  // Resolved and checked HERE, before the loop spends a single model call. The copy happens
+  // at the end of the run, but an operator who mistyped `--apply` should learn that now
+  // rather than after paying for a full sweep.
+  const applyTo =
+    flagString(flags, "apply") ?? (resultsDir === undefined ? undefined : `${resultsDir}/best-layout`);
+  if (applyTo !== undefined && applyTargetCollidesWithSource(applyTo, skillPath)) {
+    console.error(
+      `Error: --apply ${applyTo} resolves to ${resolve(applyTo)}, which overlaps the source ` +
+        `skill at ${resolve(skillPath)}. The apply target is deleted before the selected ` +
+        `layout is copied into it, so this would destroy the artifact under test. Name a ` +
+        `directory outside the skill.`,
+    );
+    process.exit(1);
+  }
 
   const report = flagString(flags, "report") ?? "auto";
   let liveReportPath: string | undefined;
@@ -2088,10 +2153,10 @@ async function main(): Promise<void> {
     onRunOutcome: tally.record,
   });
 
-  // The selected layout is COPIED to wherever the operator asked for it. The source skill
-  // is never written to, so adopting the result stays a deliberate act -- a diff someone
-  // reads -- rather than something that already happened while they were watching a bar.
-  const applyTo = flagString(flags, "apply") ?? (resultsDir === undefined ? undefined : `${resultsDir}/best-layout`);
+  // The selected layout is COPIED to wherever the operator asked for it, and `--apply` was
+  // refused up front if that target overlaps the source skill in either direction. So the
+  // source is never written to, and adopting the result stays a deliberate act -- a diff
+  // someone reads -- rather than something that already happened while they watched a bar.
   let appliedTo: string | null = null;
   if (applyTo !== undefined && output.best_layout_path !== skillPath) {
     await rm(applyTo, { recursive: true, force: true });
