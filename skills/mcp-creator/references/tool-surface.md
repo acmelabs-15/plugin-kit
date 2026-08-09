@@ -217,7 +217,7 @@ So read what the server *does*: every tool name, every input schema with its req
 
 - The neighbouring tool on the same server. `create_issue` versus `update_issue` versus `search_issues` is the discrimination that matters, and it is invisible to a set of clear positives.
 - Built-ins that overlap. A server exposing `read_file` or `run_query` competes with `Read` and `Bash`, and whether the model should prefer yours is a design question whose answer belongs in the description.
-- Co-installed neighbours. `bun ../../../shared/scripts/validate.ts --target-type skill <skill-dir> --with-environment` names installed skills competing for the same vocabulary; it reads skill descriptions, so point it at the skill fronting this server, because the neighbours it names contest your tool's scenarios too.
+- Co-installed neighbours. `bun ../../../shared/validate/validate.ts --target-type skill <skill-dir> --with-environment` names installed skills competing for the same vocabulary; it reads skill descriptions, so point it at the skill fronting this server, because the neighbours it names contest your tool's scenarios too.
 
 **Run each scenario headless with the server connected**, several times, because tool selection is sampled rather than deterministic and one run tells you close to nothing:
 
@@ -227,7 +227,7 @@ claude -p "<scenario query>" --output-format json > run.json
 
 Load an uninstalled plugin from disk with `claude --plugin-dir <plugin-dir>`. A positive passes when a tool-use block names the intended tool; a hard negative passes when none does.
 
-**Split, and select on the held-out half.** The description-optimization loop in `../../../shared/scripts/` runs exactly this shape for a skill description — 60/40 split, several runs per query, candidates proposed from what the train split failed, selection on held-out. It is **not** a drop-in here: it parses a `SKILL.md` and rewrites its `description`, and tool descriptions live in the server's own source rather than in the `.mcp.json` entry. Copy the shape. Select on held-out for the same reason it does — a surface tuned until it aces the scenarios that motivated it has usually just memorized them.
+**Split, and select on the held-out half.** The description-optimization loop in `../../../shared/operations/` runs exactly this shape for a skill description — 60/40 split, several runs per query, candidates proposed from what the train split failed, selection on held-out. It is **not** a drop-in here: it parses a `SKILL.md` and rewrites its `description`, and tool descriptions live in the server's own source rather than in the `.mcp.json` entry. Copy the shape. Select on held-out for the same reason it does — a surface tuned until it aces the scenarios that motivated it has usually just memorized them.
 
 ---
 

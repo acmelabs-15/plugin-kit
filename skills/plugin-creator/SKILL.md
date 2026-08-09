@@ -208,7 +208,7 @@ Then check the four listings — `/help`, `/agents`, `/hooks`, `/mcp` — for ev
 **Model-judged: do the components route correctly together?** Whether each fires on the right request is per-component measurement, and each sibling creator owns that loop — triggering for a skill or command, delegation for an agent, tool selection for an MCP surface. None of them sees **whether they collide**: two skills that each score well alone will split each other's triggers once co-installed, and neither author's numbers show it.
 
 ```bash
-bun ../../shared/scripts/validate.ts --target-type skill <plugin>/skills/<name> --extended --with-environment
+bun ../../shared/validate/validate.ts --target-type skill <plugin>/skills/<name> --extended --with-environment
 ```
 
 `--with-environment` is what reads the installed set; without it that half is skipped and says so. Run it per skill, including against the plugin's own siblings, since a pushy description crowds out the neighbours it shipped with. Then run each component's trigger set with the whole plugin installed rather than one at a time: a query written for one skill that fires another is a collision, invisible when the two are measured apart.

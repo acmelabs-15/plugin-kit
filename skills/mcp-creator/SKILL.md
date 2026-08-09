@@ -194,16 +194,16 @@ Two halves, and only one is a sample. Getting that backwards is the usual mistak
 
 **Model-judged: tool selection.** Given the descriptions the server advertises, does the model pick the right tool for a task? A routing decision, measurable the way skill triggering is and more directly, since the transcript carries the tool call itself rather than a consult to interpret.
 
-Synthesize from the tool list and the schemas, never from the descriptions you are about to change: scenarios drawn from a description certify it against itself, and a capability the descriptions omit produces no scenario, is never penalized, and is the defect you were hunting. The scenario builder in `../../shared/scripts/` stops before generating, so you can correct its reading first:
+Synthesize from the tool list and the schemas, never from the descriptions you are about to change: scenarios drawn from a description certify it against itself, and a capability the descriptions omit produces no scenario, is never penalized, and is the defect you were hunting. The scenario builder in `../../shared/operations/` stops before generating, so you can correct its reading first:
 
 ```bash
-bun ../../shared/scripts/synthesize-scenarios.ts \
+bun ../../shared/operations/synthesize-scenarios.ts \
   --target <path-to-.mcp.json> --target-type mcp --inventory-only
 ```
 
 It finds a tool list only where the entry points at a local implementation it can follow — a `.mcp.json` says how to *reach* a server, not what it exposes — and says so when it cannot, in which case paste in the `/mcp` listing. Put the inventory in front of the user first: a capability they confirm that no description mentions is a finding before a single scenario runs.
 
-Then run each scenario headless several times, since selection is sampled and one run says almost nothing, and select on a held-out split rather than on the scenarios that motivated the rewrite. Read `references/tool-surface.md`, section "Measuring whether the surface routes", before that first run — hard-negative sources, the run command, and why the description loop in `../../shared/scripts/` is not a drop-in here. `../../shared/references/running-detached.md` covers launching a long run so it survives the turn that started it.
+Then run each scenario headless several times, since selection is sampled and one run says almost nothing, and select on a held-out split rather than on the scenarios that motivated the rewrite. Read `references/tool-surface.md`, section "Measuring whether the surface routes", before that first run — hard-negative sources, the run command, and why the description loop in `../../shared/operations/` is not a drop-in here. `../../shared/references/running-detached.md` covers launching a long run so it survives the turn that started it.
 
 **Grade it rather than count it.** One rate over the whole set hides which tool is failing. The result worth producing is a per-tool row — how often its own scenarios chose it, which tool won when it lost, how often it was picked for a hard negative — and then a verdict naming the weakest tool and the change that would raise it. The next section of that same file, "The scoring pass", has the columns and what each failure pattern asks for.
 

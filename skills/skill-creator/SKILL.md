@@ -77,7 +77,7 @@ A skill's contents should not surprise a user who has read its description: no m
 Cheap checks before spending eval budget on a draft. Run it, fix what it reports, rerun — the fix is what introduces the next dangling reference, so one clean pass on the first draft says nothing about the fifth.
 
 ```bash
-bun ../../shared/scripts/validate.ts --target-type skill <skill-dir> --extended --with-environment
+bun ../../shared/validate/validate.ts --target-type skill <skill-dir> --extended --with-environment
 ```
 
 Frontmatter, body size, dangling references, and Bun purity where the skill ships scripts. `--extended` permits the Claude Code extensions a plugin-bundled skill carries; bare, it checks the six standardized fields alone, the right question only for a `.skill` bundle. `--with-environment` adds the collision check over the installed set; it refuses rather than reporting clean when it cannot read that set, and without the flag the report says so.
@@ -148,7 +148,7 @@ As each completion notification arrives — not batched afterwards, see Gotchas 
 2. **Aggregate**, from the skill's directory:
 
    ```bash
-   bun ../../shared/scripts/aggregate-results.ts evals/results/iteration-N --skill-name <name>
+   bun ../../shared/operations/aggregate-results.ts evals/results/iteration-N --skill-name <name>
    ```
 
    This writes `benchmark.json` and `benchmark.md` with pass rate, time and tokens per configuration, each as mean ± stddev plus the delta from the configuration under test, so a positive delta means the skill helped. It exits non-zero when nothing was graded. If you ever build `benchmark.json` by hand, read `../../shared/references/schemas.md` first: the viewer matches field names literally and renders zeros rather than erroring, so `config` for `configuration` gives a clean, wrong report.
@@ -158,7 +158,7 @@ As each completion notification arrives — not batched afterwards, see Gotchas 
 4. **Launch the viewer.**
 
    ```bash
-   nohup bun ../../shared/eval-viewer/generate-review.ts evals/results/iteration-N \
+   nohup bun ../../shared/report/generate-review.ts evals/results/iteration-N \
      --skill-name "my-skill" --benchmark evals/results/iteration-N/benchmark.json \
      > /dev/null 2>&1 &
    ```
@@ -214,7 +214,7 @@ The same loop measures a subagent's delegation (`--target-type agent`) and a sla
 Description optimization decides whether the skill is reached. This decides what it costs once it is, and it is the same shape of loop: measure, propose, re-measure, select on a held-out split. The evidence is the **pull rate** — how often each bundled file was actually read — with expectation pass rate alongside as the guardrail, since a restructure that cuts tokens and breaks the work is a regression rather than an optimization.
 
 ```bash
-bun ../../shared/scripts/optimize-disclosure.ts --skill-path <skill-dir> --scenarios evals/evals.json
+bun ../../shared/operations/optimize-disclosure.ts --skill-path <skill-dir> --scenarios evals/evals.json
 ```
 
 Read `../../shared/references/disclosure-optimization.md` when the run finishes and you are deciding what to adopt: it has the verdict table the report prints against, where *prune* and *signpost* look identical in the data and need opposite fixes. Read `../../shared/references/progressive-disclosure.md` instead when you are doing this by judgement — it is the doctrine the script automates, including why a pointer without a condition is the usual reason a file goes unread.
@@ -229,7 +229,7 @@ Four questions that arrive at the end and are much cheaper answered at the start
 - **Is it a standalone skill to hand over?** Package it and point the user at the resulting `.skill` path — only where the `present_files` tool exists to deliver it, since otherwise there is nowhere for the file to go.
 
   ```bash
-  bun ../../shared/scripts/package-skill.ts <path/to/skill-directory>
+  bun ../../shared/tools/package-skill.ts <path/to/skill-directory>
   ```
 
   The packager refuses a skill carrying `model` or another extension, and `--extended` produces a bundle Claude Code installs and the other two reject. Read `references/skill-frontmatter.md` when the user wants one bundle that goes everywhere: the way out is `metadata:`, not the flag.

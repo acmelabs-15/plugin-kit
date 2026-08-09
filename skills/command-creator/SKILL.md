@@ -199,7 +199,7 @@ A command's rendering is deterministic: substitution and injected output either 
 Derive the invocations to test from what the command *does* — the argument declarations, the injected commands, the branches in the body — rather than from how it describes itself. Generating them from the description you are about to judge is circular: they inherit its vocabulary, so a capability the description never mentions is never probed and never penalised. One command does that reading and stops before generating, so you can correct the inventory first:
 
 ```bash
-bun ../../shared/scripts/synthesize-scenarios.ts \
+bun ../../shared/operations/synthesize-scenarios.ts \
   --target <command-file-or-skill-dir> --target-type command --inventory-only
 ```
 
@@ -214,7 +214,7 @@ If the command carries `disable-model-invocation: true`, there is nothing statis
 Otherwise the command is competing for triggers exactly like a skill, and the same loop applies:
 
 ```bash
-bun ../../shared/scripts/optimize-description.ts \
+bun ../../shared/operations/optimize-description.ts \
   --eval-set <path-to-trigger-eval.json> \
   --skill-path <path-to-command-as-a-skill-directory> \
   --model <model-id-powering-this-session> \
@@ -233,7 +233,7 @@ The validator's `--with-environment` half is worth a run when the command ships 
 Before spending eval budget, run the `skill-creator:command-reviewer` agent on the file. It reads statically and never invokes anything, which is why it complements measurement rather than replacing it: it catches an argument the body references but the frontmatter never declares, an unreachable invocation combination, an exclamation mark in a position that will not be recognised, an injected command that leaks or stalls, and a command that has outgrown the layout.
 
 ```bash
-bun ../../shared/scripts/validate.ts --target-type command <dir> --extended --with-environment
+bun ../../shared/validate/validate.ts --target-type command <dir> --extended --with-environment
 ```
 
 Frontmatter, the argument contract, and the fail-open flags; `--with-environment` adds the collision check and refuses rather than reporting clean when it cannot read the installed set. Drop `--extended` to check the portable field set instead — the right question only when the file is headed for claude.ai, where the extension fields are a hard error. For a command staying in Claude Code, a bare-form failure is the expected result rather than a defect.

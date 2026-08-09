@@ -45,7 +45,7 @@ The plugin-level question is the one **no per-component loop can see from inside
 **Step 1 — the static sweep.** Point the overlap checker at each skill in the plugin:
 
 ```bash
-bun ../../../shared/scripts/validate.ts --target-type skill <plugin>/skills/<name> --extended --with-environment
+bun ../../../shared/validate/validate.ts --target-type skill <plugin>/skills/<name> --extended --with-environment
 ```
 
 It flags a neighbour that both shares domain vocabulary and uses universal-quantifier phrasing, because that conjunction is what identifies a description that will actually steal triggers rather than merely sit nearby. Run it against the installed set *and* read its output for the plugin's own siblings: a pushy description crowds out the neighbours its own author shipped alongside it, which is the one collision entirely within your control.

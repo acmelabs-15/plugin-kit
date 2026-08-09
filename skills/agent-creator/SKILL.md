@@ -140,7 +140,7 @@ Read `references/delegation.md` when you write those blocks, and again when a fi
 Two cheap checks before spending eval budget — the bundled validator on the definition itself, and the first-party one on the plugin around it:
 
 ```bash
-bun ../../shared/scripts/validate.ts --target-type agent <agent-file>
+bun ../../shared/validate/validate.ts --target-type agent <agent-file>
 claude plugin validate <plugin-path> --strict
 ```
 
@@ -163,7 +163,7 @@ Hard negatives have to be genuinely hard or the eval certifies everything: an ea
 One command does all three readings and the neighbour sweep, then stops before generating anything:
 
 ```bash
-bun ../../shared/scripts/synthesize-scenarios.ts \
+bun ../../shared/operations/synthesize-scenarios.ts \
   --target agents/<name>.md --target-type agent --inventory-only
 ```
 
@@ -185,7 +185,7 @@ When the set is ready for the user to approve rather than read in chat, `../skil
 ## Measure
 
 ```bash
-bun ../../shared/scripts/optimize-description.ts \
+bun ../../shared/operations/optimize-description.ts \
   --eval-set evals/delegation-eval.json \
   --target-type agent \
   --model <model-id-powering-this-session> \

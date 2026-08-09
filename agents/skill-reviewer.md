@@ -111,7 +111,7 @@ A file's directory is determined by **how it is loaded**, not by what it contain
 | `references/` | **Read.** Pulled into context on demand when the body points at it. |
 | `assets/` | **Copied into the output.** Templates, boilerplate, images — used as material, not read for meaning. |
 | `examples/` | **Read for its shape.** A complete, self-consistent specimen the model imitates. Distinct from `references/`: a reference is consulted for a fact, an example is imitated as a whole. |
-| `shared/eval-viewer/` | **Executed, plus the templates those executables fill.** A recorded exception in this plugin, not a fifth load mode: one sub-application kept whole rather than scattered across `scripts/` and `assets/`, since the split would change nothing about what enters context. Do not flag it, and see `progressive-disclosure.md` for the test a further exception would have to pass. |
+| `shared/report/` | **Executed, plus the templates those executables fill.** A recorded exception in this plugin, not a fifth load mode. The rule above governs directories *inside a skill*; `shared/` sits outside any skill and is grouped by function instead — `validate/`, `operations/`, `parse/`, `report/`, `tools/`, `util/`, `schemas/` — none of it read into context, so load mode does not discriminate between those directories at all. `report/` is the one that mixes modes, holding the report generators together with the HTML they fill, and it is kept whole rather than scattered across `scripts/` and `assets/` because the split would change nothing about what enters context. Do not flag it, and see `progressive-disclosure.md` for the test a further exception would have to pass. |
 
 Flag misplacement against that rule, e.g. an executable dropped in `references/`, a template the skill copies verbatim sitting in `references/` instead of `assets/`, or a fragment in `examples/` that is not a complete specimen.
 
@@ -153,7 +153,7 @@ They are conventions of this plugin, not defects:
 - **Explaining *why* a step exists** rather than issuing a rule. Explain-the-why is what this plugin teaches; a body that gives reasons is doing it right.
 - **`when_to_use`.** A live, documented field. Do not report it as deprecated.
 - **Claude Code frontmatter extensions** — `model`, `argument-hint`, `disable-model-invocation` and the rest — on a skill destined for Claude Code. They are illegal only outside it, and only once that target is established rather than assumed.
-- **`shared/eval-viewer/` in this plugin.** A recorded exception, not a fifth load mode (Section 4).
+- **`shared/report/` in this plugin.** A recorded exception, not a fifth load mode (Section 4). The rest of `shared/` is grouped by function rather than by load mode, and that is not a finding either.
 - **A literal template, or an `Input:`/`Output:` pair**, where a paragraph would have done. Both are house patterns and both beat the paragraph.
 - **A comment in the YAML frontmatter** explaining why a field is set.
 - **A short skill.** Length is not a quality signal in either direction.

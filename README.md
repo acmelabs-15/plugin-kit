@@ -91,13 +91,13 @@ statistically. `future/hook-testing/hook-creator/scripts/test-hook.ts` does that
 ## Two optimization loops
 
 **Description optimization** decides whether an artifact is ever reached.
-`shared/scripts/optimize-description.ts` splits a trigger eval set 60/40,
+`shared/operations/optimize-description.ts` splits a trigger eval set 60/40,
 proposes candidate descriptions from what failed, and selects on the held-out
 split, because a description tuned until it aces its own training queries has
 usually just memorized them.
 
 **Progressive-disclosure optimization** decides what an artifact costs once it is
-reached. `shared/scripts/optimize-disclosure.ts` measures the
+reached. `shared/operations/optimize-disclosure.ts` measures the
 **pull rate** of every bundled file — how often it was actually read across the scenario runs — and
 restructures against it. A reference pulled on nearly every run is body content
 paying an extra tool call to arrive late. A body section needed by a minority of
@@ -106,7 +106,7 @@ the guardrail, because a restructure that cuts tokens and breaks the work is a
 regression.
 
 Both loops take their test set from
-`shared/scripts/synthesize-scenarios.ts`, which
+`shared/operations/synthesize-scenarios.ts`, which
 reads what an artifact *does* — body, references, scripts, examples, tool grant —
 and deliberately not the description being optimized. Queries generated from that
 description inherit its vocabulary, so every candidate scores well on the cases
@@ -167,9 +167,13 @@ Directory choice inside a skill is decided by **load mode**, not by content type
 `scripts/` is executed, `references/` is read into context on demand, `assets/` is
 copied into the output as material, and `examples/` is a complete specimen the
 model imitates. A file in the wrong one either bloats context or never loads.
-`skill-creator/eval-viewer/` is a deliberate fifth directory and is recorded as
-such — it is one coherent sub-application of executables plus their templates, and
-splitting it across `scripts/` and `assets/` would scatter a single component.
+The `shared/` tree sits outside any skill and is grouped by function instead —
+`validate/`, `operations/`, `parse/`, `report/`, `tools/`, `util/`, `schemas/` —
+none of it read into context, so load mode does not discriminate between those
+directories at all. `shared/report/` is the recorded
+exception and not a fifth load mode: it holds the report generators together with
+the HTML they fill, because splitting them across `scripts/` and `assets/` would
+scatter a single component.
 
 ## Two things called "agent" that are not the same thing
 
@@ -194,11 +198,13 @@ built-ins.
 
 ```bash
 bun test                    # everything
-bun test shared/scripts        # one area
+bun test shared/validate    # one area
 bun test --coverage
 ```
 
-Test suites live in `__tests__/` directories under each skill's `scripts/`.
+Test suites are not pooled at one root. Each sits in a `__tests__/` directory
+beside the code it covers — `shared/validate/__tests__/`, `shared/util/__tests__/`
+and so on — so the filter argument above is just the subject's directory.
 `bunfig.toml` deliberately does not set `[test] root`, so suites anywhere in the
 tree are picked up.
 
@@ -206,13 +212,13 @@ tree are picked up.
 
 ```bash
 # Structural validation of one skill
-bun shared/scripts/validate-skill.ts <skill-dir> --extended
+bun shared/validate/validate-skill.ts <skill-dir> --extended
 
 # Find installed skills likely to steal this one's triggers
-bun shared/scripts/check-overlap.ts <skill-dir>
+bun shared/tools/check-overlap.ts <skill-dir>
 
 # Enforce the pure-Bun standard across a tree
-bun shared/scripts/check-bun-purity.ts .
+bun shared/tools/check-bun-purity.ts .
 
 # Drive a hook handler with a synthetic payload and check its contract
 bun future/hook-testing/hook-creator/scripts/test-hook.ts --fixture PreToolUse --command bun --arg ./handler.ts
@@ -246,10 +252,10 @@ bundle needs no runtime on the user's machine at all.
 
 ### The MT19937 fixtures
 
-`shared/scripts/lib/mt19937.ts` reimplements the Mersenne Twister and
+`shared/util/mt19937.ts` reimplements the Mersenne Twister and
 seeding semantics of the CPython `random` module that this port replaces. Its test
 vectors are committed as plain JSON under
-`shared/scripts/__tests__/fixtures/`, captured from that reference
+`shared/util/__tests__/fixtures/`, captured from that reference
 implementation during development and verified value-for-value against this port.
 
 They ship as data rather than as a generator on purpose. A generator would make

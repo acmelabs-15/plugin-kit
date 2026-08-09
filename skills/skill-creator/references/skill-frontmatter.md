@@ -44,7 +44,7 @@ Four fields worth *not* adding, each for a reason an author will otherwise redis
 
 **`name` and the directory disagree.** The standard requires `name` to match the parent directory. Claude Code documents `name` as an optional *display* name defaulting to the directory. Empirically: a directory `dirname-alpha/` containing `name: totally-different-name` loads in Claude Code and is invoked as **`dirname-alpha`** — the directory wins for personal and project skills. The standard's validator rejects the same skill outright. Keep them identical and the question never arises.
 
-Inside a *plugin*, `name` does set the last command segment, so Claude Code gives the field two different meanings depending on scope. `bun shared/scripts/validate.ts --target-type skill <dir>` warns on the mismatch and names which one the loader would use.
+Inside a *plugin*, `name` does set the last command segment, so Claude Code gives the field two different meanings depending on scope. `bun shared/validate/validate.ts --target-type skill <dir>` warns on the mismatch and names which one the loader would use.
 
 ---
 
