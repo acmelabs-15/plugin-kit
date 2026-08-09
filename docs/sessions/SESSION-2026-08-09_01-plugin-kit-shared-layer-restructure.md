@@ -208,6 +208,28 @@ Data flow, load-bearing numbers, and record integrity. Findings below are the on
 - Decision locked: keep the wider guard and correct the documented example, rather than narrowing the guard to the letter of the brief
 - Left unaddressed and recorded: `disclosure.ts:306` still excludes nothing, so the guard prevents the copy but not a user writing output there by other means
 
+### Event 24 — autonomy granted; decisions taken without check-in from here
+
+- User waived per-step check-ins and directed that any question be resolved by taking the option marked Recommended
+- Every such decision is still recorded here with its reasoning, so the ledger stays the audit trail rather than the conversation
+
+### Event 25 — step 3 of 9 COMPLETE, commit `57fa7b0`
+
+- Ten domain-free modules moved from `shared/scripts/lib/` to `shared/util/`; the five domain-aware files stay for the step 6 re-home
+- Import-direction test scans the directory rather than a file list, so a module added later is covered without enrolment. Confirmed failing on both an edited module and a brand-new unenrolled one
+- Two things a pure import rewrite would have missed: `detached-runs.test.ts:20` built a module path as a string and so was invisible to import rewriting, breaking eight spawned children; and `synthesize-scenarios.ts` carries a literal NUL byte at line 679, which makes `grep` treat the file as binary and skip it silently
+- The NUL byte means every grep-based census of this repo has a blind spot in that file. It explains why two independent counts of `subprocess` importers both read 4 against a true 5. Preserved byte-identically rather than tidied
+- Verified in isolation before commit by moving the concurrent agent's work aside: typecheck exit 0, 1,286 pass, 0 fail
+
+### Event 26 — my own over-generalisation, corrected
+
+- A subagent reported that `zod@4.1.0` would not auto-install and had to be seeded with `bun add`. I tested two versioned specifiers, saw both fail, and concluded Bun's auto-install is cache-only for versioned specifiers, which would have broken the no-build-step decision entirely
+- That conclusion was wrong. Testing properly: `dedent@1.5.3`, `slugify@1.6.6` and `zod@4.1.4` all resolve cold and pinned, fetching from the registry. The mechanism works
+- What is real and reproducible: `zod@4.1.5` fails `ENOENT` across five attempts while `4.1.4` succeeds, both with valid registry tarballs. Unexplained, and probably what the subagent hit on `4.1.0`
+- Correct characterisation: the pinned-specifier mechanism is sound but was intermittently flaky on this machine. That is a smaller and different claim than the one I made
+- Decision 4.3 stands unchanged and the exact pin stays. Had I acted on the wrong conclusion I would have reverted a correct decision on two data points
+- Same failure shape this session has caught repeatedly in others: a confident claim from too little evidence. Worth noting that the reviewer is not exempt from it
+
 ## Observations
 
 ### Session infrastructure
