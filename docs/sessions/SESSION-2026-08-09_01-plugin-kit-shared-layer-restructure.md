@@ -170,6 +170,27 @@ Six corrections applied across `docs/architecture.md` and `shared/references/pur
 - The house rule that a rename gets a mapping note beside the record is therefore satisfied for the retirement and not for this rename
 - Worked around for one note only: `MEASUREMENT-CAVEATS.md` states inline that `plugin-creator` is recorded under its former name. The general mapping is still missing
 
+### Event 20 — measurement-surface audit, three parallel read-only sweeps
+
+Data flow, load-bearing numbers, and record integrity. Findings below are the ones verified directly rather than accepted on report.
+
+- **A third instance of the truncating read, still live.** `shared/scripts/optimize-disclosure.ts:580` calls `parseSkillMd`, the hand-rolled reader. Measured: the disclosure loop reads 567 characters of a 949-character `skill-creator` description, 735 of 944 for `agent-creator`, 586 of 834 for `command-creator`, 688 of 893 for `plugin-creator`. That truncation is installed into every scenario copy the loop measures, so the loop reports savings for an artifact nobody ships. Two instances of this defect were fixed today; this is the one in the other loop
+- **`--apply` can delete the source skill.** `optimize-disclosure.ts:2096` guards on `output.best_layout_path !== skillPath` and never compares `applyTo` to `skillPath`, so `--apply skills/skill-creator` reaches `rm(applyTo, { recursive: true, force: true })` against the source. The comment three lines above states "the source skill is never written to", which is true of the loop and false of that line
+- **The driver cannot run.** `evals/drivers/run-measurement.ts:32,51,68` point at `skills/skill-creator/scripts/`, which does not exist after the restructure; the scripts are in `shared/scripts/`. `ALL_SKILLS` still lists `create-plugin` and `hook-creator`. `MEASUREMENTS.md` justifies keeping the driver on the grounds that a measurement nobody can re-run is an assertion rather than evidence
+- **Rate limiting is not recorded as failure.** `measure-triggering.ts:727-731` maps an exhausted stream to `declined`, a legitimate model non-trigger, discarding the exit code that `lib/subprocess.ts:298` captured. The project's stated rule is that a rate-limited run is recorded as a failed run; the code records it as a clean non-trigger, so `provenance.failed` reads 0 and the envelope certifies a fully-scored run
+- **A record-mutation path exists.** `evals/drivers/run-measurement.ts:99-105` passes `Bun.file(path)` as spawn stdout, which opens without truncating, so a shorter re-run splices its bytes over the head of an existing record and leaves the old tail attached. Probed and reproduced
+- **`MEASUREMENTS.md:86` states six false fires; the records hold seven**, and the prose discusses four
+- **No agent has ever been measured.** Five ship, none appears in any trigger set, results file or inventory. Half the plugin's description-bearing surface has never been measured, and it is the half the parser was truncating worst
+
+### Event 21 — audit outcome: numbers without evidence
+
+- Of the load-bearing numbers, only one is MEASURED: the 2-runs-per-query noise floor in `evals/MEASUREMENTS.md`, which derives a plus-or-minus-3 band from an accidental three-skill control group
+- The hollow ones, ranked by what rests on them: 25,000 tokens (nothing enforces it, and a proposed plugin capability exists solely to sum against it), 5,000 tokens (reaches 13 files, called the real justification for disclosure optimisation, enforced only as a warning in a different tool), the 13-124 second call range (five sites derive constants and user-facing copy from it, no site points at a run), 500 lines, 1 percent of context window, 1024
+- Tests that appear to pin a cap derive their expectation from the constant and would pass at any value. Two exceptions in `progress.test.ts` bind to an external figure and to an ordering invariant
+- Honest exceptions worth preserving: several constants in `lib/disclosure.ts` and `lib/progress.ts` label themselves judgements rather than measurements in their own comments. Unsourced but not misrepresented
+- `evals/RETIRED-ARTIFACTS.md` widened to cover renames as well as retirements, commit `71f5216`. The audit found renames at four levels: the skill, the repository, six scripts, and a bulk relocation of bundled files
+- Immutability discipline verified clean: every record traces to a single commit with no `M` status since, corroborated by mtime across 81 files
+
 ## Observations
 
 ### Session infrastructure
