@@ -113,3 +113,4 @@ The packager's usage strings referenced a directory the script no longer occupie
 
 - caused_by [[ADR-001: Skill Creator Merge Conflict Resolutions]]
 - pairs_with [[ADR-001: Skill Creator Merge Conflict Resolutions]]
+- pairs_with [[SESSION-2026-08-09_01: Plugin Kit Shared Layer Restructure]]

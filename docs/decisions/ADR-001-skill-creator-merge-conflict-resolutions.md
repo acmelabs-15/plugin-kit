@@ -271,3 +271,4 @@ _No clarifications yet._
 
 - leads_to [[ANALYSIS-001: Python to Bun Port Fidelity]]
 - pairs_with [[ANALYSIS-001: Python to Bun Port Fidelity]]
+- relates_to [[SESSION-2026-08-09_01: Plugin Kit Shared Layer Restructure]]
