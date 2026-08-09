@@ -13,7 +13,10 @@
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
     "isolatedModules": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "paths": {
+      "zod@4.1.0": ["./node_modules/zod"]
+    }
   },
   "exclude": ["node_modules", "dist", "**/*-workspace"]
 }
