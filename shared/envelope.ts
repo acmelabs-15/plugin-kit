@@ -98,6 +98,7 @@ export type ArtifactKind = z.infer<typeof ArtifactKindSchema>;
 export const OperationNameSchema = z.enum([
   "measure-triggering",
   "measure-disclosure",
+  "measure-outcomes",
   "optimize-description",
   "optimize-disclosure",
   "validate",
