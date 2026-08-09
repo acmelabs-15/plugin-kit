@@ -12,8 +12,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 import { renderRunPage, type RunPagePayload } from "../../eval-viewer/generate-dashboard.ts";
-import { mapWithConcurrency } from "../lib/pool.ts";
-import { classify, type DiscoveredRun, type RunStatus } from "../lib/progress.ts";
+import { mapWithConcurrency } from "../../util/pool.ts";
+import { classify, type DiscoveredRun, type RunStatus } from "../../util/progress.ts";
 
 const NOW = 5_000_000;
 

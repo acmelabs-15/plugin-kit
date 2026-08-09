@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { mapWithConcurrency } from "../lib/pool.ts";
-import { claudeEnv, runCommand, runStreamingLines } from "../lib/subprocess.ts";
+import { mapWithConcurrency } from "../pool.ts";
+import { claudeEnv, runCommand, runStreamingLines } from "../subprocess.ts";
 
 /**
  * Test children are `bun -e` rather than a shell, so the suite needs nothing on

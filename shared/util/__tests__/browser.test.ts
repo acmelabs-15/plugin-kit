@@ -19,14 +19,14 @@ import {
   ensureDashboard,
   isDashboardListening,
   openInBrowser,
-} from "../lib/browser.ts";
+} from "../browser.ts";
 import {
   discoverRuns,
   HEARTBEAT_MS,
   PRUNE_AFTER_MS,
   writeStatusAtomically,
   type RunStatus,
-} from "../lib/progress.ts";
+} from "../progress.ts";
 
 const STATUS_DIR_ENV = "SKILL_CREATOR_STATUS_DIR";
 

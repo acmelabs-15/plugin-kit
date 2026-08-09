@@ -26,7 +26,7 @@ import {
   THEME_PREPAINT_SCRIPT,
   THEME_TOKENS,
 } from "../../eval-viewer/theme.ts";
-import { formatPercent, htmlEscape } from "./pyfloat.ts";
+import { formatPercent, htmlEscape } from "../../util/pyfloat.ts";
 import type { FileStat, FileVerdict, SplitScore, TokenMethod } from "./disclosure.ts";
 
 /** One iteration's row: what was tried, what it cost, and whether it survived. */

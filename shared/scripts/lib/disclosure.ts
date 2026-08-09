@@ -18,7 +18,7 @@
 
 import { relative, resolve } from "node:path";
 
-import { PythonRandom } from "./mt19937.ts";
+import { PythonRandom } from "../../util/mt19937.ts";
 
 // ---------------------------------------------------------------------------
 // Token counting

@@ -15,7 +15,7 @@ import {
   type Run,
 } from "../../eval-viewer/generate-review.ts";
 import { CliError, formatHelp } from "../lib/cli.ts";
-import { DEFAULT_MIME_TYPE, extensionOf, getMimeType } from "../lib/mime.ts";
+import { DEFAULT_MIME_TYPE, extensionOf, getMimeType } from "../../util/mime.ts";
 
 const SHARED_ROOT = `${import.meta.dir}/../..`;
 const VIEWER_HTML = `${SHARED_ROOT}/eval-viewer/viewer.html`;

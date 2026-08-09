@@ -11,7 +11,7 @@
  */
 
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "./lib/cli.ts";
-import { htmlEscape } from "./lib/pyfloat.ts";
+import { htmlEscape } from "../util/pyfloat.ts";
 import {
   DESIGN_COMPONENTS,
   THEME_PREPAINT_SCRIPT,

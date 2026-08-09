@@ -24,7 +24,7 @@ import {
   statusDir,
   writeStatusAtomically,
   type RunStatus,
-} from "../lib/progress.ts";
+} from "../progress.ts";
 
 const STATUS_DIR_ENV = "SKILL_CREATOR_STATUS_DIR";
 

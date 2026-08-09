@@ -2,7 +2,7 @@
 /**
  * Serve a live dashboard of every long-running skill-creator script.
  *
- * Discovers runs by globbing the status directory that `../scripts/lib/progress.ts`
+ * Discovers runs by globbing the status directory that `../util/progress.ts`
  * writes into, then renders one row per run with its progress, and links through to
  * the run's own detail page where one exists.
  *
@@ -24,7 +24,7 @@ import {
   isDashboardListening,
   openInBrowser,
   openingSuppressed,
-} from "../scripts/lib/browser.ts";
+} from "../util/browser.ts";
 import { CliError, formatHelp, parseArgs, type Spec } from "../scripts/lib/cli.ts";
 import {
   discoverRuns,
@@ -32,7 +32,7 @@ import {
   statusDir,
   STALE_AFTER_MS,
   type DiscoveredRun,
-} from "../scripts/lib/progress.ts";
+} from "../util/progress.ts";
 
 /** Comment token in dashboard.html replaced with the embedded data assignment. */
 const EMBEDDED_DATA_TOKEN = "/*__EMBEDDED_DATA__*/";

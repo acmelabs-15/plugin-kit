@@ -42,11 +42,11 @@
  *                 └── run-1/grading.json
  */
 
-import { ensureDashboard } from "./lib/browser.ts";
+import { ensureDashboard } from "../util/browser.ts";
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "./lib/cli.ts";
-import { ProgressReporter } from "./lib/progress.ts";
-import { formatFixed, formatSigned, pyTitle } from "./lib/pyfloat.ts";
-import { calculateStats, type Stats } from "./lib/stats.ts";
+import { ProgressReporter } from "../util/progress.ts";
+import { formatFixed, formatSigned, pyTitle } from "../util/pyfloat.ts";
+import { calculateStats, type Stats } from "../util/stats.ts";
 
 // ---------------------------------------------------------------------------
 // Model

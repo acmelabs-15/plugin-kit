@@ -15,7 +15,7 @@
 import { cp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-import { ensureDashboard } from "./lib/browser.ts";
+import { ensureDashboard } from "../util/browser.ts";
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "./lib/cli.ts";
 import {
   buildEnvelope,
@@ -31,9 +31,9 @@ import {
 } from "./lib/envelope.ts";
 import { parseFrontmatterBlock } from "../rules/lib.ts";
 import { FrontmatterError, parseFrontmatter, skillMdPath, type ParsedSkill } from "./lib/frontmatter.ts";
-import { mapWithConcurrency } from "./lib/pool.ts";
-import { ProgressReporter, type QueryProgress } from "./lib/progress.ts";
-import { runStreamingLines } from "./lib/subprocess.ts";
+import { mapWithConcurrency } from "../util/pool.ts";
+import { ProgressReporter, type QueryProgress } from "../util/progress.ts";
+import { runStreamingLines } from "../util/subprocess.ts";
 
 /**
  * Which kind of artifact is under test.

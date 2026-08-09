@@ -20,7 +20,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { chmod, mkdir, rm } from "node:fs/promises";
 
-import { buildZip, type Bytes, type ZipEntry } from "../lib/zipwriter.ts";
+import { buildZip, type Bytes, type ZipEntry } from "../../util/zipwriter.ts";
 import { collectEntries, packageSkill, shouldExclude } from "../package-skill.ts";
 
 // ---------------------------------------------------------------------------

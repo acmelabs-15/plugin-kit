@@ -15,9 +15,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-import { parseRunStatus, type RunStatus } from "../lib/progress.ts";
+import { parseRunStatus, type RunStatus } from "../../util/progress.ts";
 
-const PROGRESS_MODULE = `${import.meta.dir}/../lib/progress.ts`;
+const PROGRESS_MODULE = `${import.meta.dir}/../../util/progress.ts`;
 
 let scratch: string;
 

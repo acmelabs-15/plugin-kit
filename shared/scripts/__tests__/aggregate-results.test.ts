@@ -15,7 +15,7 @@
 
 import { afterAll, expect, test } from "bun:test";
 
-import { DASHBOARD_HEALTH_MARKER, DASHBOARD_HEALTH_PATH, DASHBOARD_PORT } from "../lib/browser.ts";
+import { DASHBOARD_HEALTH_MARKER, DASHBOARD_HEALTH_PATH, DASHBOARD_PORT } from "../../util/browser.ts";
 import {
   aggregateResults,
   generateBenchmark,

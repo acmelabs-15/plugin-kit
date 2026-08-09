@@ -23,8 +23,8 @@
  */
 
 import { CliError, formatHelp, parseArgs, type Spec } from "./lib/cli.ts";
-import { fnmatch } from "./lib/fnmatch.ts";
-import { buildZip, type ZipEntry } from "./lib/zipwriter.ts";
+import { fnmatch } from "../util/fnmatch.ts";
+import { buildZip, type ZipEntry } from "../util/zipwriter.ts";
 import {
   baseName,
   formatResult,

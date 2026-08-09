@@ -15,7 +15,7 @@
  */
 
 import { parseSkillMd } from "./lib/frontmatter.ts";
-import { runCommand } from "./lib/subprocess.ts";
+import { runCommand } from "../util/subprocess.ts";
 import {
   flagBoolean,
   flagString,

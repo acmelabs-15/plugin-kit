@@ -1,5 +1,5 @@
 /**
- * Fidelity tests for `lib/stats.ts` against CPython 3.12.8.
+ * Fidelity tests for `util/stats.ts` against CPython 3.12.8.
  *
  * Every `expected` block below is literal output from running
  * `aggregate_benchmark.py::calculate_stats` on the same `values` under CPython
@@ -17,7 +17,7 @@
  */
 
 import { expect, test } from "bun:test";
-import { calculateStats, pySum, type Stats } from "../lib/stats.ts";
+import { calculateStats, pySum, type Stats } from "../stats.ts";
 
 interface Dataset {
   readonly name: string;

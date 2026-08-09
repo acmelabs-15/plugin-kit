@@ -29,7 +29,7 @@ import {
   writeStatusAtomically,
   type DiscoveredRun,
   type RunStatus,
-} from "../lib/progress.ts";
+} from "../../util/progress.ts";
 
 const STATUS_DIR_ENV = "SKILL_CREATOR_STATUS_DIR";
 const NOW = 5_000_000;

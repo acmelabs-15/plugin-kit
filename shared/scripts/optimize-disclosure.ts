@@ -30,11 +30,11 @@ import { cp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import { ensureDashboard, openInBrowser } from "./lib/browser.ts";
-import { mapWithConcurrency } from "./lib/pool.ts";
-import { ProgressReporter, projectRemainingMs } from "./lib/progress.ts";
-import { formatPercent } from "./lib/pyfloat.ts";
-import { runCommand, runStreamingLines, type CommandOutcome } from "./lib/subprocess.ts";
+import { ensureDashboard, openInBrowser } from "../util/browser.ts";
+import { mapWithConcurrency } from "../util/pool.ts";
+import { ProgressReporter, projectRemainingMs } from "../util/progress.ts";
+import { formatPercent } from "../util/pyfloat.ts";
+import { runCommand, runStreamingLines, type CommandOutcome } from "../util/subprocess.ts";
 import {
   applyEdits,
   bodySections,

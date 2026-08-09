@@ -66,7 +66,7 @@
  */
 
 import { parseArgs, formatHelp, CliError, type Spec } from "./lib/cli.ts";
-import { mapWithConcurrency } from "./lib/pool.ts";
+import { mapWithConcurrency } from "../util/pool.ts";
 
 // ---------------------------------------------------------------------------
 // Paths

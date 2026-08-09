@@ -62,7 +62,7 @@
  */
 
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "./lib/cli.ts";
-import { runCommand } from "./lib/subprocess.ts";
+import { runCommand } from "../util/subprocess.ts";
 import {
   absolute,
   domainTerms,
@@ -1421,7 +1421,7 @@ Respond with only a JSON array inside <scenarios> tags, nothing else:
  * Run `claude -p` with the prompt on stdin.
  *
  * The same subprocess pattern `propose-description.ts` uses, through the same
- * `lib/subprocess.ts` helper: the parent environment is merged rather than replaced
+ * `util/subprocess.ts` helper: the parent environment is merged rather than replaced
  * so a nested call keeps the session's auth, and the payload goes over stdin rather
  * than argv because it embeds whole files.
  */

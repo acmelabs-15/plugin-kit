@@ -19,10 +19,10 @@
  */
 
 import { CliError, formatHelp, parseArgs, type Spec } from "../scripts/lib/cli.ts";
-import { extensionOf, getMimeType } from "../scripts/lib/mime.ts";
+import { extensionOf, getMimeType } from "../util/mime.ts";
 import { injectAppBar } from "./app-bar.ts";
-import { DASHBOARD_PORT, ensureDashboard, openInBrowser } from "../scripts/lib/browser.ts";
-import { ProgressReporter } from "../scripts/lib/progress.ts";
+import { DASHBOARD_PORT, ensureDashboard, openInBrowser } from "../util/browser.ts";
+import { ProgressReporter } from "../util/progress.ts";
 
 /** Files to exclude from output listings */
 const METADATA_FILES: ReadonlySet<string> = new Set([

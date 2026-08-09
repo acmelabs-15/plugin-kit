@@ -46,7 +46,7 @@ import { readdir } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 
 import { CliError, formatHelp, parseArgs, type Spec } from "./lib/cli.ts";
-import { mapWithConcurrency } from "./lib/pool.ts";
+import { mapWithConcurrency } from "../util/pool.ts";
 
 // ---------------------------------------------------------------------------
 // Findings

@@ -16,7 +16,7 @@
  */
 
 import { proposeDescription, type ProposeHistoryEntry } from "./propose-description.ts";
-import { ensureDashboard, openInBrowser } from "./lib/browser.ts";
+import { ensureDashboard, openInBrowser } from "../util/browser.ts";
 import {
   buildEnvelope,
   detectInstallState,
@@ -29,9 +29,9 @@ import {
   type HeadlineMetric,
   type InstallState,
 } from "./lib/envelope.ts";
-import { PythonRandom } from "./lib/mt19937.ts";
-import { formatFixed, formatPercent } from "./lib/pyfloat.ts";
-import { ProgressReporter, projectRemainingMs } from "./lib/progress.ts";
+import { PythonRandom } from "../util/mt19937.ts";
+import { formatFixed, formatPercent } from "../util/pyfloat.ts";
+import { ProgressReporter, projectRemainingMs } from "../util/progress.ts";
 import {
   flagBoolean,
   flagNumber,
