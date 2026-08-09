@@ -101,23 +101,79 @@ Six corrections applied across `docs/architecture.md` and `shared/references/pur
 - `future/hook-testing/hook-creator/SKILL.md:214` instructs running `skill-creator:hook-reviewer`, which no longer resolves if that subtree is unparked
 - Next: step 3 of 9 — give the ten domain-free modules a `shared/util/` home and add the import-direction test
 
+### Event 12 — the 1,536 cap does not apply to subagents; the premise was wrong
+
+- Investigated in parallel: Claude Code documentation, and what this repo actually enforces
+- 1,536 caps the **skill listing**, on `description` plus `when_to_use` combined. Subagents have no `when_to_use` field and no documented description cap at all
+- `DESCRIPTION_HARD_MAX = 1536` at `shared/scripts/validate-skill.ts:70` is skill-only and structurally unreachable from the agent path: the branch sits behind `tier === "extended"`, and `shared/rules/agent.ts:47` sets `honoursTier: false`
+- Agents carry their own independent rule at `shared/rules/agent.ts:41`, `DESCRIPTION_MAX = 1024`, which pushes to `warnings`; `shared/scripts/validate.ts:682` exits non-zero on errors only, so an over-length agent description exits 0
+- Three modules hold three independent length literals with no shared source: `validate-skill.ts:70` at 1536, `agent.ts:41` at 1024, `command.ts:33` at 1024
+- Provenance of 1,536: no measurement, no test, one uncited "Anthropic docs" table attribution, propagated across seven files. `evals/` has zero hits for `1536` or `truncat`
+- `docs/architecture.md:436` claims 1,536 feeds `optimize-description`; `shared/scripts/propose-description.ts:210` actually instructs the model at 1024
+- Nothing runs `validate` at all: `package.json` has only `test` and `typecheck`, there is no CI directory, and no hook wires it up
+- Correction to an earlier claim in this session: the five reviewer descriptions were reported as "289 to 943 over the cap". No enforced cap applies to them
+
+### Event 13 — defect found: block-scalar descriptions truncate at the first blank line
+
+- `shared/scripts/lib/frontmatter.ts:106` ends block-scalar collection at any line starting with neither two spaces nor a tab; a blank line inside the scalar matches neither
+- Every reviewer description carries a blank line after its opening paragraph, so collection stops there
+- Measured loss through `readTargetDefinition`, conformant parse versus hand-rolled: skill 1876 to 368, agent 2237 to 430, command 2530 to 510, mcp 2467 to 492, plugin 2474 to 532. Between 78 and 81 percent, with `<example>` blocks present in one and absent in the other
+- Consequence for reads: every trigger measurement ever produced for these five describes about a fifth of the shipped string
+- Consequence for writes: `optimize-description.ts:379-382` seeds from the same reader and `measure-triggering.ts:321` writes frontmatter back as a space-joined `description: |`, so an optimize run would silently replace a 1,876-character description with a ~368-character one
+- The docblock at `measure-triggering.ts:438-441` asserts the opposite, claiming example blocks "survive as text but lose their line breaks". Same documented-value-versus-render-truth shape the port analysis already recorded once
+
+### Event 14 — decision locked: fix the call site, not the parser
+
+- The hand-rolled parser is bug-compatible with the Python original deliberately, and the port analysis records its quirks as load-bearing, naming newline loss in block scalars but not truncation
+- Losing line breaks and losing 80 percent of the content are different claims, so the truncation is treated as an undocumented defect rather than a preserved quirk
+- Fix scoped to the agent read path in `measure-triggering.ts`, reusing the conformant reader already present at `shared/rules/lib.ts:72`. `frontmatter.ts` is not edited
+- A regression test asserting an example block survives the read is part of the fix; the defect was invisible because nothing asserted it
+- Whether SKILL.md descriptions are affected the same way is being investigated but explicitly not acted on: widening to skills is a separate decision
+
 ## Observations
+
+### Session infrastructure
 
 - [problem] Brain MCP exited with error -32000 because the basic-memory config held project `plugin-kit` as a bare string where a ProjectEntry object is required #brain-mcp #config
 - [solution] Rewriting the project entry in object form restored the server; the prior file is preserved as a dated `.bak` alongside it #brain-mcp #recovery
 - [risk] The Brain `create_project` handler is suspected of reporting success while writing a shape its own loader rejects, so other projects may carry the same latent break #brain-mcp #write-path
+- [risk] Brain `write_note` silently dropped a `status` field passed via `metadata`, needing a repair edit; same report-success-and-drop shape as the `create_project` defect #brain-mcp #write-path
+
+### Verification and divergences
+
 - [fact] Repo verification confirmed the handover's absent-surface claims: no `bin/`, `shared/cli.ts`, `shared/env.ts`, `shared/capabilities.ts`, nor the six planned `shared/` subdirectories #verification #restructure
 - [fact] `shared/scripts` holds 13 entry points, `lib/` 15, `__tests__/` 26; `envelope.ts` is 919 lines; all ten domain-free modules sit in `shared/scripts/lib/` #verification #inventory
-- [problem] Test suite measured 1,276 pass / 1 fail over 27 files against a claimed 1,131 / 0 / 26, so the handover's baseline is stale #divergence #tests
-- [insight] The single failure is tautology-shaped: the test concatenates a `root` carrying the macOS `TMPDIR` trailing slash and asserts a doubled separator the implementation normalises away #tests #defect-class
-- [decision] The failing assertion is left unrepaired because it lives in the hooks rules that a later step of the restructure deletes #tests #sequencing
+- [problem] Test suite measured 1,276 pass / 1 fail over 27 files against a claimed 1,131 / 0 / 26, so the handover's baseline was stale #divergence #tests
+- [insight] The single failure was tautology-shaped: the test concatenated a `root` carrying the macOS `TMPDIR` trailing slash and asserted a doubled separator the implementation normalises away #tests #defect-class
 - [problem] `shared/eval-viewer` is 7 files (3 html, 4 ts), not the 4 the handover claimed #divergence #inventory
-- [outcome] Step 1 of 9 complete at commit `7ab0fcc` on branch `restructure-shared-layer`, applying six corrections across the architecture doc and the pure-bun reference #milestone #restructure
+- [insight] The handover's scoping proved reliable about code and unreliable about content surface, which is the pattern to expect across the remaining steps #handover #scoping
+
+### Step outcomes and locked decisions
+
+- [outcome] Step 1 of 9 complete at commit `7ab0fcc`, applying six corrections across the architecture doc and the pure-bun reference #milestone #restructure
+- [outcome] Step 2 of 9 complete at commit `e11b23b`; suite went 1,276 pass / 1 fail to 1,269 pass / 0 fail with typecheck clean #milestone #hooks
 - [insight] The replaced fixtures guard could never fail: it globbed `skills/**` and filtered for `fixture` while the fixture corpus lives under `shared/` #guard #false-negative
 - [decision] `docs/architecture.md:176` keeps `zod@^4.1.0` because it records what was actually tested, and a measurement record is never edited to match a later decision #provenance #measurement
+- [decision] The failing hooks assertion was left unrepaired and deleted with the block it lived in, rather than fixed then removed #tests #sequencing
+- [decision] Retiring `hook-reviewer` keeps the hook exclusion in all five reviewer descriptions and drops the pointer, so no description names an agent that is not there #descriptions #hooks
+- [decision] The block-scalar truncation is fixed at the call site, leaving the deliberately bug-compatible parser untouched #parser #bug-compatibility
+
+### Defects and unsupported claims
+
+- [problem] `shared/scripts/lib/frontmatter.ts:106` ends block-scalar collection at the first blank line, losing 78 to 81 percent of every agent description and dropping `<example>` blocks entirely #parser #data-loss
+- [risk] `optimize-description` seeds from that truncated read and writes frontmatter back, so a run against any reviewer would silently replace a 1,876-character description with roughly 368 characters #parser #destructive-write
+- [problem] The docblock at `measure-triggering.ts:438-441` asserts example blocks survive the read when they do not, repeating the documented-value-versus-render-truth failure the port analysis already recorded #documentation #drift
+- [problem] The 1,536 cap does not apply to subagents: it caps the skill listing on `description` plus `when_to_use`, and subagents have no `when_to_use` field #cap #premise-error
+- [fact] `DESCRIPTION_HARD_MAX` is skill-only and unreachable from the agent path; agents carry an independent 1024 warning that exits 0, and three modules hold three unshared length literals #validation #duplication
+- [problem] Nothing in the repo runs `validate`: no CI directory, no hook, and `package.json` carries only `test` and `typecheck` #validation #coverage-gap
 - [risk] The 25,000-token combined re-attach budget at `docs/architecture.md:434` is asserted without justification while the 5,000-token figure directly below it is fully argued #budget #unsupported-claim
 - [problem] `skills/plugin-creator/references/shared-code-architecture.md` argues for a build step, contradicting the no-build-step decision #contradiction #build-step
-- [requirement] Step 2 of 9 retires hooks: `shared/rules/hooks.ts`, the `registry.ts` import and target-type entry, and `agents/hook-reviewer.md` #next-step #hooks
+
+### Carried forward
+
+- [requirement] Step 3 of 9 gives the ten domain-free modules a `shared/util/` home and adds the import-direction test #next-step #util
+- [requirement] Whether SKILL.md descriptions suffer the same block-scalar truncation is open and deliberately unacted on, as widening the fix is a separate decision #parser #open-question
+- [requirement] `README.md` still advertises `hook-creator` as shipped when it lives in parked `future/`, and `future/hook-testing/hook-creator/SKILL.md:214` invokes an agent that no longer resolves #docs #parked
 
 ## Relations
 
