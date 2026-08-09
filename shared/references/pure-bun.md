@@ -13,7 +13,7 @@ This is a house rule rather than an ecosystem norm — Anthropic's own official 
 
 A script that genuinely cannot be Bun is a design signal worth examining before it is an exception worth granting.
 
-`../scripts/check-bun-purity.ts` enforces everything below, and `../scripts/validate.ts --target-type skill` runs it as part of a skill's checks. Run it before claiming the standard holds.
+`../tools/check-bun-purity.ts` enforces everything below, and `../validate/validate.ts --target-type skill` runs it as part of a skill's checks. Run it before claiming the standard holds.
 
 ---
 
@@ -149,7 +149,7 @@ Worth knowing before you promise "no dependencies":
 Cheap to check, so check rather than assume. The script is the real answer:
 
 ```bash
-bun shared/scripts/check-bun-purity.ts .
+bun shared/tools/check-bun-purity.ts .
 ```
 
 It reports every violation with a file, a line and a fix, distinguishes errors from warnings, and exits non-zero on an error. Where a mention is a fact about what the platform permits rather than a recommendation this plugin is making, mark it and say why:

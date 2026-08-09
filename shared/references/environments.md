@@ -32,7 +32,7 @@ Be honest with the user about what this is worth: you wrote the skill and you ar
 
 **Blind comparison.** Requires subagents. Skip it.
 
-**Packaging.** `../scripts/package-skill.ts` needs only Bun and a filesystem, so it works here and the user can download the resulting `.skill` file.
+**Packaging.** `../tools/package-skill.ts` needs only Bun and a filesystem, so it works here and the user can download the resulting `.skill` file.
 
 ---
 
@@ -42,7 +42,7 @@ Be honest with the user about what this is worth: you wrote the skill and you ar
 
 **The viewer needs `--static`.** With no browser or display, pass `--static <output_path>` to write a standalone HTML file instead of starting a server, then offer the user a link they can click to open it. The progress dashboard takes the same flag, and `SKILL_CREATOR_NO_OPEN=1` suppresses every window at once — the dashboard, the description report and the eval viewer — which is worth exporting for the whole session here rather than remembering a flag per command.
 
-**Generate the viewer.** Something about this environment makes it tempting to skip the viewer and go straight to evaluating the outputs yourself. Do not. Whether you are in Cowork or Claude Code, once the runs are in you generate the eval viewer and get the outputs in front of the human *before* forming and acting on your own opinion — with `generate-review.ts`, not hand-written HTML. You wrote the skill; you will read its outputs generously, and the human is the correction for that. Put it on your todo list explicitly if you keep one: *"write evals.json and run `../eval-viewer/generate-review.ts` so the human can review the outputs."*
+**Generate the viewer.** Something about this environment makes it tempting to skip the viewer and go straight to evaluating the outputs yourself. Do not. Whether you are in Cowork or Claude Code, once the runs are in you generate the eval viewer and get the outputs in front of the human *before* forming and acting on your own opinion — with `generate-review.ts`, not hand-written HTML. You wrote the skill; you will read its outputs generously, and the human is the correction for that. Put it on your todo list explicitly if you keep one: *"write evals.json and run `../report/generate-review.ts` so the human can review the outputs."*
 
 **Feedback arrives as a file.** With no running server, "Submit All Reviews" downloads `feedback.json`. Read it from there — you may need to request access first — and copy it into `evals/results/iteration-<N>/` so the next iteration picks it up.
 

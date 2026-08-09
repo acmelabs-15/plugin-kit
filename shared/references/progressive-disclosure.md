@@ -39,7 +39,7 @@ Both failure directions are real defects, and they need opposite fixes:
 | Pulled on no run, body never names it | It could not have loaded; its zero says nothing | Write the pointer |
 | Pulled speculatively, then unused | The condition is vague — "for more detail" | Name the trigger |
 
-A skill's own reader is the test: open SKILL.md, find each bundled file's mention, and ask whether it tells you what would have to be true for you to stop and read it. `../scripts/measure-disclosure.ts` measures the same thing empirically, and `../scripts/optimize-disclosure.ts` goes on to restructure from what it found; read `disclosure-optimization.md` when you have one of its reports open and are deciding what to adopt.
+A skill's own reader is the test: open SKILL.md, find each bundled file's mention, and ask whether it tells you what would have to be true for you to stop and read it. `../operations/measure-disclosure.ts` measures the same thing empirically, and `../operations/optimize-disclosure.ts` goes on to restructure from what it found; read `disclosure-optimization.md` when you have one of its reports open and are deciding what to adopt.
 
 **Flow matters as much as placement.** A reference should be openable at the moment its condition fires and answer the question completely. Where two files are always needed together, that is one file. Where one answers half a question, it should say where the other half is — a reader who has to guess at the second hop usually does not take it.
 
@@ -125,7 +125,7 @@ Keep `assets/`. Its low usage in developer-tooling skills is a sampling artefact
 
 ## When a fifth directory earns its place
 
-Four names cover placement for nearly every skill, and a fifth should be treated as a smell until it defends itself. This skill ships one that does: `eval-viewer/`.
+Four names cover placement for nearly every skill, and a fifth should be treated as a smell until it defends itself. This skill ships one that does: `report/`.
 
 It holds the eval report generators, the modules they share, and the HTML templates they fill in — one sub-application whose parts are only meaningful together. Split by load mode it would land in two places: generators in `scripts/`, templates in `assets/`, with nothing in either saying they are one component. That split changes nothing about what enters context, which is the only thing the taxonomy exists to control — the generators are still run and the templates are still filled in. It costs legibility and buys conformance to a rule whose purpose is already met.
 

@@ -51,7 +51,7 @@ Then ask something that should trigger the skill and check that it loads. Note t
 
 ## No packaging
 
-Plugin-bundled skills are distributed as part of the plugin. There is no zip step, no `.skill` file — users get the skills when they install the plugin. `../scripts/package-skill.ts` is for standalone skills only.
+Plugin-bundled skills are distributed as part of the plugin. There is no zip step, no `.skill` file — users get the skills when they install the plugin. `../tools/package-skill.ts` is for standalone skills only.
 
 ---
 

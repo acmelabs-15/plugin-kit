@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { chmod, rm } from "node:fs/promises";
 
-import { CliError, parseArgs } from "../../../../../shared/scripts/lib/cli.ts";
+import { CliError, parseArgs } from "../../../../../shared/cli.ts";
 import {
   DECISION_KEYS,
   EVENTS,

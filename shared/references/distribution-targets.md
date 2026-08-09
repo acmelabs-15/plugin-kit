@@ -75,7 +75,7 @@ This is where authors lose time, so each of these is worth knowing before the fi
 Unexpected key(s) in SKILL.md frontmatter: argument-hint. Allowed properties are: allowed-tools, compatibility, description, license, metadata, name
 ```
 
-That is a better failure than a silent ignore, because it happens at packaging time. `bun ../scripts/validate.ts --target-type skill <dir>` without `--extended` is the same gate applied earlier still.
+That is a better failure than a silent ignore, because it happens at packaging time. `bun ../validate/validate.ts --target-type skill <dir>` without `--extended` is the same gate applied earlier still.
 
 **The description length limit is not one number.** The Agent Skills spec allows 1024 characters; Claude Code truncates `description` plus `when_to_use` at 1,536 combined; claude.ai caps `description` at **200**. A description written to the Claude Code budget will usually exceed the claude.ai cap, so the trip to claude.ai is a rewrite of the highest-leverage field in the file rather than a copy.
 

@@ -5,13 +5,13 @@
  * the tier, it says what is wrong. Nothing reads the disk, so `./skill.ts` can
  * compose these into a layer a unit test parses with no filesystem at all.
  *
- * Semantics are mirrored from `../scripts/validate-skill.ts`, message for
+ * Semantics are mirrored from `../validate/validate-skill.ts`, message for
  * message. Where the two disagree, that file is right and this one is a bug.
  *
  * The constants below are a THIRD copy of limits that already exist in
- * `../scripts/validate-skill.ts` and (for the 1024 ceiling) in
- * `../rules/agent.ts`, `../rules/command.ts` and
- * `../scripts/propose-description.ts`. Unifying them is a later pass; mirroring
+ * `../validate/validate-skill.ts` and (for the 1024 ceiling) in
+ * `../validate/rules/agent.ts`, `../validate/rules/command.ts` and
+ * `../operations/propose-description.ts`. Unifying them is a later pass; mirroring
  * them is this one.
  */
 

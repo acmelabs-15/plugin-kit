@@ -3,7 +3,7 @@
  * there.
  *
  * A module here may import runtime builtins and its own siblings. Nothing else -- not
- * `shared/scripts/`, not `shared/rules/`, not any layer added later. The rule is not
+ * `shared/validate/`, not `shared/operations/`, not any layer added later. The rule is not
  * stylistic: a utility that reaches upward into domain code stops being reusable, and
  * the cycle it creates is discovered much later and much more expensively than here.
  *
@@ -48,7 +48,7 @@ function specifiersOf(source: string): readonly string[] {
  *
  * Two categories only. Runtime builtins -- `node:*`, `bun:*`, and the bare `bun` module --
  * are beneath every layer and cannot create a cycle. A relative specifier is allowed only
- * when it lands inside `util/`; `../scripts/x.ts` resolves outside and is refused. Anything
+ * when it lands inside `util/`; `../operations/x.ts` resolves outside and is refused. Anything
  * else, including a bare npm package, is refused: this layer has no runtime dependencies
  * and adding one is a decision that should not pass silently.
  */
@@ -112,13 +112,13 @@ describe("importIsAllowed", () => {
   });
 
   test("reaching up into any domain layer is refused", () => {
-    expect(importIsAllowed("../scripts/measure-triggering.ts", aFile)).toBe(false);
-    expect(importIsAllowed("../scripts/lib/envelope.ts", aFile)).toBe(false);
-    expect(importIsAllowed("../rules/registry.ts", aFile)).toBe(false);
+    expect(importIsAllowed("../operations/measure-triggering.ts", aFile)).toBe(false);
+    expect(importIsAllowed("../envelope.ts", aFile)).toBe(false);
+    expect(importIsAllowed("../validate/rules/registry.ts", aFile)).toBe(false);
+    expect(importIsAllowed("../report/generate-report.ts", aFile)).toBe(false);
+    expect(importIsAllowed("../schemas/skill.ts", aFile)).toBe(false);
     // Layers that do not exist yet are refused by the same rule, without naming them.
-    expect(importIsAllowed("../operations/run.ts", aFile)).toBe(false);
-    expect(importIsAllowed("../validate/skill.ts", aFile)).toBe(false);
-    expect(importIsAllowed("../schemas/plan.ts", aFile)).toBe(false);
+    expect(importIsAllowed("../discover/find.ts", aFile)).toBe(false);
   });
 
   test("an npm package is refused, since this layer has no runtime dependencies", () => {

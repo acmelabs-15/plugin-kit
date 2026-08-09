@@ -2,7 +2,7 @@
  * Opening a URL in the user's browser, and deciding whether to.
  *
  * Extracted because three call sites had grown their own copy of the same platform
- * switch -- `optimize-description.ts`, `eval-viewer/generate-review.ts` and now the dashboard. The
+ * switch -- `optimize-description.ts`, `report/generate-review.ts` and now the dashboard. The
  * duplication was pre-existing and harmless until the `unref()` mattered: a batch
  * script that does not unref its opener cannot exit, which is the difference between a
  * detached run finishing and a detached run appearing to hang forever.
@@ -145,7 +145,7 @@ export async function ensureDashboard(
       [
         "bun",
         "run",
-        new URL("../../eval-viewer/generate-dashboard.ts", import.meta.url).pathname,
+        new URL("../report/generate-dashboard.ts", import.meta.url).pathname,
         "--port",
         String(port),
         "--no-open",

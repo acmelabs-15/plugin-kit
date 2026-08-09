@@ -6,7 +6,7 @@ set at three runs each is sixty of those. So these jobs are meant to be **launch
 watched**, not babysat in a terminal.
 
 ```bash
-nohup bun ../scripts/optimize-description.ts --eval-set <path> --skill-path <path> --model <id> &
+nohup bun ../operations/optimize-description.ts --eval-set <path> --skill-path <path> --model <id> &
 ```
 
 That is a complete invocation. The script starts the dashboard itself and opens a window.
@@ -61,9 +61,9 @@ than a run that was cut off.
 ## The dashboard
 
 ```bash
-bun ../eval-viewer/generate-dashboard.ts                  # serves on 127.0.0.1:3118
-bun ../eval-viewer/generate-dashboard.ts --static <path>  # snapshot; implies --no-open
-bun ../eval-viewer/generate-dashboard.ts --no-open        # serve without opening a window
+bun ../report/generate-dashboard.ts                  # serves on 127.0.0.1:3118
+bun ../report/generate-dashboard.ts --static <path>  # snapshot; implies --no-open
+bun ../report/generate-dashboard.ts --no-open        # serve without opening a window
 ```
 
 `--refresh <seconds>` sets the poll interval, default 5.
@@ -97,7 +97,7 @@ every few seconds against a window measured in days.
 ## Screenshotting a page
 
 ```bash
-bun ../scripts/capture-page.ts <url> [--theme light|dark|both] [--click <selector>]
+bun ../tools/capture-page.ts <url> [--theme light|dark|both] [--click <selector>]
 ```
 
 Defaults to **both** themes, which is the whole reason it exists. Five defects in these pages were

@@ -2,12 +2,12 @@
 
 Read this when a disclosure run has finished and you are deciding what to adopt, or before starting one to know what it will cost. For the doctrine underneath it — which directory a file belongs in, the body's size budget, and the pointer-condition standard — that is `progressive-disclosure.md`, and it is the better read when you are doing this by judgement rather than by measurement. What doctrine cannot tell you is *which* content should move, because that depends on what the skill is actually asked to do.
 
-`../scripts/optimize-disclosure.ts` answers that by measuring it. It runs the skill on real evals, watches which bundled files get read and how often, counts what each run costs, and restructures the layout to cut the cost — with the expectation pass rate as the thing a restructure is not allowed to break.
+`../operations/optimize-disclosure.ts` answers that by measuring it. It runs the skill on real evals, watches which bundled files get read and how often, counts what each run costs, and restructures the layout to cut the cost — with the expectation pass rate as the thing a restructure is not allowed to break.
 
-If you only want the numbers — which bundled files get pulled, at what rate, at what token cost — reach for `../scripts/measure-disclosure.ts` instead. Same sweep, same grading, same file table; no candidates, no selection, no `--apply`. It is the cheaper half of the run above, and the one to start with, because a table of pull rates usually tells you what to do without a loop proposing it.
+If you only want the numbers — which bundled files get pulled, at what rate, at what token cost — reach for `../operations/measure-disclosure.ts` instead. Same sweep, same grading, same file table; no candidates, no selection, no `--apply`. It is the cheaper half of the run above, and the one to start with, because a table of pull rates usually tells you what to do without a loop proposing it.
 
 ```bash
-bun ../scripts/measure-disclosure.ts \
+bun ../operations/measure-disclosure.ts \
   --skill-path ../my-skill \
   --scenarios ../my-skill/evals/evals.json \
   --model opus \
@@ -17,7 +17,7 @@ bun ../scripts/measure-disclosure.ts \
 Restructuring as well is the same command with the optimizer's name and its extra flags:
 
 ```bash
-bun ../scripts/optimize-disclosure.ts \
+bun ../operations/optimize-disclosure.ts \
   --skill-path ../my-skill \
   --scenarios ../my-skill/evals/evals.json \
   --model opus \
@@ -47,7 +47,7 @@ The guardrail also depends on the grader being *held constant*: a candidate's pa
 
 Token figures come from `tiktoken` where it is installed. It is a devDependency of this repository rather than a runtime one, because a skill's scripts run with nothing but Bun; when it is absent the loop falls back to the published characters-over-four estimator and says so on every surface — in the terminal, in `results.json`, and at the top of the report. A body measured at 4,800 estimated tokens against a 5,000-token budget has not been shown to be inside it.
 
-Invocation is held constant. The prompt names the skill outright rather than relying on the description to route to it, because whether the description triggers is what `../scripts/optimize-description.ts` measures. Holding it fixed here is what makes these numbers about the layout instead of about routing.
+Invocation is held constant. The prompt names the skill outright rather than relying on the description to route to it, because whether the description triggers is what `../operations/optimize-description.ts` measures. Holding it fixed here is what makes these numbers about the layout instead of about routing.
 
 ---
 
@@ -101,7 +101,7 @@ The report opens automatically and rewrites itself as the run proceeds. Three se
 
 **Body tokens against the guardrail** — one row per layout measured, baseline first. The body-token bar shows the trend; the pass-rate bar beside it is the guardrail at each step. Rejected candidates stay in the table, greyed, with the reason they lost. Selection reads the held-out column only, so a candidate that looks good on train and lost on held-out is showing you an overfit that the split caught.
 
-**Before adopting this layout** appears above the file table when the rewrite hit something it could not decide alone. The rewrite works on paragraphs rather than lines, because a pointer sentence is routinely wrapped and deleting the line that happens to hold the path leaves the rest of the clause dangling. The case it cannot resolve is a sentence that points at two files — deleting it to remove one takes the pointer to the other with it, and that loss is silent, where a dangling reference is loud: `../scripts/validate.ts` and the skill-reviewer agent both flag one. So the sentence stays, and the note tells you to rewrite it.
+**Before adopting this layout** appears above the file table when the rewrite hit something it could not decide alone. The rewrite works on paragraphs rather than lines, because a pointer sentence is routinely wrapped and deleting the line that happens to hold the path leaves the rest of the clause dangling. The case it cannot resolve is a sentence that points at two files — deleting it to remove one takes the pointer to the other with it, and that loss is silent, where a dangling reference is loud: `../validate/validate.ts` and the skill-reviewer agent both flag one. So the sentence stays, and the note tells you to rewrite it.
 
 The winning layout is written to `--apply <dir>`, or to `<results-dir>/best-layout/` when you gave one. **The source skill is never modified**, on any path — adopting the result stays a diff someone reads rather than something that already happened while they watched a progress bar.
 

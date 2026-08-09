@@ -63,11 +63,11 @@ are allowed.
 
 A well-formed, fully-functional Claude Code skill fails this by design, on the first extension field. Never put it in a pipeline for a Claude-Code-targeted skill — an author who meets it as a CI break will "fix" it by deleting their extensions.
 
-The standard's own guidance to runtime authors says the opposite of its validator: *"Warn on issues but still load the skill when possible… don't block skill loading on cosmetic issues."* Unknown fields are not among the conditions it lists for skipping a skill. Read the validator as **"does this use only portable fields?"**, not **"will this work?"**. Use it against the standard subset — strip extension keys, then validate — which is what `bun ../scripts/validate.ts --target-type skill <dir>` does by default; `--extended` allows the extensions through.
+The standard's own guidance to runtime authors says the opposite of its validator: *"Warn on issues but still load the skill when possible… don't block skill loading on cosmetic issues."* Unknown fields are not among the conditions it lists for skipping a skill. Read the validator as **"does this use only portable fields?"**, not **"will this work?"**. Use it against the standard subset — strip extension keys, then validate — which is what `bun ../validate/validate.ts --target-type skill <dir>` does by default; `--extended` allows the extensions through.
 
 ### The same split decides what a `.skill` bundle may contain
 
-`bun ../scripts/package-skill.ts <dir>` gates on the standard subset for the same reason, and it is a real constraint rather than a strict default: a `.skill` file is how a skill *travels*, and claude.ai upload and the Skills API accept the six fields and nothing else. A bundle built around `model:` or `argument-hint:` would be refused at the far end, so the packager refuses it here, where the message can say why.
+`bun ../tools/package-skill.ts <dir>` gates on the standard subset for the same reason, and it is a real constraint rather than a strict default: a `.skill` file is how a skill *travels*, and claude.ai upload and the Skills API accept the six fields and nothing else. A bundle built around `model:` or `argument-hint:` would be refused at the far end, so the packager refuses it here, where the message can say why.
 
 `--extended` packages it anyway. What that produces is a bundle Claude Code installs without complaint and those two reject — which is the right trade for a Claude-Code-only skill and the wrong one for anything expected to travel. Skills bundled inside a plugin never pass through the packager at all, so the question only arises for standalone distribution.
 

@@ -2,7 +2,7 @@
  * Pure readings of SKILL.md text: where the body starts, and what the body
  * claims exists on disk.
  *
- * Both are mirrored from `../scripts/validate-skill.ts` rather than imported,
+ * Both are mirrored from `../validate/validate-skill.ts` rather than imported,
  * for the reason given in `./paths.ts`. Nothing here touches the filesystem --
  * `extractReferences` says what was referenced; deciding whether those
  * references resolve is the full layer's job.

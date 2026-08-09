@@ -31,7 +31,7 @@ import {
   parseArgs,
   type ParsedArgs,
   type Spec,
-} from "../../../../shared/scripts/lib/cli.ts";
+} from "../../../../shared/cli.ts";
 import {
   DECISION_KEYS,
   EVENTS,

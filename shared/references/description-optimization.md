@@ -15,7 +15,7 @@ Twenty queries, roughly half should-trigger and half should-not, shaped
 inventing them:
 
 ```bash
-bun ../scripts/synthesize-scenarios.ts --target <skill-dir> --out evals/trigger-eval.json
+bun ../operations/synthesize-scenarios.ts --target <skill-dir> --out evals/trigger-eval.json
 ```
 
 The script reads what the artifact *does* — body, references, scripts, examples,
@@ -96,7 +96,7 @@ eval set to `evals/`, then launch it detached rather than babysitting it — the
 script opens its own dashboard, so `nohup ... &` is complete:
 
 ```bash
-nohup bun ../scripts/optimize-description.ts \
+nohup bun ../operations/optimize-description.ts \
   --eval-set <path-to-trigger-eval.json> \
   --target-path <path-to-skill-or-agent> \
   --target-type skill \

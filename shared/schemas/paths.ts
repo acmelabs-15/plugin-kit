@@ -1,8 +1,8 @@
 /**
- * Path arithmetic, mirrored from `../scripts/validate-skill.ts`.
+ * Path arithmetic, mirrored from `../validate/validate-skill.ts`.
  *
  * Deliberately duplicated rather than imported: this pass authors the schema
- * layer while `../scripts/**` is being rewritten, and the two copies are meant to
+ * layer while `../validate/**` is being rewritten, and the two copies are meant to
  * be reconciled by the later wiring pass, not now. Both are pure string maths --
  * no `node:path`, no disk.
  */

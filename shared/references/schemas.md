@@ -189,7 +189,7 @@ Wall clock for a run. Located at `<run-dir>/timing.json`.
 
 ## benchmark.json
 
-Written by `bun ../scripts/aggregate-results.ts`, and read by the viewer.
+Written by `bun ../operations/aggregate-results.ts`, and read by the viewer.
 
 ```json
 {
@@ -398,7 +398,7 @@ Written by the viewer when the user clicks "Submit All Reviews". Located at the 
 
 ## Description-optimization outputs
 
-`bun ../scripts/optimize-description.ts` writes two files that the original documentation omitted. Both land under `<--results-dir>/<timestamp>/`, and **only when `--results-dir` is passed** — without it the run keeps its results in memory, prints them, and leaves nothing behind but a report in a temp directory. Pass it if you want either file on disk afterwards.
+`bun ../operations/optimize-description.ts` writes two files that the original documentation omitted. Both land under `<--results-dir>/<timestamp>/`, and **only when `--results-dir` is passed** — without it the run keeps its results in memory, prints them, and leaves nothing behind but a report in a temp directory. Pass it if you want either file on disk afterwards.
 
 **`results.json`** — the machine-readable result of the optimization run: per-iteration candidate descriptions with their train and held-out scores, and the selected `best_description`. `best_description` is chosen on the **held-out** score. This is the file to read programmatically.
 
@@ -410,7 +410,7 @@ Written by the viewer when the user clicks "Submit All Reviews". Located at the 
 
 ## envelope.json — the results envelope
 
-One shape that every measured operation writes alongside its own output. Defined as a Zod schema, `EnvelopeSchema`, in `../scripts/lib/envelope.ts`, which is both the type source (every exported envelope type is inferred from it) and the only validator; the filename is fixed as `envelope.json` by the `ENVELOPE_FILENAME` constant.
+One shape that every measured operation writes alongside its own output. Defined as a Zod schema, `EnvelopeSchema`, in `../envelope.ts`, which is both the type source (every exported envelope type is inferred from it) and the only validator; the filename is fixed as `envelope.json` by the `ENVELOPE_FILENAME` constant.
 
 **What it is for.** A `results.json` answers "what did the run find". An envelope answers the two questions a reader has *before* they are willing to believe it: under what conditions was this produced, and is it comparable to the last one. Those questions are the same for every operation, so only `rows` varies by producer — the other four blocks mean the same thing whether the run measured trigger rates, pull rates or frontmatter errors.
 
@@ -527,7 +527,7 @@ All three are required arrays. Empty is fine; absent is refused.
 
 ### Comparability — why a delta is sometimes refused
 
-Change `workers`, `model` or `timeoutSeconds` and a run is incomparable with every earlier one, but the numbers still line up in a table and still look like a trend. `compareRuns` in `../scripts/lib/envelope.ts` makes that judgement in code rather than leaving it to whoever is squinting at two files. Six fields block a comparison, each because it changes what the number *means* rather than what it measures:
+Change `workers`, `model` or `timeoutSeconds` and a run is incomparable with every earlier one, but the numbers still line up in a table and still look like a trend. `compareRuns` in `../envelope.ts` makes that judgement in code rather than leaving it to whoever is squinting at two files. Six fields block a comparison, each because it changes what the number *means* rather than what it measures:
 
 | Key | Why a difference is disqualifying |
 |---|---|
@@ -548,11 +548,11 @@ Change `workers`, `model` or `timeoutSeconds` and a run is incomparable with eve
 
 | Producer | Flag | Default when the flag is omitted |
 |---|---|---|
-| `../scripts/measure-triggering.ts` | `--envelope <path>` | none — no flag, no envelope |
-| `../scripts/optimize-disclosure.ts` | `--envelope <path>` | `<--results-dir>/<timestamp>/envelope.json`, when `--results-dir` was passed |
-| `../scripts/validate.ts` | `--envelope <path>` | none — no flag, no envelope |
+| `../operations/measure-triggering.ts` | `--envelope <path>` | none — no flag, no envelope |
+| `../operations/optimize-disclosure.ts` | `--envelope <path>` | `<--results-dir>/<timestamp>/envelope.json`, when `--results-dir` was passed |
+| `../validate/validate.ts` | `--envelope <path>` | none — no flag, no envelope |
 
-`../scripts/optimize-description.ts` accepts `--envelope` and exports `buildDescriptionEnvelope`, but does not yet write the file; the row and verdict shapes above are what it will emit. Until it does, a description-optimization run leaves only `results.json` and `report.html`.
+`../operations/optimize-description.ts` accepts `--envelope` and exports `buildDescriptionEnvelope`, but does not yet write the file; the row and verdict shapes above are what it will emit. Until it does, a description-optimization run leaves only `results.json` and `report.html`.
 
 ### It is validated on the way out
 
@@ -562,7 +562,7 @@ Change `workers`, `model` or `timeoutSeconds` and a run is incomparable with eve
 
 ## Run status files
 
-Every long-running script writes one status file per run, and `../eval-viewer/generate-dashboard.ts` discovers them by glob. They live under `$TMPDIR/skill-creator-progress/` — override with `SKILL_CREATOR_STATUS_DIR` — named `<runId>.json`. They are scratch, not evidence: a status file describes a run in flight and is safe to delete at any time.
+Every long-running script writes one status file per run, and `../report/generate-dashboard.ts` discovers them by glob. They live under `$TMPDIR/skill-creator-progress/` — override with `SKILL_CREATOR_STATUS_DIR` — named `<runId>.json`. They are scratch, not evidence: a status file describes a run in flight and is safe to delete at any time.
 
 ```json
 {
