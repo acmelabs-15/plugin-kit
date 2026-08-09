@@ -152,6 +152,24 @@ Six corrections applied across `docs/architecture.md` and `shared/references/pur
 - Rejected: reflowing the four SKILL.md descriptions to remove blank lines, which would contort authoring around a parser defect and let the next paragraph break silently reintroduce the truncation
 - Open and delegated for report only: whether the third target type, `command`, is affected. No `commands/` directory appears to exist, which would make that branch dead in practice
 
+### Event 18 — skills read path fixed, commit `037d59f`
+
+- Branch inverted to a single positive rule: everything reads conformantly, with `command` the one carve-out, so a target type added later inherits the correct reader by default
+- Recovered lengths: `skill-creator` 567 to 948, `command-creator` 586 to 833, `plugin-creator` 688 to 892, `agent-creator` 735 to 943, `mcp-creator` unchanged at 943 with its shape corrected
+- Regression test built around a negative clause rather than an example block, because that is the shape that hurts for skills: truncation kept the "use when" half and dropped the "do not use when" half, so the measured description triggered on cases its author had excluded
+- Verified failing against the old reader at 57 characters versus 114
+- `command` confirmed dead in practice: no `commands/` directory, none declared in the manifest, and the only command-shaped file is a test fixture with a one-line description. Left unchanged deliberately, with the reason recorded in the docblock
+- `evals/MEASUREMENT-CAVEATS.md` created beside the record; `MEASUREMENTS.md` and `frontmatter.ts` both verified unchanged by diff
+- Suite 1,270 to 1,271 pass, 0 fail, typecheck clean
+
+### Event 19 — gap found: an unmapped rename in the measurement records
+
+- `evals/MEASUREMENTS.md` records the skill as `create-plugin` at five sites; on disk it is `skills/plugin-creator/` with `name: plugin-creator`
+- A whole record family carries the former name: `evals/results/{after,baseline,final,optimize}/create-plugin.json`, `evals/trigger/create-plugin.json`, `evals/trigger/create-plugin-inventory.md`, `evals/disclosure/create-plugin.json`
+- `evals/RETIRED-ARTIFACTS.md` maps only `hook-creator` and `hook-reviewer`, so this rename is uncovered
+- The house rule that a rename gets a mapping note beside the record is therefore satisfied for the retirement and not for this rename
+- Worked around for one note only: `MEASUREMENT-CAVEATS.md` states inline that `plugin-creator` is recorded under its former name. The general mapping is still missing
+
 ## Observations
 
 ### Session infrastructure
