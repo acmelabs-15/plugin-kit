@@ -98,6 +98,7 @@ import {
   type Envelope,
   type HeadlineMetric,
   type InstallState,
+  type OperationName,
   type TokenizerKind,
   type Verdict,
 } from "./lib/envelope.ts";
@@ -936,6 +937,17 @@ export function createRunTally(): {
 
 export interface DisclosureEnvelopeInput {
   readonly output: OptimizeOutput;
+  /**
+   * Which operation produced this, defaulting to the optimizer.
+   *
+   * A parameter rather than a constant because the builder is not the optimizer's: a
+   * measurement pass produces the same rows, the same verdicts and the same provenance
+   * questions, and the only thing that differs is which entrypoint asked. Hard-coding it
+   * would force `measure-disclosure` to either lie about being the optimizer or fork the
+   * builder, and a forked builder is how two producers stop agreeing about what a pull
+   * rate means.
+   */
+  readonly operation?: OperationName;
   readonly tally: RunTally;
   /**
    * Scenario runs the loop budgeted, worst case.
@@ -1240,7 +1252,7 @@ export function buildDisclosureEnvelope(
       // one correct setting and one way to be wrong.
       artifact: "skill",
       target: output.skill_name,
-      operation: "optimize-disclosure",
+      operation: input.operation ?? "optimize-disclosure",
       model: input.model,
       // The first producer with a real grader. Disclosure grades every run's assertions
       // with a second call on a DIFFERENT model from the one that did the work, so

@@ -23,7 +23,6 @@ import { rm } from "node:fs/promises";
 
 import {
   ADVISORY_KEYS,
-  assertValidEnvelope,
   buildEnvelope,
   compareEnvelopes,
   compareRuns,
@@ -37,7 +36,7 @@ import {
   installConflict,
   newEnvelopeId,
   readEnvelope,
-  validateEnvelope,
+  EnvelopeSchema,
   writeEnvelope,
   type Envelope,
   type RunBlock,
@@ -97,9 +96,21 @@ function envelope(overrides: Partial<Envelope> = {}): Envelope {
 // Validation
 // ---------------------------------------------------------------------------
 
-describe("validateEnvelope", () => {
+describe("EnvelopeSchema", () => {
+  /**
+   * Dotted issue paths, which is how a caller names the field that is wrong.
+   *
+   * Zod carries the field in a structured \`path\` array rather than in the sentence, so
+   * these tests assert on the path and not on the wording. The wording is Zod's and will
+   * change with Zod; the path is the contract.
+   */
+  function paths(value: unknown): readonly string[] {
+    const result = EnvelopeSchema.safeParse(value);
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+  }
+
   test("a complete envelope has no problems", () => {
-    expect(validateEnvelope(envelope())).toEqual([]);
+    expect(paths(envelope())).toEqual([]);
   });
 
   const RUN_FIELDS: string[] = [
@@ -122,9 +133,7 @@ describe("validateEnvelope", () => {
     const bad = envelope();
     const run: Record<string, unknown> = { ...bad.run };
     delete run[field];
-    const problems = validateEnvelope({ ...bad, run });
-    expect(problems.map((p) => p.path)).toEqual([`run.${field}`]);
-    expect(problems[0]?.message).toContain(`run.${field}`);
+    expect(paths({ ...bad, run })).toEqual([`run.${field}`]);
   });
 
   const PROVENANCE_FIELDS: string[] = [
@@ -141,110 +150,128 @@ describe("validateEnvelope", () => {
     const bad = envelope();
     const provenance: Record<string, unknown> = { ...bad.provenance };
     delete provenance[field];
-    const problems = validateEnvelope({ ...bad, provenance });
-    expect(problems.map((p) => p.path)).toEqual([`provenance.${field}`]);
+    expect(paths({ ...bad, provenance })).toEqual([`provenance.${field}`]);
   });
 
   test("a whole missing run block is one problem, not thirteen", () => {
     const { run: _run, ...rest } = envelope();
-    expect(validateEnvelope(rest).map((p) => p.path)).toEqual(["run"]);
+    expect(paths(rest)).toEqual(["run"]);
   });
 
   test("a whole missing provenance block is refused", () => {
     const { provenance: _p, ...rest } = envelope();
-    expect(validateEnvelope(rest).map((p) => p.path)).toEqual(["provenance"]);
+    expect(paths(rest)).toEqual(["provenance"]);
   });
 
   test.each(["headline", "rows", "verdicts"] as const)("a missing %s array is refused", (key) => {
     const bad: Record<string, unknown> = { ...envelope() };
     delete bad[key];
-    expect(validateEnvelope(bad).map((p) => p.path)).toEqual([key]);
+    expect(paths(bad)).toEqual([key]);
   });
 
-  // The distinction the whole validator turns on: `{installState: undefined}` and `{}`
-  // serialize identically, so presence has to be checked with `in`, and an explicit null
-  // has to be accepted only where null is a real answer.
+  // The distinction the whole schema turns on: `{installState: undefined}` and `{}`
+  // serialize identically, so a present-but-undefined key has to read as missing rather
+  // than as a value -- and an explicit null has to be accepted only where null is a real
+  // answer. Zod gets the first for free: a required key is unsatisfied by `undefined`.
   test("an explicitly undefined field reads as missing", () => {
-    const problems = validateEnvelope({
-      ...envelope(),
-      run: { ...runBlock(), installState: undefined },
-    });
-    expect(problems.map((p) => p.path)).toEqual(["run.installState"]);
+    expect(paths({ ...envelope(), run: { ...runBlock(), installState: undefined } })).toEqual([
+      "run.installState",
+    ]);
   });
 
   test("null is accepted where it is a real answer and refused where it is not", () => {
     expect(
-      validateEnvelope({ ...envelope(), run: { ...runBlock(), model: null, evalSetHash: null } }),
+      paths({ ...envelope(), run: { ...runBlock(), model: null, evalSetHash: null } }),
     ).toEqual([]);
-    expect(
-      validateEnvelope({ ...envelope(), run: { ...runBlock(), targetSha: null } }).map(
-        (p) => p.path,
-      ),
-    ).toEqual(["run.targetSha"]);
+    expect(paths({ ...envelope(), run: { ...runBlock(), targetSha: null } })).toEqual([
+      "run.targetSha",
+    ]);
   });
 
   test("an unknown installState is refused, so a typo cannot invent a state", () => {
-    const problems = validateEnvelope({
+    const result = EnvelopeSchema.safeParse({
       ...envelope(),
       run: { ...runBlock(), installState: "not-installed" },
     });
-    expect(problems.map((p) => p.path)).toEqual(["run.installState"]);
-    expect(problems[0]?.message).toContain("absent, installed, shadowed, unknown");
+    expect(result.success).toBe(false);
+    const issue = result.success ? undefined : result.error.issues[0];
+    expect(issue?.path.join(".")).toBe("run.installState");
+    // The enum's members are named in the message, so a reader is told what WAS allowed
+    // rather than only that their value was not.
+    expect(issue?.message).toContain("absent");
+    expect(issue?.message).toContain("unknown");
   });
 
   test("an unknown timeoutPolicy is refused", () => {
     const bad = envelope();
-    const problems = validateEnvelope({
-      ...bad,
-      provenance: { ...bad.provenance, timeoutPolicy: "ignored" },
-    });
-    expect(problems.map((p) => p.path)).toEqual(["provenance.timeoutPolicy"]);
+    expect(paths({ ...bad, provenance: { ...bad.provenance, timeoutPolicy: "ignored" } })).toEqual(
+      ["provenance.timeoutPolicy"],
+    );
   });
 
   test("caps must be strings, since it is prose a reader is shown", () => {
     const bad = envelope();
-    const problems = validateEnvelope({ ...bad, provenance: { ...bad.provenance, caps: [7] } });
-    expect(problems.map((p) => p.path)).toEqual(["provenance.caps"]);
+    // Named per offending element rather than once for the array. The hand-rolled check
+    // this replaced reported `provenance.caps` whatever went wrong inside it.
+    expect(paths({ ...bad, provenance: { ...bad.provenance, caps: [7, "ok", 9] } })).toEqual([
+      "provenance.caps.0",
+      "provenance.caps.2",
+    ]);
   });
 
   test("headline and verdict entries are checked field by field", () => {
-    const problems = validateEnvelope({
-      ...envelope(),
-      headline: [{ label: "x", unit: "fraction" }],
-      verdicts: [{ subject: "a", verdict: "prune" }],
-    });
-    expect(problems.map((p) => p.path)).toEqual(["headline[0].value", "verdicts[0].reason"]);
+    expect(
+      paths({
+        ...envelope(),
+        headline: [{ label: "x", unit: "fraction" }],
+        verdicts: [{ subject: "a", verdict: "prune" }],
+      }),
+    ).toEqual(["headline.0.value", "verdicts.0.reason"]);
   });
 
   test("an optional headline delta is allowed but typechecked when present", () => {
     expect(
-      validateEnvelope({ ...envelope(), headline: [{ label: "x", value: 1, unit: "n", delta: -2 }] }),
+      paths({ ...envelope(), headline: [{ label: "x", value: 1, unit: "n", delta: -2 }] }),
     ).toEqual([]);
     expect(
-      validateEnvelope({
-        ...envelope(),
-        headline: [{ label: "x", value: 1, unit: "n", delta: "-2" }],
-      }).map((p) => p.path),
-    ).toEqual(["headline[0].delta"]);
+      paths({ ...envelope(), headline: [{ label: "x", value: 1, unit: "n", delta: "-2" }] }),
+    ).toEqual(["headline.0.delta"]);
+  });
+
+  // Every count in the envelope is arithmetic a reader will do more arithmetic on, so a
+  // non-finite one is refused for the same reason a string is.
+  test.each([Number.NaN, Number.POSITIVE_INFINITY])("a non-finite number is refused", (value) => {
+    const bad = envelope();
+    expect(paths({ ...bad, provenance: { ...bad.provenance, scored: value } })).toEqual([
+      "provenance.scored",
+    ]);
   });
 
   test("a non-object is refused rather than crashing", () => {
-    expect(validateEnvelope(null).map((p) => p.message)).toEqual([
-      "envelope must be a JSON object",
-    ]);
-    expect(validateEnvelope([]).length).toBe(1);
+    expect(paths(null)).toEqual([""]);
+    expect(paths([])).toEqual([""]);
   });
 
-  test("assertValidEnvelope throws an EnvelopeError carrying every problem", () => {
+  // Unknown keys pass. The schema says what an envelope must carry, not what it may not,
+  // and a producer that adds a field is not writing an invalid envelope.
+  test("an extra key is not a problem", () => {
+    expect(paths({ ...envelope(), extra: 1 })).toEqual([]);
+  });
+
+  test("writeEnvelope throws an EnvelopeError carrying every problem", async () => {
     let thrown: unknown;
     try {
-      assertValidEnvelope({ run: {}, provenance: {} });
+      await writeEnvelope("/dev/null", { run: {}, provenance: {} } as unknown as Envelope);
     } catch (error) {
       thrown = error;
     }
     expect(thrown).toBeInstanceOf(EnvelopeError);
     const problems = (thrown as EnvelopeError).problems;
     expect(problems.length).toBe(13 + 7 + 3);
+    // Each problem still names its field, which is the whole reason the error carries a
+    // list rather than a sentence.
+    expect(problems.map((p) => p.path)).toContain("run.installState");
+    expect((thrown as EnvelopeError).message).toContain("run.installState");
   });
 });
 
@@ -278,7 +305,7 @@ describe("buildEnvelope", () => {
         caps: ["environment checks not performed"],
       },
     });
-    expect(validateEnvelope(built)).toEqual([]);
+    expect(EnvelopeSchema.safeParse(built).success).toBe(true);
     expect(built.run.id).toContain("validate-demo-");
     expect(built.run.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     // Absent arrays default to empty rather than being omitted; the contract says every

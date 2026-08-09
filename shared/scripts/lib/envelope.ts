@@ -61,14 +61,32 @@
  * dependency, no spawned tool.
  */
 
+import { z } from "zod@4.1.0";
+
 import { discoverSkillsWithStatus, type Discovery } from "../check-overlap.ts";
 
 // ---------------------------------------------------------------------------
 // Vocabulary
 // ---------------------------------------------------------------------------
 
+/**
+ * Structural deep-readonly, applied to every type inferred below.
+ *
+ * Zod infers mutable properties and the interfaces this file used to hand-write were
+ * `readonly` throughout, so dropping the modifier would be a source-visible change rather
+ * than the representation change this conversion is. Zod's own `.readonly()` would express
+ * it inside the schema but freezes the parsed object at runtime, which is a behaviour
+ * change; this keeps the change in the type system where it belongs.
+ */
+type Immutable<T> = T extends readonly (infer Element)[]
+  ? readonly Immutable<Element>[]
+  : T extends object
+    ? { readonly [K in keyof T]: Immutable<T[K]> }
+    : T;
+
 /** The artifact kinds this plugin measures. Mirrors `../../rules/registry.ts`. */
-export type ArtifactKind = "skill" | "agent" | "command" | "mcp" | "plugin";
+export const ArtifactKindSchema = z.enum(["skill", "agent", "command", "mcp", "plugin"]);
+export type ArtifactKind = z.infer<typeof ArtifactKindSchema>;
 
 /**
  * The operations that write an envelope, named after the entrypoint that produces them.
@@ -77,11 +95,14 @@ export type ArtifactKind = "skill" | "agent" | "command" | "mcp" | "plugin";
  * new operation as far as any consumer grouping by it is concerned, and the whole point of
  * this file is that the reporting layer can group runs without asking the producer.
  */
-export type OperationName =
-  | "measure-triggering"
-  | "optimize-description"
-  | "optimize-disclosure"
-  | "validate";
+export const OperationNameSchema = z.enum([
+  "measure-triggering",
+  "measure-disclosure",
+  "optimize-description",
+  "optimize-disclosure",
+  "validate",
+]);
+export type OperationName = z.infer<typeof OperationNameSchema>;
 
 /**
  * What the machine's installed set looked like from the run's point of view.
@@ -96,16 +117,14 @@ export type OperationName =
  * `unknown` is a real answer, not a placeholder: it means the sweep could not see enough
  * of the machine to have an opinion. Recording it is strictly better than recording
  * `absent`, which is a claim.
+ *
+ *   absent     Nothing on the machine claims the target's name besides the source under test.
+ *   installed  A copy of the target is installed under its own name.
+ *   shadowed   Something else is installed under the target's name and can win its probes.
+ *   unknown    The sweep did not run, or ran blind. Never write it to mean "probably absent".
  */
-export type InstallState =
-  /** Nothing on the machine claims the target's name besides the source under test. */
-  | "absent"
-  /** A copy of the target is installed under its own name. */
-  | "installed"
-  /** Something else is installed under the target's name and can win its probes. */
-  | "shadowed"
-  /** The sweep did not run, or ran blind. Never write this to mean "probably absent". */
-  | "unknown";
+export const InstallStateSchema = z.enum(["absent", "installed", "shadowed", "unknown"]);
+export type InstallState = z.infer<typeof InstallStateSchema>;
 
 /**
  * How the number was arrived at, for reports that carry token counts.
@@ -114,7 +133,8 @@ export type InstallState =
  * figure at all, and it exists so that such an operation cannot be forced to claim
  * `tiktoken` (a lie about precision) or `estimated` (a lie about there being a number).
  */
-export type TokenizerKind = "tiktoken" | "estimated" | "none";
+export const TokenizerKindSchema = z.enum(["tiktoken", "estimated", "none"]);
+export type TokenizerKind = z.infer<typeof TokenizerKindSchema>;
 
 /**
  * What the operation does with a unit of work that timed out.
@@ -135,14 +155,13 @@ export type TokenizerKind = "tiktoken" | "estimated" | "none";
  * Neither is being changed. What changes is that each now says which one it uses, so a
  * reader comparing a disclosure rate against a triggering rate can see that the same
  * `failed` count landed on opposite sides of the line.
+ *
+ *   scored         A timed-out unit is folded into the numbers as a definite negative.
+ *   excluded        A timed-out unit is dropped from the denominators.
+ *   not-applicable  Nothing in this operation can time out, because it spawns nothing.
  */
-export type TimeoutPolicy =
-  /** A timed-out unit is folded into the numbers as a definite negative outcome. */
-  | "scored"
-  /** A timed-out unit is dropped from the denominators. */
-  | "excluded"
-  /** Nothing in this operation can time out, because it spawns nothing. */
-  | "not-applicable";
+export const TimeoutPolicySchema = z.enum(["scored", "excluded", "not-applicable"]);
+export type TimeoutPolicy = z.infer<typeof TimeoutPolicySchema>;
 
 // ---------------------------------------------------------------------------
 // The envelope
@@ -154,17 +173,18 @@ export type TimeoutPolicy =
  * Every field is required. `null` is permitted where it is a real answer -- `model: null`
  * means no model was involved, not "we forgot" -- but the KEY is never absent, because an
  * absent key and a null value read identically to a consumer while meaning opposite
- * things. {@link validateEnvelope} enforces exactly that distinction.
+ * things. {@link EnvelopeSchema} enforces exactly that distinction: a required key is unsatisfied by
+ * `undefined`, and `.nullable()` marks the places where null is a real answer.
  */
-export interface RunBlock {
+export const RunBlockSchema = z.object({
   /** Unique per run and readable in a directory listing. */
-  readonly id: string;
+  id: z.string(),
   /** ISO 8601, UTC. */
-  readonly startedAt: string;
-  readonly artifact: ArtifactKind;
+  startedAt: z.string(),
+  artifact: ArtifactKindSchema,
   /** The artifact's authored name -- `ask-user-question`, not a path. */
-  readonly target: string;
-  readonly operation: OperationName;
+  target: z.string(),
+  operation: OperationNameSchema,
   /**
    * The model the run pinned, or `null` when this run's model is not part of the record.
    *
@@ -175,15 +195,15 @@ export interface RunBlock {
    * equal here while having been answered by whatever each machine had configured --
    * which is precisely the incomparability {@link compareRuns} exists to catch.
    */
-  readonly model: string | null;
+  model: z.string().nullable(),
   /** The grading model, or `null` when the operation has no grading step. */
-  readonly graderModel: string | null;
+  graderModel: z.string().nullable(),
   /** Concurrent units of work. `1` for a sequential operation, never `0`. */
-  readonly workers: number;
+  workers: z.number(),
   /** Repeats per unit -- runs per query, runs per scenario. */
-  readonly runsPer: number;
+  runsPer: z.number(),
   /** Per-unit wall clock budget, or `null` when nothing can time out. */
-  readonly timeoutSeconds: number | null;
+  timeoutSeconds: z.number().nullable(),
   /**
    * Content hash of the questions asked, or `null` when the operation asks none.
    *
@@ -191,15 +211,16 @@ export interface RunBlock {
    * reformatting an eval set does not make two runs look incomparable while renaming a
    * query correctly does.
    */
-  readonly evalSetHash: string | null;
+  evalSetHash: z.string().nullable(),
   /** Content hash of the artifact under test, from {@link hashArtifact}. */
-  readonly targetSha: string;
-  readonly installState: InstallState;
-}
+  targetSha: z.string(),
+  installState: InstallStateSchema,
+});
+export type RunBlock = Immutable<z.infer<typeof RunBlockSchema>>;
 
 /** How the numbers were arrived at, and what bounded them. */
-export interface Provenance {
-  readonly tokenizer: TokenizerKind;
+export const ProvenanceSchema = z.object({
+  tokenizer: TokenizerKindSchema,
   /**
    * What one unit of `scored`/`excluded`/`failed` is, in words -- "query attempt",
    * "scenario run", "check section".
@@ -207,11 +228,11 @@ export interface Provenance {
    * `"scored": 24` is meaningless without it, and the unit is not recoverable from
    * `runsPer` because the two operations count different things.
    */
-  readonly unit: string;
+  unit: z.string(),
   /** Units that reached the numbers in `headline` and `rows`. */
-  readonly scored: number;
+  scored: z.number(),
   /** Units that ran, or partly ran, and were deliberately left out of the denominators. */
-  readonly excluded: number;
+  excluded: z.number(),
   /**
    * Units the harness could not complete -- a timeout, or a spawn that errored.
    *
@@ -221,8 +242,8 @@ export interface Provenance {
    * destroy the thing this exists to show: under a `scored` policy a timeout is in the
    * numbers, and a reader has to be able to see both that it happened and that it counted.
    */
-  readonly failed: number;
-  readonly timeoutPolicy: TimeoutPolicy;
+  failed: z.number(),
+  timeoutPolicy: TimeoutPolicySchema,
   /**
    * Anything that bounded coverage, one plain sentence each.
    *
@@ -230,15 +251,16 @@ export interface Provenance {
    * whose absence is invisible, so it is required and empty-by-declaration rather than
    * optional.
    */
-  readonly caps: readonly string[];
-}
+  caps: z.array(z.string()),
+});
+export type Provenance = Immutable<z.infer<typeof ProvenanceSchema>>;
 
 /** One figure a reader should see without opening the table. */
-export interface HeadlineMetric {
-  readonly label: string;
-  readonly value: number;
+export const HeadlineMetricSchema = z.object({
+  label: z.string(),
+  value: z.number(),
   /** `"fraction"`, `"tokens"`, `"queries"` -- whatever makes the number readable. */
-  readonly unit: string;
+  unit: z.string(),
   /**
    * Difference from a comparable earlier run.
    *
@@ -246,8 +268,9 @@ export interface HeadlineMetric {
    * legitimate to subtract. A delta is only ever filled in after {@link compareRuns} has
    * said the two runs are comparable; that is the whole reason the check exists.
    */
-  readonly delta?: number;
-}
+  delta: z.number().optional(),
+});
+export type HeadlineMetric = Immutable<z.infer<typeof HeadlineMetricSchema>>;
 
 /**
  * What the operation concluded about one subject.
@@ -258,11 +281,12 @@ export interface HeadlineMetric {
  * lose meaning or grow a union nobody can read. `reason` is what makes that survivable:
  * a verdict a reader has never seen before still arrives with its justification attached.
  */
-export interface Verdict {
-  readonly subject: string;
-  readonly verdict: string;
-  readonly reason: string;
-}
+export const VerdictSchema = z.object({
+  subject: z.string(),
+  verdict: z.string(),
+  reason: z.string(),
+});
+export type Verdict = Immutable<z.infer<typeof VerdictSchema>>;
 
 /**
  * The envelope. `Row` is the operation's own table row type.
@@ -270,13 +294,23 @@ export interface Verdict {
  * Generic rather than `unknown[]` so a producer's rows stay typed at the producer, which
  * is the only place their shape is known. Consumers reading a file back get the default.
  */
-export interface Envelope<Row = unknown> {
-  readonly run: RunBlock;
-  readonly provenance: Provenance;
-  readonly headline: readonly HeadlineMetric[];
-  readonly rows: readonly Row[];
-  readonly verdicts: readonly Verdict[];
-}
+export const EnvelopeSchema = z.object({
+  run: RunBlockSchema,
+  provenance: ProvenanceSchema,
+  headline: z.array(HeadlineMetricSchema),
+  rows: z.array(z.unknown()),
+  verdicts: z.array(VerdictSchema),
+});
+
+/**
+ * `rows` is the one member overridden rather than inferred, because it is the generic hole:
+ * the schema can only say "an array of something", and the producer is the only place the
+ * something is known. Every other member comes straight off {@link EnvelopeSchema}.
+ */
+export type Envelope<Row = unknown> = Omit<
+  Immutable<z.infer<typeof EnvelopeSchema>>,
+  "rows"
+> & { readonly rows: readonly Row[] };
 
 /** The filename producers write alongside their existing `results.json`. */
 export const ENVELOPE_FILENAME = "envelope.json";
@@ -354,173 +388,37 @@ export interface EnvelopeProblem {
   readonly message: string;
 }
 
-const ARTIFACT_KINDS: readonly ArtifactKind[] = [
-  "skill",
-  "agent",
-  "command",
-  "mcp",
-  "plugin",
-];
-const OPERATION_NAMES: readonly OperationName[] = [
-  "measure-triggering",
-  "optimize-description",
-  "optimize-disclosure",
-  "validate",
-];
-const INSTALL_STATES: readonly InstallState[] = ["absent", "installed", "shadowed", "unknown"];
-const TOKENIZER_KINDS: readonly TokenizerKind[] = ["tiktoken", "estimated", "none"];
-const TIMEOUT_POLICIES: readonly TimeoutPolicy[] = ["scored", "excluded", "not-applicable"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+/**
+ * Render a Zod issue path the way this module has always named a field: dotted for keys,
+ * bracketed for indices, so a problem reads `headline[0].value` rather than
+ * `headline.0.value`. The empty string is the envelope itself.
+ */
+function formatIssuePath(path: readonly PropertyKey[]): string {
+  let rendered = "";
+  for (const segment of path) {
+    if (typeof segment === "number") rendered += `[${segment}]`;
+    else rendered += rendered === "" ? String(segment) : `.${String(segment)}`;
+  }
+  return rendered;
 }
 
 /**
- * Check one field for presence AND type in a single pass.
+ * Zod issues as the `{path, message}` pairs {@link EnvelopeError} promises its callers.
  *
- * Presence is checked with `in` rather than by testing for `undefined`, which is the whole
- * point: `{ installState: undefined }` and `{}` serialize to the same JSON, and a producer
- * that forgot the field is exactly the failure mode being caught. A key that is present
- * and null is a different statement, and is accepted only where `nullable` says so.
+ * A mapping, not a second validator. Every rule lives in {@link EnvelopeSchema} and nowhere
+ * else; this exists only because a caller wants to assert that omitting `installState` was
+ * caught BY NAME rather than that something somewhere went wrong, and Zod carries the name
+ * in a structured path rather than in the sentence.
  */
-function checkField(
-  problems: EnvelopeProblem[],
-  container: Record<string, unknown>,
-  prefix: string,
-  key: string,
-  expected: "string" | "number" | "boolean" | "string[]",
-  options: { readonly nullable?: boolean; readonly oneOf?: readonly string[] } = {},
-): void {
-  const path = `${prefix}.${key}`;
-  if (!(key in container)) {
-    problems.push({ path, message: `missing required field \`${path}\`` });
-    return;
-  }
-  const value = container[key];
-  if (value === null) {
-    if (options.nullable !== true) {
-      problems.push({ path, message: `\`${path}\` may not be null` });
-    }
-    return;
-  }
-  if (value === undefined) {
-    problems.push({ path, message: `missing required field \`${path}\`` });
-    return;
-  }
-  if (expected === "string[]") {
-    if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
-      problems.push({ path, message: `\`${path}\` must be an array of strings` });
-    }
-    return;
-  }
-  if (typeof value !== expected) {
-    problems.push({ path, message: `\`${path}\` must be a ${expected}, got ${typeof value}` });
-    return;
-  }
-  if (expected === "number" && !Number.isFinite(value)) {
-    problems.push({ path, message: `\`${path}\` must be a finite number` });
-    return;
-  }
-  if (options.oneOf !== undefined && !options.oneOf.includes(value as string)) {
-    problems.push({
-      path,
-      message: `\`${path}\` must be one of ${options.oneOf.join(", ")}, got ${String(value)}`,
-    });
-  }
+function problemsOf(error: z.ZodError): readonly EnvelopeProblem[] {
+  return error.issues.map((issue) => {
+    const path = formatIssuePath(issue.path);
+    return { path, message: path === "" ? issue.message : `${path}: ${issue.message}` };
+  });
 }
 
-/**
- * Every problem with a candidate envelope, or an empty array.
- *
- * Returns a list rather than throwing, and names the offending field in `path`, because
- * the two callers want different things: {@link writeEnvelope} wants to refuse with all
- * the reasons at once, and a test wants to assert that omitting `installState` is caught
- * BY NAME rather than that something somewhere went wrong.
- */
-export function validateEnvelope(value: unknown): readonly EnvelopeProblem[] {
-  const problems: EnvelopeProblem[] = [];
-  if (!isRecord(value)) {
-    return [{ path: "", message: "envelope must be a JSON object" }];
-  }
 
-  const run = value["run"];
-  if (!isRecord(run)) {
-    problems.push({ path: "run", message: "missing required object `run`" });
-  } else {
-    checkField(problems, run, "run", "id", "string");
-    checkField(problems, run, "run", "startedAt", "string");
-    checkField(problems, run, "run", "artifact", "string", { oneOf: ARTIFACT_KINDS });
-    checkField(problems, run, "run", "target", "string");
-    checkField(problems, run, "run", "operation", "string", { oneOf: OPERATION_NAMES });
-    checkField(problems, run, "run", "model", "string", { nullable: true });
-    checkField(problems, run, "run", "graderModel", "string", { nullable: true });
-    checkField(problems, run, "run", "workers", "number");
-    checkField(problems, run, "run", "runsPer", "number");
-    checkField(problems, run, "run", "timeoutSeconds", "number", { nullable: true });
-    checkField(problems, run, "run", "evalSetHash", "string", { nullable: true });
-    checkField(problems, run, "run", "targetSha", "string");
-    checkField(problems, run, "run", "installState", "string", { oneOf: INSTALL_STATES });
-  }
-
-  const provenance = value["provenance"];
-  if (!isRecord(provenance)) {
-    problems.push({ path: "provenance", message: "missing required object `provenance`" });
-  } else {
-    const at = "provenance";
-    checkField(problems, provenance, at, "tokenizer", "string", { oneOf: TOKENIZER_KINDS });
-    checkField(problems, provenance, at, "unit", "string");
-    checkField(problems, provenance, at, "scored", "number");
-    checkField(problems, provenance, at, "excluded", "number");
-    checkField(problems, provenance, at, "failed", "number");
-    checkField(problems, provenance, at, "timeoutPolicy", "string", { oneOf: TIMEOUT_POLICIES });
-    checkField(problems, provenance, at, "caps", "string[]");
-  }
-
-  for (const key of ["headline", "rows", "verdicts"] as const) {
-    if (!(key in value)) {
-      problems.push({ path: key, message: `missing required array \`${key}\`` });
-      continue;
-    }
-    if (!Array.isArray(value[key])) {
-      problems.push({ path: key, message: `\`${key}\` must be an array` });
-    }
-  }
-
-  const headline = value["headline"];
-  if (Array.isArray(headline)) {
-    for (const [index, metric] of headline.entries()) {
-      const at = `headline[${index}]`;
-      if (!isRecord(metric)) {
-        problems.push({ path: at, message: `${at} must be an object` });
-        continue;
-      }
-      checkField(problems, metric, at, "label", "string");
-      checkField(problems, metric, at, "value", "number");
-      checkField(problems, metric, at, "unit", "string");
-      if ("delta" in metric && metric["delta"] !== undefined) {
-        checkField(problems, metric, at, "delta", "number");
-      }
-    }
-  }
-
-  const verdicts = value["verdicts"];
-  if (Array.isArray(verdicts)) {
-    for (const [index, verdict] of verdicts.entries()) {
-      const at = `verdicts[${index}]`;
-      if (!isRecord(verdict)) {
-        problems.push({ path: at, message: `${at} must be an object` });
-        continue;
-      }
-      checkField(problems, verdict, at, "subject", "string");
-      checkField(problems, verdict, at, "verdict", "string");
-      checkField(problems, verdict, at, "reason", "string");
-    }
-  }
-
-  return problems;
-}
-
-/** Thrown by {@link assertValidEnvelope} and {@link writeEnvelope}. */
+/** Thrown by {@link writeEnvelope} and {@link readEnvelope}. */
 export class EnvelopeError extends Error {
   constructor(readonly problems: readonly EnvelopeProblem[]) {
     super(
@@ -530,9 +428,17 @@ export class EnvelopeError extends Error {
   }
 }
 
-export function assertValidEnvelope(value: unknown): asserts value is Envelope {
-  const problems = validateEnvelope(value);
-  if (problems.length > 0) throw new EnvelopeError(problems);
+/**
+ * Parse against {@link EnvelopeSchema}, throwing {@link EnvelopeError} with every problem.
+ *
+ * The parsed data is deliberately discarded. `z.object` strips keys it does not know, and
+ * this is the gate a whole envelope passes through on its way to and from disk -- returning
+ * the stripped copy would silently drop a producer's extra field on read and change what a
+ * round trip means. Validation is all that is wanted here, so validation is all it does.
+ */
+function assertEnvelope(value: unknown): asserts value is Envelope {
+  const result = EnvelopeSchema.safeParse(value);
+  if (!result.success) throw new EnvelopeError(problemsOf(result.error));
 }
 
 // ---------------------------------------------------------------------------
@@ -549,14 +455,14 @@ export function assertValidEnvelope(value: unknown): asserts value is Envelope {
  * is not evidence a hand-built file is right is that nothing was checking.
  */
 export async function writeEnvelope(path: string, envelope: Envelope<unknown>): Promise<void> {
-  assertValidEnvelope(envelope);
+  assertEnvelope(envelope);
   await Bun.write(path, `${JSON.stringify(envelope, null, 2)}\n`);
 }
 
 /** Read an envelope back, validating it. Throws {@link EnvelopeError} on a bad file. */
 export async function readEnvelope(path: string): Promise<Envelope> {
   const parsed: unknown = await Bun.file(path).json();
-  assertValidEnvelope(parsed);
+  assertEnvelope(parsed);
   return parsed;
 }
 

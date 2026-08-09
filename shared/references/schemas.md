@@ -410,7 +410,7 @@ Written by the viewer when the user clicks "Submit All Reviews". Located at the 
 
 ## envelope.json — the results envelope
 
-One shape that every measured operation writes alongside its own output. Defined and validated in `../scripts/lib/envelope.ts`; the filename is fixed as `envelope.json` by the `ENVELOPE_FILENAME` constant.
+One shape that every measured operation writes alongside its own output. Defined as a Zod schema, `EnvelopeSchema`, in `../scripts/lib/envelope.ts`, which is both the type source (every exported envelope type is inferred from it) and the only validator; the filename is fixed as `envelope.json` by the `ENVELOPE_FILENAME` constant.
 
 **What it is for.** A `results.json` answers "what did the run find". An envelope answers the two questions a reader has *before* they are willing to believe it: under what conditions was this produced, and is it comparable to the last one. Those questions are the same for every operation, so only `rows` varies by producer — the other four blocks mean the same thing whether the run measured trigger rates, pull rates or frontmatter errors.
 
@@ -466,7 +466,7 @@ One shape that every measured operation writes alongside its own output. Defined
 | `startedAt` | no | ISO 8601, UTC. Filled in by the builder |
 | `artifact` | no | `skill`, `agent`, `command`, `mcp`, `plugin` or `hooks`. An unlisted value is refused |
 | `target` | no | The artifact's authored name — `ask-user-question`, not a path |
-| `operation` | no | `measure-triggering`, `optimize-description`, `optimize-disclosure` or `validate`. A closed set, so a typo cannot invent an operation that consumers then group by |
+| `operation` | no | `measure-triggering`, `measure-disclosure`, `optimize-description`, `optimize-disclosure` or `validate`. A closed set, so a typo cannot invent an operation that consumers then group by |
 | `model` | **yes** | The model the run pinned. `null` means either no model was involved or the caller omitted `--model`; the two are told apart by a `caps` sentence, which a producer taking the second path must add |
 | `graderModel` | **yes** | The grading model, `null` when the operation has no grading step. Only `optimize-disclosure` fills it today |
 | `workers` | no | Concurrent units of work. `1` for a sequential operation, never `0` |
@@ -501,7 +501,7 @@ This repository holds two opposite policies, both defensible, and neither is bei
 | Value | Meaning | Used by |
 |---|---|---|
 | `scored` | A timed-out unit is folded into the numbers as a definite negative outcome | `measure-triggering`, `optimize-description` |
-| `excluded` | A timed-out unit is dropped from the denominators | `optimize-disclosure` |
+| `excluded` | A timed-out unit is dropped from the denominators | `optimize-disclosure`, `measure-disclosure` |
 | `not-applicable` | Nothing in this operation can time out, because it spawns nothing | `validate` |
 
 `measure-triggering` scores a timeout as a non-trigger: the router demonstrably did not reach for the artifact within the budget, and a description that only triggers after 150 seconds has not triggered. `optimize-disclosure` excludes it: a run that never finished says nothing about whether its scenario needed a reference, and treating silence as evidence of absence would push the loop toward deleting files whose only crime was being needed by a slow scenario. Under `excluded`, `failed` and `excluded` are the same number; under `scored` they are not, and that difference is the whole point of reporting both.
@@ -518,7 +518,9 @@ All three are required arrays. Empty is fine; absent is refused.
 |---|---|---|
 | `measure-triggering` | one query: `query`, `shouldTrigger`, `triggers`, `runs`, `triggerRate`, `pass`, `earlyStopped` | `pass`, `fail` |
 | `optimize-description` | one iteration: `iteration`, `description`, `trainPassed`, `trainTotal`, `testPassed`, `testTotal`, `selected` | `selected`, `scored` |
-| `optimize-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
+| `optimize-disclosure`, `measure-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
+
+`measure-disclosure` shares the disclosure builder rather than owning one. It measures the layout as authored where `optimize-disclosure` measures the layout it selected, so the rows, the verdict vocabulary and the timeout policy are the same and only `run.operation` distinguishes them — which is exactly what a closed operation set is for.
 | `validate` | one finding: `file`, `line`, `severity`, `rule`, `message`, `section` | `valid`/`invalid` for the artifact, `invalid`/`warned`/`no-findings` per section, `not-checked` for a check that did not run |
 
 **`no-findings` is not `pass`, and the distinction is load-bearing.** A section that ran and was satisfied and a section that declined to look both come back as zero errors and zero warnings. `pass` would be a judgement the validator has not earned on the second, so a clean section says only what came back, and a check that did not run gets its own `not-checked` verdict beside it.

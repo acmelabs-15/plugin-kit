@@ -58,7 +58,7 @@ import {
   ENVELOPE_FILENAME,
   installConflict,
   readEnvelope,
-  validateEnvelope,
+  EnvelopeSchema,
   writeEnvelope,
 } from "../lib/envelope.ts";
 import {
@@ -1562,7 +1562,7 @@ describe("the results envelope", () => {
     // The whole retrofit rests on this. A producer that builds a nearly-right envelope is
     // worse than one that builds none: `writeEnvelope` refuses it at the moment of writing
     // rather than three weeks later, and this is that refusal moved into the suite.
-    expect(validateEnvelope(buildDisclosureEnvelope(envelopeInput()))).toEqual([]);
+    expect(EnvelopeSchema.safeParse(buildDisclosureEnvelope(envelopeInput())).success).toBe(true);
   });
 
   test("the timeout policy is `excluded`, which is the OPPOSITE of the trigger harness's", () => {
@@ -1833,7 +1833,7 @@ describe("the results envelope", () => {
       verdict: "unsound",
       reason: conflict as string,
     });
-    expect(validateEnvelope(envelope)).toEqual([]);
+    expect(EnvelopeSchema.safeParse(envelope).success).toBe(true);
   });
 
   test("no conflict leaves the verdict block to the files alone", () => {

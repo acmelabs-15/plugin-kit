@@ -16,7 +16,7 @@ import { RULES, TARGET_TYPES } from "../../rules/registry.ts";
 import { RuleAbort, type Section } from "../../rules/types.ts";
 import {
   readEnvelope,
-  validateEnvelope,
+  EnvelopeSchema,
   type ArtifactKind,
 } from "../lib/envelope.ts";
 import { buildDisclosureEnvelope } from "../optimize-disclosure.ts";
@@ -442,7 +442,7 @@ describe("the results envelope", () => {
     // The reason this producer exists in the retrofit at all. Everything else that writes
     // an envelope spawns a model and reports rates; if the contract only fitted those it
     // would be a measurement schema with an ambitious name.
-    expect(validateEnvelope(buildValidationEnvelope(input()))).toEqual([]);
+    expect(EnvelopeSchema.safeParse(buildValidationEnvelope(input())).success).toBe(true);
   });
 
   test("the timeout policy is `not-applicable`, because nothing here is spawned", () => {
