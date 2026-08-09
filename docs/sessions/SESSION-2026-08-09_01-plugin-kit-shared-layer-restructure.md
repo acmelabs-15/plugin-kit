@@ -191,6 +191,23 @@ Data flow, load-bearing numbers, and record integrity. Findings below are the on
 - `evals/RETIRED-ARTIFACTS.md` widened to cover renames as well as retirements, commit `71f5216`. The audit found renames at four levels: the skill, the repository, six scripts, and a bulk relocation of bundled files
 - Immutability discipline verified clean: every record traces to a single commit with no `M` status since, corroborated by mtime across 81 files
 
+### Event 22 — both criticals fixed, commit `6b70388`
+
+- Disclosure loop read routed to the conformant reader; recovered 567 to 948, 735 to 943, 586 to 833, 688 to 892, with `mcp-creator` unchanged
+- The read was extracted to a named export rather than swapped in place, because the sweep around it spawns `claude` and an inlined read is unreachable from a test. That unreachability is how the defect survived
+- The `name` read at `:914` fixed on the same one-line shape. The two readers agree for all five shipped skills today, so the fix is against latency rather than a live break: agreement there is luck, not a property, and a wrong name installs the artifact under a name the router never sees
+- `--apply` guard now resolves both paths to absolute and refuses either containing the other, enforced before the loop spends a model call rather than after a full sweep is paid for. Six tests added, all confirmed failing against the old code; a naive string compare catches one of nine cases
+- Suite 1,271 to 1,277 pass, 0 fail, typecheck clean, `frontmatter.ts` unchanged
+
+### Event 23 — the guard surfaced a second defect in the documented workflow
+
+- The engineer implemented containment in both directions, wider than the brief, and flagged it for veto rather than absorbing it silently
+- Investigating the flag found the wider guard was catching a real problem: `shared/references/disclosure-optimization.md` documented `--results-dir` pointing inside the skill under test, and `shared/scripts/lib/disclosure.ts:306` scans the skill with `Bun.Glob("**/*")` excluding nothing
+- Consequence: results written to the documented location become bundled files the next run measures as part of the artifact, so the tool measures its own output
+- Same defect family as the fixtures guard corrected in step 1, where deliberately invalid files were safe only because discovery happened not to scan them. Both are positional safety rather than enforced safety
+- Decision locked: keep the wider guard and correct the documented example, rather than narrowing the guard to the letter of the brief
+- Left unaddressed and recorded: `disclosure.ts:306` still excludes nothing, so the guard prevents the copy but not a user writing output there by other means
+
 ## Observations
 
 ### Session infrastructure
