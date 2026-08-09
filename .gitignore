@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Bun
+.bun/
+*.bun-build
+
+# Build and packaging output
+dist/
+build/
+*.skill
+*.tsbuildinfo
+
+# Test and coverage output
+coverage/
+*.lcov
+
+# Local, machine-specific config
+.env
+.env.*
+!.env.example
+
+# Scratch workspaces
+.scratch/
+
+# macOS noise
+.DS_Store
+**/.DS_Store
+
+# Editor noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
