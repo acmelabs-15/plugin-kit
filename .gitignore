@@ -10,6 +10,11 @@ dist/
 build/
 *.skill
 
+# tsc's incremental cache. `bun run typecheck` emits no JS, but it still writes
+# this, so it appears untracked after any typecheck run and would otherwise get
+# swept into a `git add .`.
+.tsbuildinfo
+
 # Scratch workspaces from older eval runs. Durable eval evidence now lives in
 # evals/results/ and IS committed: transcripts and benchmarks are the evidence behind
 # the skill's own measured claims, and a number nobody can re-derive is not evidence.

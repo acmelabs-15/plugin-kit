@@ -90,7 +90,7 @@ Decide what the plugin is made of. Every component type is optional, and each ha
 |---|---|---|---|
 | Skill | `skills/<name>/SKILL.md` | Specialized knowledge, or a user-invoked action | `../skill-creator/SKILL.md` |
 | Agent | `agents/<name>.md` | Work needing its own context window and tool set | `../agent-creator/SKILL.md` |
-| Hook | `hooks/hooks.json` | Behaviour that must fire on an event, not a request | this skill, then `hook-reviewer` |
+| Hook | `hooks/hooks.json` | Behaviour that must fire on an event, not a request | this skill — no creator or reviewer covers hooks |
 | MCP server | `.mcp.json` | An external service — database, API, LSP | `../mcp-creator/SKILL.md` |
 | Slash command | `skills/<name>/SKILL.md` | An entry point whose point is that a person types `/name` | `../command-creator/SKILL.md` |
 | Shared library | `packages/<name>/` (outside the plugin root) | Two or more components need the same code | `references/shared-code-architecture.md` |
@@ -156,7 +156,7 @@ Each component type is owned by a sibling skill carrying its frontmatter, its fa
 
 `../skill-creator/SKILL.md` · `../agent-creator/SKILL.md` · `../mcp-creator/SKILL.md` · `../command-creator/SKILL.md`
 
-Hooks have no creator skill: written here, checked by the Phase 8 validator under `--target-type hooks`, audited by `hook-reviewer`.
+Hooks are the one component with no tooling behind them: no creator skill, no validator target type, no reviewer agent. Write them here, and check them by hand against the Claude Code hooks reference.
 
 The handoff runs the other way too, and decides which skill should have been loaded first. A request to add one component to a plugin that already exists — "add a hook to my plugin", "write a reviewer agent for this repo" — is that creator's work from the first turn. The plugin is the artifact again only when the manifest or the layout is wrong.
 
@@ -179,7 +179,7 @@ Fix what it reports and run it again. Repeat until it comes back clean: fixing o
 | the plugin itself — manifest, layout, anchoring, marketplace entry, cross-component names | `plugin-reviewer` |
 | `skills/<name>/SKILL.md` | `skill-reviewer` |
 | `agents/<name>.md` | `agent-reviewer` |
-| `hooks/hooks.json`, or a `hooks:` block | `hook-reviewer` |
+| `hooks/hooks.json`, or a `hooks:` block | nothing — hooks have no reviewer; check them by hand |
 | `.mcp.json`, or an inline `mcpServers` | `mcp-reviewer` |
 | an entry point whose value is a person typing `/name` | `command-reviewer` |
 

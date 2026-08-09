@@ -68,7 +68,7 @@ import { discoverSkillsWithStatus, type Discovery } from "../check-overlap.ts";
 // ---------------------------------------------------------------------------
 
 /** The artifact kinds this plugin measures. Mirrors `../../rules/registry.ts`. */
-export type ArtifactKind = "skill" | "agent" | "command" | "mcp" | "plugin" | "hooks";
+export type ArtifactKind = "skill" | "agent" | "command" | "mcp" | "plugin";
 
 /**
  * The operations that write an envelope, named after the entrypoint that produces them.
@@ -360,7 +360,6 @@ const ARTIFACT_KINDS: readonly ArtifactKind[] = [
   "command",
   "mcp",
   "plugin",
-  "hooks",
 ];
 const OPERATION_NAMES: readonly OperationName[] = [
   "measure-triggering",

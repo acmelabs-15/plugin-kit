@@ -3,7 +3,7 @@ name: skill-reviewer
 description: |
   Reviews a SKILL.md and its bundled references, scripts, assets and examples, and returns a severity-categorized findings report with a concrete fix for each finding. Use after a skill is created or edited, when the user asks to "review my skill", "check skill quality", or "audit this skill's description", or when a skill never loads and the description is suspected.
 
-  Do not use to write or edit a skill — this agent is read-only and reports findings; the skill-creator skill does the authoring. Do not use to review a subagent definition, a hook, an MCP server entry or a slash command — agent-reviewer, hook-reviewer, mcp-reviewer and command-reviewer cover those. Do not use for plugin-level manifest and layout validation — that is the plugin-reviewer agent, plus `claude plugin validate --strict`.
+  Do not use to write or edit a skill — this agent is read-only and reports findings; the skill-creator skill does the authoring. Do not use to review a subagent definition, an MCP server entry or a slash command — agent-reviewer, mcp-reviewer and command-reviewer cover those. Do not use to review a hook — no agent in this plugin covers hook review. Do not use for plugin-level manifest and layout validation — that is the plugin-reviewer agent, plus `claude plugin validate --strict`.
 
   <example>
   Context: User just finished authoring a new skill.

@@ -3,7 +3,7 @@ name: mcp-reviewer
 description: |
   Reviews an MCP configuration — a `.mcp.json`, an inline `mcpServers` block in a plugin manifest, and the tool surface the servers expose — and returns a severity-categorized findings report with a concrete fix for each finding. Use after an MCP server is wired up or edited, when the user asks to "review my .mcp.json", "check my MCP setup", or "audit these tool descriptions", or when a permission grant for an MCP tool matches nothing, or a server connects but Claude never calls its tools.
 
-  Do not use to write or edit MCP configuration — this agent is read-only and reports findings; the mcp-creator skill does the authoring. Do not use to debug an MCP server's own implementation source. Do not use to review a SKILL.md and its bundled files, a subagent definition, a hook or a slash command — skill-reviewer, agent-reviewer, hook-reviewer and command-reviewer cover those. Do not use for plugin-level manifest and layout validation — that is `claude plugin validate --strict` plus the plugin-reviewer agent.
+  Do not use to write or edit MCP configuration — this agent is read-only and reports findings; the mcp-creator skill does the authoring. Do not use to debug an MCP server's own implementation source. Do not use to review a SKILL.md and its bundled files, a subagent definition or a slash command — skill-reviewer, agent-reviewer and command-reviewer cover those. Do not use to review a hook — no agent in this plugin covers hook review. Do not use for plugin-level manifest and layout validation — that is `claude plugin validate --strict` plus the plugin-reviewer agent.
 
   <example>
   Context: User has just added an MCP server to a plugin they are building.

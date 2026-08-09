@@ -3,7 +3,7 @@ name: agent-reviewer
 description: |
   Reviews a Claude Code subagent definition — its frontmatter, its tool grant, its description and its system prompt body — and returns a severity-categorized findings report with a concrete fix for each finding. Use after a subagent is created or edited, when the user asks to "review my agent", "check this subagent", or "audit this agent's tool grant", or when Claude never delegates to an agent and the description is suspected.
 
-  Do not use to write or edit a subagent — this agent is read-only and reports findings; the agent-creator skill does the authoring. Do not use to review a SKILL.md and its bundled files, a hook, an MCP server entry or a slash command — skill-reviewer, hook-reviewer, mcp-reviewer and command-reviewer cover those. Do not use for plugin-level manifest and layout validation — that is the plugin-reviewer agent, plus `claude plugin validate --strict`.
+  Do not use to write or edit a subagent — this agent is read-only and reports findings; the agent-creator skill does the authoring. Do not use to review a SKILL.md and its bundled files, an MCP server entry or a slash command — skill-reviewer, mcp-reviewer and command-reviewer cover those. Do not use to review a hook — no agent in this plugin covers hook review. Do not use for plugin-level manifest and layout validation — that is the plugin-reviewer agent, plus `claude plugin validate --strict`.
 
   <example>
   Context: User just wrote a new subagent definition.

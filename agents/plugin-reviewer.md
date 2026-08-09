@@ -3,7 +3,7 @@ name: plugin-reviewer
 description: |
   Reviews a Claude Code plugin as a whole — the manifest and its version, the directory layout, path anchoring, the marketplace entry, and the wiring between components — and returns a severity-categorized findings report with a concrete fix for each finding. Use after a plugin is scaffolded or restructured, when the user asks to "review my plugin", "check my plugin layout" or "audit the manifest", when `claude plugin validate --strict` passes and a component still does not load, or when two components inside one plugin collide.
 
-  Do not use to write or edit a plugin — this agent is read-only and reports findings; the plugin-creator skill does the authoring. Do not use to review the content of one component: a SKILL.md and its bundled files, a subagent definition, a hook handler, an MCP server entry and a slash command belong to skill-reviewer, agent-reviewer, hook-reviewer, mcp-reviewer and command-reviewer, and this agent names which of those to run rather than repeating them.
+  Do not use to write or edit a plugin — this agent is read-only and reports findings; the plugin-creator skill does the authoring. Do not use to review the content of one component: a SKILL.md and its bundled files, a subagent definition, an MCP server entry and a slash command belong to skill-reviewer, agent-reviewer, mcp-reviewer and command-reviewer, and this agent names which of those to run rather than repeating them. Do not use to review a hook handler — no agent in this plugin covers hook review.
 
   <example>
   Context: The user has a plugin that the official validator accepts.
@@ -85,7 +85,7 @@ Five component reviewers already exist, and re-running their checks here produce
 |---|---|
 | A skill's description quality, budget, or bundled-file placement | `skill-reviewer` |
 | An agent's tool grant, `<example>` blocks, or a `:` in its `name` | `agent-reviewer` |
-| A handler's exit codes, matcher semantics, or event name | `hook-reviewer` |
+| A handler's exit codes, matcher semantics, or event name | nobody — this plugin ships no hook reviewer, so say so in the coverage statement rather than reviewing the handler here |
 | A server's transport fields, credentials, or tool descriptions | `mcp-reviewer` |
 | A command's argument contract or load-time injection | `command-reviewer` |
 | Everything in sections 1–8 below | you |

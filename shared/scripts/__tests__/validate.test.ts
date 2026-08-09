@@ -14,7 +14,6 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { CliError } from "../lib/cli.ts";
 import { RULES, TARGET_TYPES } from "../../rules/registry.ts";
 import { RuleAbort, type Section } from "../../rules/types.ts";
-import { classifyMatcher, EVENT_RULES, isBareMcpServer, pluginRootFor, suggestEvent } from "../../rules/hooks.ts";
 import {
   readEnvelope,
   validateEnvelope,
@@ -79,7 +78,7 @@ async function writeSkill(
 
 describe("the entry point stays generic", () => {
   test("every registered artifact is reachable and self-describing", () => {
-    expect(TARGET_TYPES).toEqual(["skill", "agent", "command", "mcp", "plugin", "hooks"]);
+    expect(TARGET_TYPES).toEqual(["skill", "agent", "command", "mcp", "plugin"]);
     for (const type of TARGET_TYPES) {
       const rule = RULES[type]!;
       expect(rule.targetType).toBe(type);
@@ -108,7 +107,7 @@ describe("the entry point stays generic", () => {
     expect(() => requireTargetType({ "target-type": "agnet" })).toThrow(CliError);
     const { code, out } = run(["--target-type", "agnet", "."]);
     expect(code).toBe(2);
-    expect(out).toContain("must be one of skill, agent, command, mcp, plugin, hooks");
+    expect(out).toContain("must be one of skill, agent, command, mcp, plugin");
   });
 
   test("the tier flags are mutually exclusive", () => {
@@ -122,10 +121,6 @@ describe("the entry point stays generic", () => {
     const agent = run(["--target-type", "agent", "agents/skill-reviewer.md", "--with-environment"]);
     expect(agent.code).toBe(2);
     expect(agent.out).toContain("no environment-dependent checks");
-
-    const hooks = run(["--target-type", "hooks", ".", "--extended"]);
-    expect(hooks.code).toBe(2);
-    expect(hooks.out).toContain("do not apply");
   });
 
   test("a nonexistent path exits 2 rather than reporting a verdict", () => {
@@ -164,7 +159,7 @@ describe("formatReport", () => {
   });
 
   test("artifacts without a tier do not claim one", () => {
-    const report = formatReport([], "hooks", "/tmp/x", "standard", false);
+    const report = formatReport([], "agent", "/tmp/x", "standard", false);
     expect(report).not.toContain("**Tier**");
     expect(report).not.toContain("Environment checks");
   });
@@ -406,87 +401,6 @@ describe("plugin rules", () => {
     const { code, out } = run(["--target-type", "plugin", root]);
     expect(code).toBe(1);
     expect(out).toContain("./");
-  });
-});
-
-describe("hooks rules", () => {
-  test("the event table covers every event and marks the non-blocking ones", () => {
-    expect(Object.keys(EVENT_RULES).length).toBe(31);
-    expect(EVENT_RULES["PreToolUse"]!.blocking).toBe("blocks");
-    expect(EVENT_RULES["FileChanged"]!.blocking).toBe("ignored");
-    expect(EVENT_RULES["WorktreeCreate"]!.blocking).toBe("aborts");
-    expect(EVENT_RULES["UserPromptSubmit"]!.matcherField).toBeNull();
-  });
-
-  test("matcher classification follows the character set, not the author's intent", () => {
-    expect(classifyMatcher("*", "PreToolUse")).toBe("wildcard");
-    expect(classifyMatcher("Edit|Write", "PreToolUse")).toBe("exact");
-    expect(classifyMatcher("mcp__memory__.*", "PreToolUse")).toBe("regex");
-    expect(classifyMatcher("Edit(", "PreToolUse")).toBe("invalid-regex");
-    // The narrow set: a hyphen keeps FileChanged on the regex path where
-    // PreToolUse would have treated the same string as a literal.
-    expect(classifyMatcher("src-lib", "PreToolUse")).toBe("exact");
-    expect(classifyMatcher("src-lib", "FileChanged")).toBe("regex");
-  });
-
-  test("a bare MCP server name is recognised as the literal that matches nothing", () => {
-    expect(isBareMcpServer("mcp__memory")).toBe(true);
-    expect(isBareMcpServer("mcp__memory|mcp__github")).toBe(true);
-    expect(isBareMcpServer("mcp__memory__read")).toBe(false);
-    expect(isBareMcpServer("Edit")).toBe(false);
-  });
-
-  test("a misspelled event name gets the nearest real one", () => {
-    expect(suggestEvent("PreToolUze")).toBe("PreToolUse");
-    expect(suggestEvent("pretooluse")).toBe("PreToolUse");
-    expect(suggestEvent("CompletelyUnrelatedThing")).toBeUndefined();
-  });
-
-  test("the plugin root is two levels up from hooks/hooks.json", () => {
-    expect(pluginRootFor("/a/b/hooks/hooks.json")).toBe("/a/b");
-    expect(pluginRootFor("/a/b/hooks.json")).toBe("/a/b");
-  });
-
-  test("a missing handler is an error naming where it looked", async () => {
-    const root = tempDir();
-    await Bun.write(
-      `${root}/hooks/hooks.json`,
-      JSON.stringify({
-        hooks: {
-          PreToolUse: [
-            { matcher: "Bash", hooks: [{ type: "command", command: "bun", args: ["${CLAUDE_PLUGIN_ROOT}/h/gone.ts"] }] },
-          ],
-        },
-      }),
-    );
-    const { code, out } = run(["--target-type", "hooks", root]);
-    expect(code).toBe(1);
-    expect(out).toContain("does not exist");
-    expect(out).toContain(`${root}/h/gone.ts`);
-  });
-
-  test("a guard on an event that discards exit codes is reported as decorative", async () => {
-    const root = tempDir();
-    await Bun.write(`${root}/g.ts`, "process.exit(2);\n");
-    await Bun.write(
-      `${root}/hooks/hooks.json`,
-      JSON.stringify({
-        hooks: {
-          CwdChanged: [{ hooks: [{ type: "command", command: "bun", args: ["${CLAUDE_PLUGIN_ROOT}/g.ts"] }] }],
-        },
-      }),
-    );
-    const { code, out } = run(["--target-type", "hooks", root]);
-    expect(code).toBe(0);
-    expect(out).toContain("discards a handler's exit code");
-  });
-
-  test("an unknown event is an error, since nothing under it ever runs", async () => {
-    const root = tempDir();
-    await Bun.write(`${root}/hooks/hooks.json`, JSON.stringify({ hooks: { PreToolUze: [] } }));
-    const { code, out } = run(["--target-type", "hooks", root]);
-    expect(code).toBe(1);
-    expect(out).toContain("Did you mean `PreToolUse`");
   });
 });
 
@@ -750,11 +664,11 @@ describe("the results envelope", () => {
       extended.provenance.caps.some((cap) => cap.includes("portable Agent Skills field set only")),
     ).toBe(false);
     // An artifact with no tier never claims one either way.
-    const hooks = buildValidationEnvelope(
-      input({ targetType: "hooks", tier: "standard", sections: [section_("Structure")] }),
+    const untiered = buildValidationEnvelope(
+      input({ targetType: "agent", tier: "standard", sections: [section_("Structure")] }),
     );
     expect(
-      hooks.provenance.caps.some((cap) => cap.includes("portable Agent Skills field set only")),
+      untiered.provenance.caps.some((cap) => cap.includes("portable Agent Skills field set only")),
     ).toBe(false);
   });
 

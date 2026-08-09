@@ -235,9 +235,9 @@ export async function runValidation(
  *     name" is a state the field cannot represent, and it is a state this operation sees
  *     constantly.
  *   - reading a name means knowing where each artifact keeps one -- frontmatter for a
- *     skill, a different frontmatter key for an agent, JSON for `hooks` and `mcp` -- and
+ *     skill, a different frontmatter key for an agent, JSON for `mcp` and `plugin` -- and
  *     branching on artifact type is the one thing this file is built never to do. The
- *     whole shape exists so that a seventh artifact is a rules module and a registry line.
+ *     whole shape exists so that a sixth artifact is a rules module and a registry line.
  *
  * So the path's basename goes in, matching the report's own header, and a `caps` sentence
  * says that is what it is. That is the honest handling of a field that does not fit: fill
@@ -405,7 +405,7 @@ export async function censusArtifactFiles(path: string): Promise<FileCensus> {
  * The artifact kinds this entry point can validate, checked against the envelope's union.
  *
  * `satisfies` makes the compiler reject an entry the envelope does not know, so the two
- * lists cannot drift apart silently in that direction. The other direction -- a seventh
+ * lists cannot drift apart silently in that direction. The other direction -- a sixth
  * artifact added to `../rules/registry.ts` -- is caught at runtime by
  * {@link asArtifactKind} and by a test that walks `TARGET_TYPES`, because `RULES` is keyed
  * by plain strings and nothing about it is a type the compiler can compare against.
@@ -416,7 +416,6 @@ export const ENVELOPE_ARTIFACTS = [
   "command",
   "mcp",
   "plugin",
-  "hooks",
 ] as const satisfies readonly ArtifactKind[];
 
 /** Map a `--target-type` onto the envelope's artifact vocabulary, refusing to invent one. */

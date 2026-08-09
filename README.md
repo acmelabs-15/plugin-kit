@@ -24,7 +24,7 @@ installed.
 |---|---|---|
 | `skill-creator` | `SKILL.md` and its bundled files | `skill-reviewer` |
 | `agent-creator` | a subagent definition under `agents/` | `agent-reviewer` |
-| `hook-creator` | a `hooks.json` entry and its handler | `hook-reviewer` |
+| `hook-creator` | a `hooks.json` entry and its handler | not covered |
 | `mcp-creator` | an `.mcp.json` entry and its tool surface | `mcp-reviewer` |
 | `command-creator` | a `/name` slash-command entry point | `command-reviewer` |
 | `plugin-creator` | the plugin that carries any of the above | `plugin-reviewer` |
@@ -39,7 +39,6 @@ flowchart LR
 
   SC -->|audited by| SR[skill-reviewer]
   AC -->|audited by| AR[agent-reviewer]
-  HC -->|audited by| HR[hook-reviewer]
   MC -->|audited by| MR[mcp-reviewer]
   CC -->|audited by| CR[command-reviewer]
   CP -->|audited by| PR[plugin-reviewer]
