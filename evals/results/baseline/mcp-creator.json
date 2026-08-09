@@ -1,0 +1,171 @@
+{
+  "skill_name": "mcp-creator",
+  "description": "Wires an MCP server into a Claude Code plugin or project and shapes the tool surface it exposes — the `.mcp.json` entry, the transport, credentials that stay out of version control, the plugin-scoped tool names a permission grant has to match, and tool descriptions the model routes on correctly. Use when MCP configuration or an MCP tool surface is the artifact being produced, including a connector that must also work outside Claude Code. Do not use to implement an MCP server's own internals — the mcp-builder skill does that. Do not use when the artifact is a SKILL.md, a subagent, a hook, a slash command, or the plugin carrying them. Do not use to audit MCP configuration without changing it: mcp-reviewer does that read-only.",
+  "results": [
+    {
+      "query": "trying to decide if my new server should be stdio or http — it just talks to a rest api over the network, does it matter which one I pick?",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "so weird, i put mcp__issue-tracker__search_issues in my subagent's allowed-tools and it still prompts for permission literally every single call, even though the server is definitely bundled in the plugin and connects fine",
+      "should_trigger": true,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "where do I even put this .mcp.json — should it live in the plugin we're building, the repo, or just add it to my own user config? trying to figure out before i write it since i heard changing it later is annoying",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "we're shipping a plugin with a tracker integration and I don't want people editing a file to set their api token, is there a way for claude to just prompt them for it and store it somewhere safe",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "a teammate installed our plugin and the tracker server just keeps returning 401 for them, but works fine for me. env var thing maybe? no errors show up anywhere though",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "our bundled ts server broke completely on another person's machine even though the command path works great locally, i think it's something to do with how I wrote the path in the command field",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "ever since one of our users added their own entry called issue-tracker in user scope, our plugin's auth headers just vanished for them, but the server name is still the same so shouldn't it just still work?",
+      "should_trigger": true,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "/mcp shows our server as connected and everything, but claude straight up never calls any of its tools even on stuff that's obviously what it's for",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "can you walk through the acme-devtools example and show me exactly what the hook's server field and the permission rule should look like for each of our four bundled servers so I stop guessing at the naming",
+      "should_trigger": true,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our search tool just dumps the entire raw api response and claude burns a ton of context on fields nobody uses, plus when it 422s the model just retries the same broken call over and over. how do we make the tool itself smarter about this",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "our plugin's mcp server needs a whole directory scaffold — manifest, hooks folder, skills folder, the works — can you set all that up around the entry we're adding?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "we want this remote server to also show up in Desktop's Chat tab, can you package it up as a bundle for that?",
+      "should_trigger": false,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "the description on this skill isn't landing, claude keeps skipping it for something more specific — can you sharpen the wording so it actually gets picked?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "can you get our org's claude.ai admin console set up so this connector shows as approved for everyone on the team?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our stdio server takes forever indexing the repo on first run — can you add a progress indicator so users know it's still working?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "we want people to be able to install our MCP server as a browser extension so it runs completely outside claude",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "starting completely from scratch on a python fastmcp server to wrap our internal ticketing api — what's a clean way to lay out the tools and handlers?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "the tool needs to hand back an actual xlsx export of the query results — can you build that output file generation for me?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "before I show this mcp integration proposal to the team, can you help me write and tighten up the spec doc explaining what we're building and why?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our sprint report needs four api calls chained together — can you just write the code that does the chaining and hands back the combined json?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 20,
+    "passed": 15,
+    "failed": 5
+  }
+}

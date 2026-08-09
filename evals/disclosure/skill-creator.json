@@ -1,0 +1,45 @@
+{
+  "skill_name": "skill-creator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Turn this into a skill: every week I export a CSV from our billing system, drop rows where status is refunded, pivot by region, and paste the result into a weekly email. Make me a skill that does it.",
+      "expected_output": "A new skill directory with a SKILL.md whose description names the artifact produced, and body instructions that generalize beyond the exact columns mentioned.",
+      "expectations": [
+        "A new skill directory with a SKILL.md whose description names the artifact produced, and body instructions that generalize beyond the exact columns mentioned."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My pdf-tables skill never fires. People ask things like get the numbers out of this report and it just does it by hand instead. Fix the description.",
+      "expected_output": "A rewritten description that leads with the concrete deliverable and carries at least one negative clause sharing vocabulary with the positives.",
+      "expectations": [
+        "A rewritten description that leads with the concrete deliverable and carries at least one negative clause sharing vocabulary with the positives."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "This SKILL.md is 640 lines and every invocation is paying for all of it. Restructure it so the rarely-needed parts load on demand.",
+      "expected_output": "Content moved into references/ with pointers in the body that state the condition for loading each one, and a body under 500 lines.",
+      "expectations": [
+        "Content moved into references/ with pointers in the body that state the condition for loading each one, and a body under 500 lines."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I want to hand my contract-review skill to a colleague as a single file they can install. Package it up.",
+      "expected_output": "A packaged .skill bundle, or a clear explanation of the frontmatter that blocks packaging and how to resolve it.",
+      "expectations": [
+        "A packaged .skill bundle, or a clear explanation of the frontmatter that blocks packaging and how to resolve it."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Before I roll this out to the team I want actual before/after numbers proving the new version is better, not just my impression.",
+      "expected_output": "An eval set plus a described or executed with-skill versus baseline comparison, with the results reported per configuration.",
+      "expectations": [
+        "An eval set plus a described or executed with-skill versus baseline comparison, with the results reported per configuration."
+      ]
+    }
+  ]
+}

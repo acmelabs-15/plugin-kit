@@ -1,0 +1,45 @@
+{
+  "skill_name": "mcp-creator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Wire our internal metrics server into this plugin. It is an HTTP server behind a bearer token that must not be committed.",
+      "expected_output": "An .mcp.json http entry with the token supplied by interpolation rather than literal text.",
+      "expectations": [
+        "An .mcp.json http entry with the token supplied by interpolation rather than literal text."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I added allowed-tools for mcp__metrics__query in my plugin skill and it still prompts for permission every time.",
+      "expected_output": "A correction to the plugin-scoped tool name, with the derivation shown.",
+      "expectations": [
+        "A correction to the plugin-scoped tool name, with the derivation shown."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Our MCP server exposes 40 tools and Claude picks the wrong one constantly. Help.",
+      "expected_output": "Consolidation and description guidance treating tool descriptions as a routing surface.",
+      "expectations": [
+        "Consolidation and description guidance treating tool descriptions as a routing surface."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Should this server be stdio or http? It runs locally today but the team also uses Claude on their phones.",
+      "expected_output": "A recommendation of http with the reason that stdio is absent on web and mobile.",
+      "expectations": [
+        "A recommendation of http with the reason that stdio is absent on web and mobile."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "The server connects fine according to /mcp but Claude never uses any of its tools.",
+      "expected_output": "A diagnosis pointing at tool descriptions or naming rather than transport.",
+      "expectations": [
+        "A diagnosis pointing at tool descriptions or naming rather than transport."
+      ]
+    }
+  ]
+}

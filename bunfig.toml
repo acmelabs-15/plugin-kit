@@ -1,0 +1,9 @@
+[test]
+# Test helpers and eval harnesses are scaffolding, not shipped surface. Counting
+# them drags coverage toward a number that says nothing about the code under test.
+coveragePathIgnorePatterns = ["**/__tests__/**", "**/evals/**"]
+
+# NOTE: `root` is deliberately unset. Tests live in `__tests__/` folders wherever
+# the code they cover lives -- today that is `shared/scripts/__tests__/`, and a
+# skill adding its own would land somewhere else entirely. Pinning a root would
+# silently exclude every suite outside it.

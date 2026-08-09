@@ -1,0 +1,39 @@
+{
+  "skill_name": "invoice-parser",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Pull the line items out of this invoice and give me a CSV with description, quantity, unit price and line total. Totals should reconcile to the invoice total.",
+      "expected_output": "A CSV with one row per line item plus a header, where the summed line totals equal the invoice total printed on the document.",
+      "files": ["evals/files/invoice-standard.pdf"],
+      "expectations": [
+        "The output is a CSV file, not a markdown table pasted into the reply",
+        "The header row is description,quantity,unit_price,line_total",
+        "Summing line_total equals the invoice total on the document",
+        "Quantities are integers and prices have exactly two decimal places"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Same extraction, but this one is a scan and the middle page is rotated 90 degrees.",
+      "expected_output": "The same CSV shape as eval 1, with no rows dropped from the rotated page.",
+      "files": ["evals/files/invoice-scanned-rotated.pdf"],
+      "expectations": [
+        "Line items from the rotated page appear in the output",
+        "Row count matches the line-item count on the source document",
+        "The skill corrected the page orientation rather than asking the user to do it"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "This vendor puts tax on each line instead of once at the bottom. Extract it the same way and add a tax column.",
+      "expected_output": "A CSV with an added tax column, where line totals are exclusive of tax and a separate tax column carries the per-line amount.",
+      "files": ["evals/files/invoice-per-line-tax.pdf"],
+      "expectations": [
+        "A tax column is present",
+        "line_total excludes tax rather than silently folding it in",
+        "The sum of line_total plus tax equals the invoice gross total"
+      ]
+    }
+  ]
+}

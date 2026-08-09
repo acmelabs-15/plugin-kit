@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run — Skill Creator</title>
+  <!-- No local stylesheet. Every rule this page needs comes from the ported design system,
+       injected with the tokens by the app bar. A local block would shadow it, which is how
+       .badge and .note diverged from the source before this. Only genuinely page-specific
+       layout lives here. -->
+  <style>
+    /* The source's own container. Vertical rhythm comes from section.sec's 56px padding and
+       2px --sep rule, so no gap is set here -- a flex gap on top of that would double it. */
+    .wrap{ max-width:960px; margin:0 auto; padding:0 20px 48px; }
+    /* The first section has the app bar above it, so its top rule would sit directly under
+       the bar's own border. */
+    section.sec:first-child{ border-top:0; padding-top:28px; }
+    /* Progress track. The source has no equivalent -- its closest is a chart -- so this is
+       the one genuinely new component, built from tokens rather than literals. */
+    /* Gaps measured off the adjusted render: chip -> bar 40px, bar -> meta 19px. */
+    .track{ background:var(--surface-3); border-radius:999px; height:6px; overflow:hidden; margin:40px 0 19px; }
+    .track > div{ height:100%; background:var(--accent); }
+    /* Keyed on state so a failed run's bar does not read as healthy progress beside its own
+       red failure note. The dashboard's rows already do this. */
+    .track > div.done{ background:var(--good); }
+    .track > div.failed{ background:var(--bad); }
+    .track > div.stale{ background:var(--warn); }
+    .rowbar{ background:var(--surface-3); border-radius:999px; height:5px; width:76px; overflow:hidden; display:inline-block; vertical-align:middle; }
+    .rowbar > div{ height:100%; background:var(--accent); }
+    .kv{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:13px; color:var(--muted); }
+    .kv .strong{ color:var(--text); font-weight:550; }
+    .meta-row{ font-size:13px; }
+    /* The count is the figure you look for first, so it takes the accent. */
+    .meta-count{ color:var(--accent); font-weight:600; font-family:var(--mono); }
+    .meta-phase{ color:var(--muted); }
+    .meta-time{ color:var(--muted); font-family:var(--mono); }
+    /* 2:1:1, measured off the adjusted render's panel edges. Collapses to one column at the
+       source's own 760px breakpoint so the tiles do not crush. */
+    .prov-grid{ display:grid; grid-template-columns:2fr 1fr 1fr; gap:14px; align-items:start; }
+    @media (max-width:760px){ .prov-grid{ grid-template-columns:1fr; } }
+    .prov-grid .ctrl-row:first-child{ border-top:0; padding-top:2px; }
+    .prov-grid .metric .mv.accent{ color:var(--accent); }
+    /* --warn, not --bad: the kind is neutral information, and amber here is a category
+       marker rather than a warning. */
+    .prov-grid .metric .mv.warn{ color:var(--warn); }
+    .prov-grid pre.mono{ font-size:11px; padding:10px 12px; }
+    /* The source styles inline `code` but has no `pre` -- nothing in it renders a block of
+       preformatted text -- so this extends the source's own code rule to a block rather
+       than leaving it on the UA default, which has no surface or border at all. */
+    pre.mono{
+      background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-sm);
+      padding:12px 14px; font-size:12px; line-height:1.55;
+      overflow-x:auto; white-space:pre-wrap; word-break:break-word; margin:0;
+    }
+    .artifact + .artifact{ margin-top:14px; }
+  </style>
+</head>
+<body>
+  <!-- No page heading. The injected app bar above carries the title AND the kind, so a
+       heading here rendered the same run name twice -- once in the bar and again in a
+       full-width band beneath it. -->
+  <main class="wrap" id="root"></main>
+
+  <script>
+    /*__EMBEDDED_DATA__*/
+
+    function formatDuration(ms) {
+      const total = Math.max(0, Math.round(ms / 1000));
+      const hours = Math.trunc(total / 3600);
+      const minutes = Math.trunc((total % 3600) / 60);
+      const seconds = total % 60;
+      if (hours > 0) return hours + "h " + minutes + "m";
+      if (minutes > 0) return minutes + "m " + seconds + "s";
+      return seconds + "s";
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    /**
+     * A section in the source's shape: section.sec > .sec-head(grid) > [eyebrow + h2 | .desc].
+     *
+     * The right-hand description is not decoration -- the source pairs every heading with an
+     * explanation of what the reader is looking at, and our pages previously presented numbers
+     * with no interpretation. Passing it is how that gap gets closed per block.
+     */
+    function section(eyebrow, heading, description) {
+      const sec = document.createElement("section");
+      sec.className = "sec";
+      const head = el("div", "sec-head");
+      const left = el("div");
+      if (eyebrow) left.appendChild(el("div", "eyebrow", eyebrow));
+      left.appendChild(el("h2", "", heading));
+      head.appendChild(left);
+      if (description) head.appendChild(el("p", "desc", description));
+      sec.appendChild(head);
+      return sec;
+    }
+
+    function metaItem(parent, text, strong) {
+      if (parent.childElementCount > 0) parent.appendChild(el("span", "", "·"));
+      parent.appendChild(el("span", strong ? "strong" : "", text));
+    }
+
+    /**
+     * Progress card: the source's .panel holding the run's state as a .chip. No card header --
+     * the enclosing section.sec names the block, and a card title as well rendered the same
+     * word twice.
+     */
+    function renderProgress(data) {
+      const status = data.status;
+      const state = data.stale ? "stale" : status.state;
+      const card = el("div", "panel");
+
+      const head = el("div", "between");
+      head.appendChild(el("span", "chip chip-" + state,
+        state === "stale" ? "no longer reporting" : state));
+      card.appendChild(head);
+
+      const percent = status.total > 0
+        ? Math.min(100, Math.round((status.settled / status.total) * 100))
+        : 0;
+      const track = el("div", "track");
+      const fill = el("div", state === "running" ? "" : state);
+      fill.style.width = (state === "done" ? 100 : percent) + "%";
+      track.appendChild(fill);
+      card.appendChild(track);
+
+      /*
+       * Space-between rather than a dot-separated list: the count anchors left, the duration
+       * right, and the space between them carries the phase only while there is a phase worth
+       * naming.
+       *
+       * STATE-DEPENDENT, deliberately. The adjusted design is of a FINISHED run, where "phase"
+       * is noise and there is no remaining estimate -- so a terminal run shows exactly the two
+       * anchors and nothing between. A running run has both of those to say, and dropping them
+       * to match a screenshot of a state that cannot show them would lose the only information
+       * that matters while you are waiting. They go in the middle and on the right, so the two
+       * anchors sit in the same place in either state.
+       */
+      const meta = el("div", "between meta-row");
+      const left = el("span", "meta-count");
+      left.textContent = status.total > 0 ? status.settled + "/" + status.total : "";
+      meta.appendChild(left);
+
+      if (state === "running" && status.detail && status.detail.phase) {
+        meta.appendChild(el("span", "meta-phase", status.detail.phase));
+      }
+
+      const right = el("span", "meta-time");
+      const elapsed = formatDuration((state === "running" ? data.now : status.updatedAt) - status.startedAt);
+      right.textContent = state === "running" && typeof data.remainingMs === "number"
+        ? elapsed + "  \u00b7  ~" + formatDuration(data.remainingMs) + " left"
+        : elapsed;
+      meta.appendChild(right);
+      card.appendChild(meta);
+
+      if (status.state === "failed" && status.error) {
+        const note = el("div", "note");
+        note.style.borderLeftColor = "var(--bad)";
+        const nb = el("div", "nb", "failed");
+        nb.style.color = "var(--bad)";
+        note.appendChild(nb);
+        note.appendChild(el("div", "", status.error));
+        card.appendChild(note);
+      }
+      if (state === "stale") {
+        const note = el("div", "note warn");
+        note.appendChild(el("div", "nb", "no longer reporting"));
+        note.appendChild(el("div", "",
+          "This run stopped updating " + formatDuration(data.now - status.updatedAt) +
+          " ago. It was most likely killed; nothing will finish it."));
+        card.appendChild(note);
+      }
+      return card;
+    }
+
+    /**
+     * Per-query table for an eval sweep.
+     *
+     * Rows exist from the first render — every query is seeded at zero — so the page shows
+     * the sweep's full shape immediately and each row fills in as its attempts land,
+     * rather than the table growing and reflowing under the reader.
+     */
+    function renderQueries(queries) {
+      // .pad0 and no .card-head: the section above supplies the heading, so a card title
+      // here would render "Queries" twice. The table's own thead is the only header needed.
+      const card = el("div", "panel pad0");
+
+      // table.tbl from the source: uppercase --muted headers on --surface-2, --hair row
+      // rules, and .n for numeric columns so figures right-align on tabular numerals.
+      const table = el("table", "tbl");
+      const headRow = el("tr");
+      for (const [label, numeric] of [["Query", false], ["Expected", false],
+                                      ["Triggered", true], ["Rate", true], ["Progress", true]]) {
+        headRow.appendChild(el("th", numeric ? "n" : "", label));
+      }
+      table.appendChild(el("thead")).appendChild(headRow);
+
+      const body = el("tbody");
+      for (const row of queries) {
+        const tr = el("tr");
+        tr.appendChild(el("td", "", row.query));
+        const expect = el("td");
+        expect.appendChild(el("span", row.should_trigger ? "chip m" : "chip",
+          row.should_trigger ? "should trigger" : "should NOT"));
+        tr.appendChild(expect);
+        tr.appendChild(el("td", "n mono", row.triggered + "/" + row.settled));
+        // A rate only once something has settled: 0/0 would read as a measured zero.
+        tr.appendChild(el("td", "n mono",
+          row.settled > 0 ? Math.round((row.triggered / row.settled) * 100) + "%" : "—"));
+        const cell = el("td", "n");
+        const bar = el("span", "rowbar");
+        const inner = el("div");
+        inner.style.width = (row.total > 0 ? Math.round((row.settled / row.total) * 100) : 0) + "%";
+        bar.appendChild(inner);
+        cell.appendChild(bar);
+        tr.appendChild(cell);
+        body.appendChild(tr);
+      }
+      table.appendChild(body);
+      card.appendChild(table);
+      return card;
+    }
+
+    function renderArtifacts(artifacts) {
+      const card = el("div", "panel");
+      for (const artifact of artifacts) {
+        const block = el("div", "artifact");
+        block.appendChild(el("div", "eyebrow", artifact.name));
+        const pre = el("pre", "mono");
+        pre.textContent = artifact.content;
+        block.appendChild(pre);
+        card.appendChild(block);
+      }
+      return card;
+    }
+
+    function renderProvenance(status) {
+      // 2:1:1 rather than the source's even .g2 -- measured off the adjusted render. The left
+      // panel holds label/value rows that need prose width (a full command line); the two
+      // right tiles hold single figures that do not.
+      const grid = el("div", "prov-grid");
+
+      // Left: .ctrl-row label/value rows from the ported stylesheet, always visible. The
+      // collapsed details element is gone -- an invocation you have to click to see is one you
+      // will not check, and it is the first thing you want when a run looks wrong.
+      const left = el("div", "panel");
+      const idRow = el("div", "ctrl-row");
+      idRow.appendChild(el("div", "lbl", "Run Id"));
+      const idBody = el("div", "body");
+      idBody.appendChild(el("span", "chip chip-running", status.runId));
+      idRow.appendChild(idBody);
+      left.appendChild(idRow);
+
+      if (status.commandLine) {
+        const cmdRow = el("div", "ctrl-row");
+        cmdRow.appendChild(el("div", "lbl", "Invocation"));
+        const cmdBody = el("div", "body");
+        const pre = el("pre", "mono");
+        pre.textContent = status.commandLine;
+        cmdBody.appendChild(pre);
+        cmdRow.appendChild(cmdBody);
+        left.appendChild(cmdRow);
+      }
+      grid.appendChild(left);
+
+      // Right: two .metric tiles. PROCESS is the shared prefix, so the labels read as a pair
+      // rather than two unrelated figures.
+      if (typeof status.pid === "number") {
+        const m = el("div", "metric");
+        m.appendChild(el("div", "ml", "process \u00b7 id"));
+        const v = el("div", "mv accent");
+        v.textContent = String(status.pid);
+        m.appendChild(v);
+        const foot = el("div", "mf");
+        foot.appendChild(el("code", "", "ps -p " + status.pid));
+        foot.appendChild(document.createTextNode("  \u00b7  status"));
+        m.appendChild(foot);
+        grid.appendChild(m);
+      }
+
+      const km = el("div", "metric");
+      km.appendChild(el("div", "ml", "process \u00b7 kind"));
+      const kv = el("div", "mv warn");
+      kv.textContent = status.kind;
+      km.appendChild(kv);
+      km.appendChild(el("div", "mf", "script that produced status"));
+      grid.appendChild(km);
+
+      return grid;
+    }
+
+    function render() {
+      const data = typeof EMBEDDED_DATA === "undefined" ? null : EMBEDDED_DATA;
+      const root = document.getElementById("root");
+      if (data === null) {
+        root.appendChild(el("div", "empty", "No run data was embedded in this page."));
+        return;
+      }
+      const status = data.status;
+      const state = data.stale ? "stale" : status.state;
+      document.title = (status.label || status.runId) + " — Skill Creator";
+
+      // Sections rather than a flat stack of cards, per the source's composition. The run
+      // page's blocks are NOT sequential -- progress, queries and provenance are three views
+      // of one run, not steps -- so they take plain eyebrows rather than the source's numbered
+      // (#1, #2) form, which is reserved for the report's genuinely ordered iterations.
+      // Heading-only: the card directly below states the run's condition with a chip and the
+      // figures, so a paragraph saying the same thing in words was the redundant half. The
+      // other two sections keep their descriptions -- they explain how to READ data rather
+      // than restating it.
+      const progress = section("01 \u00b7 status", "Progress", "");
+      progress.appendChild(renderProgress(data));
+      root.appendChild(progress);
+
+      const queries = status.detail && status.detail.queries;
+      if (Array.isArray(queries) && queries.length > 0) {
+        const sec = section("02 \u00b7 evaluation", "Queries",
+          "One row per eval-set query. A positive expects the skill to trigger; a negative " +
+          "expects it not to. Rate is the share of settled attempts that triggered, so it " +
+          "sharpens as evidence arrives rather than being a verdict.");
+        sec.appendChild(renderQueries(queries));
+        root.appendChild(sec);
+      }
+
+      if (Array.isArray(data.artifacts) && data.artifacts.length > 0) {
+        const sec = section("output", "Output",
+          "Files this run wrote, read at the moment this page was served rather than copied " +
+          "when the run recorded them.");
+        sec.appendChild(renderArtifacts(data.artifacts));
+        root.appendChild(sec);
+      } else if (status.state === "running") {
+        const sec = section("output", "Output", "This run has not written its output yet.");
+        root.appendChild(sec);
+      }
+
+      if (data.retryUrl) {
+        const sec = section("recovery", "Retry",
+          "This run stopped. A retry resumes from whatever it already persisted, or starts " +
+          "over when it persisted nothing — the plan below says which.");
+        sec.appendChild(renderRetry(data));
+        root.appendChild(sec);
+      }
+
+      const prov = section("03 \u00b7 provenance", "Provenance",
+        "Which process produced this, and how it was invoked. A detached run's real flags are " +
+        "otherwise unrecoverable once the launching shell is gone.");
+      prov.appendChild(renderProvenance(status));
+      root.appendChild(prov);
+    }
+
+    /**
+     * Retry card, offered only on a stopped run.
+     *
+     * States what the retry will DO before it is confirmed -- resume from a persisted
+     * iteration, or run again from the start -- because the two differ by tens of minutes.
+     * The exact invocation is shown above the button rather than only inside the dialog: a
+     * command worth confirming is worth reading first.
+     */
+    function renderRetry(data) {
+      const wrap = el("div");
+
+      // The plan is a CAVEAT, not a label: "from iteration 3" and "from the start" differ by
+      // tens of minutes, and the user is agreeing to one of them. The source's .note is the
+      // shape for a qualification that must be read before acting, so it goes here rather
+      // than as inline text under the button.
+      const note = el("div", "note warn");
+      note.appendChild(el("div", "nb", "before you confirm"));
+      note.appendChild(el("div", "", data.retryPlan || "This run has stopped."));
+      wrap.appendChild(note);
+
+      const cmd = el("div", "fine");
+      cmd.appendChild(document.createTextNode("will run "));
+      cmd.appendChild(el("code", "", data.retryCommand || "(unknown command)"));
+      wrap.appendChild(cmd);
+
+      const label = data.retryResumeFrom > 0
+        ? "Retry from iteration " + (data.retryResumeFrom + 1)
+        : "Retry from the start";
+      const button = el("button", "btn sm", label);
+      button.type = "button";
+      button.style.marginTop = "12px";
+      button.addEventListener("click", async () => {
+        const command = data.retryCommand || "(unknown command)";
+        const plan = data.retryPlan || label;
+        if (!window.confirm(plan + "\n\n" + command + "\n\nThese jobs can take an hour.")) return;
+        button.disabled = true;
+        button.textContent = "Retrying…";
+        try {
+          const response = await fetch(data.retryUrl, { method: "POST" });
+          const body = await response.json();
+          button.textContent = response.ok
+            ? (body.resumedFrom > 0
+                ? "Retrying from iteration " + (body.resumedFrom + 1) + " — see the run list"
+                : "Retrying — it will appear as a new run")
+            : "Could not retry: " + (body.error || response.status);
+          if (!response.ok) button.disabled = false;
+        } catch (error) {
+          button.textContent = "Could not retry: " + error;
+          button.disabled = false;
+        }
+      });
+      wrap.appendChild(button);
+      return wrap;
+    }
+
+    render();
+  </script>
+</body>
+</html>

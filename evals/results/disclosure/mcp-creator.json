@@ -1,0 +1,86 @@
+{
+  "skill_name": "mcp-creator",
+  "skill_path": "skills/mcp-creator",
+  "exit_reason": "max_iterations (1)",
+  "token_method": "tiktoken:cl100k_base",
+  "tokens_are_estimated": false,
+  "holdout": 0,
+  "train_size": 5,
+  "holdout_size": 0,
+  "runs_per_scenario": 1,
+  "baseline_body_tokens": 4808,
+  "best_body_tokens": 4808,
+  "baseline_context_tokens": 449463.2,
+  "best_context_tokens": 449463.2,
+  "best_layout_path": "skills/mcp-creator",
+  "applied_edits": [],
+  "files": [
+    {
+      "path": "examples/naming-walkthrough.md",
+      "loadMode": "specimen",
+      "bytes": 11061,
+      "tokens": 2785,
+      "signposted": true,
+      "pulls": 3,
+      "countedRuns": 5,
+      "pullRate": 0.6,
+      "verdict": "keep"
+    },
+    {
+      "path": "examples/plugin-mcp.json",
+      "loadMode": "specimen",
+      "bytes": 1036,
+      "tokens": 295,
+      "signposted": true,
+      "pulls": 3,
+      "countedRuns": 5,
+      "pullRate": 0.6,
+      "verdict": "keep"
+    },
+    {
+      "path": "references/server-entry.md",
+      "loadMode": "read",
+      "bytes": 18353,
+      "tokens": 4456,
+      "signposted": true,
+      "pulls": 4,
+      "countedRuns": 5,
+      "pullRate": 0.8,
+      "verdict": "inline"
+    },
+    {
+      "path": "references/tool-surface.md",
+      "loadMode": "read",
+      "bytes": 17169,
+      "tokens": 3849,
+      "signposted": true,
+      "pulls": 2,
+      "countedRuns": 5,
+      "pullRate": 0.4,
+      "verdict": "keep"
+    }
+  ],
+  "iterations": [
+    {
+      "iteration": 1,
+      "label": "baseline (as authored)",
+      "candidateId": null,
+      "rationale": "4 bundled file(s), 4808 body tokens",
+      "bodyTokens": 4808,
+      "train": {
+        "scenarios": 5,
+        "runs": 5,
+        "assertionsPassed": 5,
+        "assertionsTotal": 5,
+        "passRate": 1,
+        "meanContextTokens": 449463.2,
+        "runsWithoutSkill": 0
+      },
+      "holdout": null,
+      "accepted": true,
+      "note": "the layout every candidate is measured against"
+    }
+  ],
+  "notes": [],
+  "applied_to": null
+}

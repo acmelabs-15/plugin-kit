@@ -1,0 +1,45 @@
+{
+  "skill_name": "create-plugin",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Scaffold a plugin for our team with two skills and a lint hook, and get it validating.",
+      "expected_output": "A plugin tree with a valid manifest that passes claude plugin validate --strict.",
+      "expectations": [
+        "A plugin tree with a valid manifest that passes claude plugin validate --strict."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our plugin installs but none of its components show up. Work out why.",
+      "expected_output": "A diagnosis covering directory placement, naming, and manifest fields.",
+      "expectations": [
+        "A diagnosis covering directory placement, naming, and manifest fields."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What actually goes in .claude-plugin/plugin.json and which fields matter?",
+      "expected_output": "The manifest fields with version explained as load-bearing.",
+      "expectations": [
+        "The manifest fields with version explained as load-bearing."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "We want this to work in Claude Code and also for people using Claude Desktop. What do we need to build?",
+      "expected_output": "A distribution answer distinguishing plugin from MCPB and naming which surfaces each reaches.",
+      "expectations": [
+        "A distribution answer distinguishing plugin from MCPB and naming which surfaces each reaches."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Two of our components need the same parsing code. How should the repo be laid out?",
+      "expected_output": "A shared-package layout with the build step and the installation constraint that forces it.",
+      "expectations": [
+        "A shared-package layout with the build step and the installation constraint that forces it."
+      ]
+    }
+  ]
+}

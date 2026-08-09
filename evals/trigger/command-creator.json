@@ -1,0 +1,82 @@
+[
+  {
+    "query": "not sure if this should live in .claude/commands or get its own skill folder — it's literally one paragraph of instructions, no scripts, nothing fancy attached. is there an actual difference besides the file path?",
+    "should_trigger": true
+  },
+  {
+    "query": "made a /deploy command and $1 keeps grabbing the second word i typed instead of the first, is that a bug or is that just how it works",
+    "should_trigger": true
+  },
+  {
+    "query": "I want /send-invoice to only ever fire when I type it myself — never automatically — and honestly I'd rather claude not even see a description of it sitting around in context",
+    "should_trigger": true
+  },
+  {
+    "query": "when someone runs /fix-issue and forgets to pass a ticket number, what's actually supposed to happen — does it just plow ahead making stuff up?",
+    "should_trigger": true
+  },
+  {
+    "query": "the slash menu shows [args] for my command and that tells nobody anything, how do i get it to show something like [pr-number] [reviewer] instead",
+    "should_trigger": true
+  },
+  {
+    "query": "can I make it so /standup runs `git log` and `gh pr list` itself before claude even sees my prompt, so it just gets the text?",
+    "should_trigger": true
+  },
+  {
+    "query": "in my command file I've got !`gh pr view $pr` — does $pr actually get swapped for the real number before that shell command runs, or is the shell just seeing the literal text '$pr'?",
+    "should_trigger": true
+  },
+  {
+    "query": "give me the smallest possible slash command file — no arguments, no fetching anything, just a fixed set of steps for staging and committing",
+    "should_trigger": true
+  },
+  {
+    "query": "before I trust this new /review-pr thing, how do I actually see the exact text claude is going to receive, injected diff and all, without just hoping it looks right",
+    "should_trigger": true
+  },
+  {
+    "query": "is there some kind of static check I can run on a command's frontmatter before I bother setting up a whole eval loop for it",
+    "should_trigger": true
+  },
+  {
+    "query": "I don't want to type anything — I want claude to just notice on its own whenever someone pastes a PR link in chat and kick off the review automatically",
+    "should_trigger": false
+  },
+  {
+    "query": "this /triage thing has grown a lot — it really needs its own python script plus a couple of reference docs bundled alongside it now",
+    "should_trigger": false
+  },
+  {
+    "query": "my /deploy command isn't firing at all, I think it's because there's a deploy skill installed with the same name — can you make my command file win instead?",
+    "should_trigger": false
+  },
+  {
+    "query": "write me a bash deploy script that tags a docker image and pushes it, then wire it into a github actions workflow",
+    "should_trigger": false
+  },
+  {
+    "query": "I want an MCP server that lets claude hit our internal deploy API directly instead of going through the CLI",
+    "should_trigger": false
+  },
+  {
+    "query": "set up a hook so claude automatically runs eslint after every single file edit in this repo, no exceptions",
+    "should_trigger": false
+  },
+  {
+    "query": "the finance export has three jammed header rows and merged cells, can you clean it up into an actual usable spreadsheet",
+    "should_trigger": false
+  },
+  {
+    "query": "set up /morning so it runs every weekday and shows me a nice styled brief automatically",
+    "should_trigger": false
+  },
+  {
+    "query": "before I start building this feature, grill me with questions one at a time until the requirements are actually airtight",
+    "should_trigger": false
+  },
+  {
+    "query": "the description on my 'changelog-notes' skill isn't getting picked up half the time — can you help tune it so claude actually notices when it applies?",
+    "should_trigger": false
+  }
+]

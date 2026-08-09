@@ -1,0 +1,83 @@
+[
+  {
+    "query": "i've got a folder of ~40 markdown runbooks our SREs wrote and every incident someone re-reads the wrong one. can you turn the postgres failover one into something claude can actually follow when i'm paging at 3am",
+    "should_trigger": true
+  },
+  {
+    "query": "we keep pasting the same 200-line prompt into claude to get our release notes formatted the way marketing wants. make that reusable so nobody has to remember it",
+    "should_trigger": true
+  },
+  {
+    "query": "my pdf-extract skill fires maybe half the time. people ask 'pull the tables out of this statement' and it just doesn't pick it up. can you fix the description so it triggers properly",
+    "should_trigger": true
+  },
+  {
+    "query": "Is the new version of our invoice-parser skill actually better than the one we shipped last month, or does it just feel better? I need something I can show my lead.",
+    "should_trigger": true
+  },
+  {
+    "query": "package up the brand-guidelines skill so the design team can install it themselves without me sending them a zip of a folder",
+    "should_trigger": true
+  },
+  {
+    "query": "add a step to our deploy-checklist skill that reminds you to drain connections before restarting, and make sure it still works after",
+    "should_trigger": true
+  },
+  {
+    "query": "we have 6 skills in the plugin now and two of them keep fighting over the same requests. figure out which descriptions overlap",
+    "should_trigger": true
+  },
+  {
+    "query": "our data-cleanup SKILL.md is about 900 lines now and every single run drags the whole thing in. work out what actually has to stay in the main file and what can move out behind a pointer",
+    "should_trigger": true
+  },
+  {
+    "query": "before we ship contract-review i want real test cases run against it rather than me eyeballing three outputs. set that up and tell me whether it actually beats not having the skill",
+    "should_trigger": true
+  },
+  {
+    "query": "the /handover skill got restructured last sprint and nobody checked it still fires. come up with realistic things people would type that should and shouldn't hit it, then measure it",
+    "should_trigger": true
+  },
+
+  {
+    "query": "Put together a training deck for new hires on how to write good skill descriptions. Ten to fifteen slides, speaker notes, worked before-and-after examples. It's for the platform onboarding session next month.",
+    "should_trigger": false
+  },
+  {
+    "query": "Our platform team wants a one-page cheat sheet of the house conventions for skill frontmatter that we can pin in Confluence. Pull the rules from our existing skills and format it as a table.",
+    "should_trigger": false
+  },
+  {
+    "query": "Grade these five skill descriptions from our repo on a 1-to-5 scale for trigger precision and write up which ones need attention, ranked. I'm doing a quality review, not changing anything yet.",
+    "should_trigger": false
+  },
+  {
+    "query": "the research-helper skill throws 'ENOENT: references/api.md' halfway through every run. work out why and fix it",
+    "should_trigger": false
+  },
+  {
+    "query": "audit the skills in this repo for anything that shells out to curl or writes outside the workspace. security review before we make the marketplace public.",
+    "should_trigger": false
+  },
+  {
+    "query": "which skills do i have installed right now, and which ones are actually enabled? i think something is shadowing /deploy",
+    "should_trigger": false
+  },
+  {
+    "query": "write the CONTRIBUTING.md for this plugin repo. cover how to run the tests, the commit convention, and how we review changes.",
+    "should_trigger": false
+  },
+  {
+    "query": "our SKILL.md files are inconsistent about heading levels and some use tabs. run a formatter over all of them and normalise it.",
+    "should_trigger": false
+  },
+  {
+    "query": "explain how claude decides which skill to load when two of them could plausibly handle the same request. i'm trying to understand the mechanism, not change anything.",
+    "should_trigger": false
+  },
+  {
+    "query": "write me a one-pager comparing skills against MCP prompts for thursday's architecture review — what each is actually for, where they overlap, and which one we should reach for by default.",
+    "should_trigger": false
+  }
+]

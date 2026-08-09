@@ -1,0 +1,7 @@
+Warning: no held-out scenarios, so candidates are selected on the same scenarios that proposed them. Add scenarios, or raise --holdout, before trusting the result.
+
+Baseline: 4988 body tokens, 503759 context tokens/run, pass 100% (5/5)
+  inline     4/5 examples/flake-triage.md (2317 tokens)
+  inline     4/5 references/delegation.md (2774 tokens)
+  inline     4/5 references/frontmatter.md (3895 tokens)
+Results saved to: evals/results/disclosure/agent-creator/2026-08-08_201102

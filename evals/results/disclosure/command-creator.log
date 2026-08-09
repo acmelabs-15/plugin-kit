@@ -1,0 +1,10 @@
+Warning: no held-out scenarios, so candidates are selected on the same scenarios that proposed them. Add scenarios, or raise --holdout, before trusting the result.
+
+Baseline: 4989 body tokens, 581661 context tokens/run, pass 80% (4/5)
+  keep       1/4 examples/minimal-command.md (1329 tokens)
+  inline     4/4 examples/review-pr.md (1864 tokens)
+  keep       3/4 references/arguments.md (2952 tokens)
+  keep       3/4 references/frontmatter.md (4294 tokens)
+  inline     4/4 references/load-time-injection.md (3175 tokens)
+Warning: the skill never loaded on 1 baseline run(s). Those runs are excluded from every pull rate, so the verdicts rest on less evidence than the run count suggests.
+Results saved to: evals/results/disclosure/command-creator/2026-08-08_201102

@@ -1,0 +1,2 @@
+Warning: query timed out after 150s and is scored as a non-trigger. If this recurs, raise --timeout: measured calls reached 124s.
+Results saved to: evals/results/optimize/hook-creator/2026-08-08_192659

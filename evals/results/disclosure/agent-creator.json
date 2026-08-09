@@ -1,0 +1,75 @@
+{
+  "skill_name": "agent-creator",
+  "skill_path": "skills/agent-creator",
+  "exit_reason": "max_iterations (1)",
+  "token_method": "tiktoken:cl100k_base",
+  "tokens_are_estimated": false,
+  "holdout": 0,
+  "train_size": 5,
+  "holdout_size": 0,
+  "runs_per_scenario": 1,
+  "baseline_body_tokens": 4988,
+  "best_body_tokens": 4988,
+  "baseline_context_tokens": 503758.8,
+  "best_context_tokens": 503758.8,
+  "best_layout_path": "skills/agent-creator",
+  "applied_edits": [],
+  "files": [
+    {
+      "path": "examples/flake-triage.md",
+      "loadMode": "specimen",
+      "bytes": 10321,
+      "tokens": 2317,
+      "signposted": true,
+      "pulls": 4,
+      "countedRuns": 5,
+      "pullRate": 0.8,
+      "verdict": "inline"
+    },
+    {
+      "path": "references/delegation.md",
+      "loadMode": "read",
+      "bytes": 12813,
+      "tokens": 2774,
+      "signposted": true,
+      "pulls": 4,
+      "countedRuns": 5,
+      "pullRate": 0.8,
+      "verdict": "inline"
+    },
+    {
+      "path": "references/frontmatter.md",
+      "loadMode": "read",
+      "bytes": 17086,
+      "tokens": 3895,
+      "signposted": true,
+      "pulls": 4,
+      "countedRuns": 5,
+      "pullRate": 0.8,
+      "verdict": "inline"
+    }
+  ],
+  "iterations": [
+    {
+      "iteration": 1,
+      "label": "baseline (as authored)",
+      "candidateId": null,
+      "rationale": "3 bundled file(s), 4988 body tokens",
+      "bodyTokens": 4988,
+      "train": {
+        "scenarios": 5,
+        "runs": 5,
+        "assertionsPassed": 5,
+        "assertionsTotal": 5,
+        "passRate": 1,
+        "meanContextTokens": 503758.8,
+        "runsWithoutSkill": 0
+      },
+      "holdout": null,
+      "accepted": true,
+      "note": "the layout every candidate is measured against"
+    }
+  ],
+  "notes": [],
+  "applied_to": null
+}

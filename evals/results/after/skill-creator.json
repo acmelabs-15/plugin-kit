@@ -1,0 +1,171 @@
+{
+  "skill_name": "skill-creator",
+  "description": "Use when the thing being built, fixed, or shipped is a Claude skill itself — a SKILL.md plus whatever references, scripts, or assets ride along with it. Covers the whole life of one: capturing a workflow into a first draft, editing or restructuring an existing skill, debugging frontmatter and packaging errors, bundling a skill into a portable .skill file to hand to someone, running evals and benchmarks to prove a change helped, and rewriting a description so Claude actually fires the skill on the phrasings real users type (or stops firing it on the wrong ones).",
+  "results": [
+    {
+      "query": "we keep re-explaining the same pdf table extraction steps to claude every week in the #ops-automation slack thread, half the time someone forgets a step and support gets the wrong numbers. can you turn that into something that just sticks instead of us retyping it every monday",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our /release-notes skill barely fires anymore — people type stuff like 'format the changelog for marketing' and it just gets ignored. probably a description problem, can you take a look",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "before we push the new contract-review skill out to the whole legal team i want actual before/after numbers, not just me eyeballing three outputs and going 'yeah looks fine'",
+      "should_trigger": true,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "the runbook-helper SKILL.md ballooned to like 650 lines after everyone kept bolting stuff onto it, and now every single invocation feels like it's dragging the whole thing in even for trivial requests. what actually needs to move out into references?",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "i put model: opus in the frontmatter of our internal triage skill so it always uses the good model, but now the packaging script is refusing to build it and complaining about that key. what's going on",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "can you zip up the onboarding-buddy skill into something i can just email to the design team, they don't have repo access",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "we've got like 8 skills bundled into one plugin now and i have a hunch two of them are fighting over the same requests but i honestly can't tell which two",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "i rewrote triage-bot last week and it feels better to me but i also wrote it so of course i think that. is there a way to check if it's actually better without me just being biased about my own work",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "someone on the team deleted the evals/results folder for our deploy-checklist skill last week because they figured it was just scratch test junk — should we have kept that around, and should i stop that from happening again",
+      "should_trigger": true,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "i'm drafting this new skill straight in the claude.ai web app, no terminal, no subagents available — how am i even supposed to test it before i hand it off to the team that does have claude code",
+      "should_trigger": true,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "can you do a security pass on the pdf-extract skill our contractor built before we let it anywhere near customer data",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our deploy-checklist skill is installed and now throws 'ENOENT: reference not found' the second it runs step 3 — can you dig in and fix it",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "write up a short wiki page for the rest of engineering explaining how our internal skills system works and where the files live",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "I've got the Q3 platform rollout doc already written up — one of the bullet points is 'update three plugin skills for the new API version', just work through the doc top to bottom for me",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "someone reorganized .claude/skills into .claude/tools last week and now half our slash commands 404, can you move everything back and get the paths right again",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "we need something that lets claude hit our internal jira api directly and file tickets on its own — what's the right way to wire that up",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "quick gut check — on a scale of 1 to 5, which of our eight installed skills have the weakest descriptions? not asking you to touch anything, just want the ranking",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our finance intern dumped a csv export full of merged cells and phantom headers into the shared drive, can you turn it into an actual clean spreadsheet",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "put together a slide deck for the platform onboarding session on how to write good skill descriptions, 10-12 slides with before/after examples",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "did i already get pinged about anything urgent this morning, or is my calendar actually clear till the 10am",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 20,
+    "passed": 16,
+    "failed": 4
+  }
+}

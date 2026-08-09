@@ -1,0 +1,41 @@
+{
+  "mcpServers": {
+    "issue-tracker": {
+      "type": "http",
+      "url": "${ACME_TRACKER_URL:-https://tracker.acme.example.com/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${user_config.trackerToken}",
+        "X-Acme-Tenant": "${user_config.tenantId}"
+      }
+    },
+
+    "repo-index": {
+      "type": "stdio",
+      "command": "bun",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/servers/repo-index/index.ts",
+        "--root",
+        "${CLAUDE_PROJECT_DIR}"
+      ],
+      "env": {
+        "REPO_INDEX_CACHE": "${CLAUDE_PLUGIN_DATA}/repo-index",
+        "REPO_INDEX_LOG": "${ACME_LOG_LEVEL:-warn}"
+      },
+      "alwaysLoad": true
+    },
+
+    "metrics-api": {
+      "type": "http",
+      "url": "https://metrics.acme.example.com/mcp",
+      "headers": {
+        "X-Acme-Tenant": "${user_config.tenantId}"
+      },
+      "headersHelper": "bun \"${CLAUDE_PLUGIN_ROOT}/scripts/mint-metrics-token.ts\""
+    },
+
+    "docs-search": {
+      "type": "http",
+      "url": "https://docs.acme.example.com/mcp"
+    }
+  }
+}

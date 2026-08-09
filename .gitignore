@@ -9,7 +9,15 @@ node_modules/
 dist/
 build/
 *.skill
-*.tsbuildinfo
+
+# Scratch workspaces from older eval runs. Durable eval evidence now lives in
+# evals/results/ and IS committed: transcripts and benchmarks are the evidence behind
+# the skill's own measured claims, and a number nobody can re-derive is not evidence.
+*-workspace/
+
+# Fixture repositories copied into a run. Reproducible from evals/fixtures/, and each
+# carries its own .git, so committing one nests a repository inside this one.
+evals/results/**/repo/
 
 # Test and coverage output
 coverage/
@@ -19,17 +27,16 @@ coverage/
 .env
 .env.*
 !.env.example
+.claude/*.local.md
+.claude/settings.local.json
 
-# Scratch workspaces
-.scratch/
-
-# macOS noise
-.DS_Store
-**/.DS_Store
-
-# Editor noise
+# Editors
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*

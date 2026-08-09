@@ -1,0 +1,6 @@
+Warning: no held-out scenarios, so candidates are selected on the same scenarios that proposed them. Add scenarios, or raise --holdout, before trusting the result.
+
+Baseline: 4828 body tokens, 337855 context tokens/run, pass 80% (4/5)
+  keep       3/5 references/path-anchors.md (1270 tokens)
+  keep       1/5 references/shared-code-architecture.md (3124 tokens)
+Results saved to: evals/results/disclosure/create-plugin/2026-08-08_195729

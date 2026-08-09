@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skill Creator — Run Dashboard</title>
+  <!-- No local palette or components: both come from the ported design system, injected
+       with the tokens by the app bar. Local rules here are page layout only. -->
+  <style>
+    .wrap{ max-width:960px; margin:0 auto; padding:0 20px 48px; }
+    /* The first section sits under the app bar, whose own border would double with its rule. */
+    section.sec:first-child{ border-top:0; padding-top:24px; }
+    .head-strip{ display:flex; justify-content:space-between; align-items:baseline; gap:14px;
+      flex-wrap:wrap; font-family:var(--mono); font-size:11px; color:var(--faint); margin-bottom:16px; }
+    .runs{ display:flex; flex-direction:column; gap:10px; }
+    /* Progress track: the source has no equivalent, so it is built from tokens. */
+    .track{ background:var(--surface-3); border-radius:999px; height:6px; overflow:hidden; margin:10px 0 8px; }
+    .track > div{ height:100%; background:var(--accent); }
+    .track > div.done{ background:var(--good); }
+    .track > div.failed{ background:var(--bad); }
+    .track > div.stale{ background:var(--warn); }
+    .run.clickable{ cursor:pointer; transition:.12s border-color; }
+    .run.clickable:hover{ border-color:var(--text); }
+    .run.clickable:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  </style>
+</head>
+<body>
+  <!-- Slimmed: the app bar above names the page, so this keeps only the two things it
+       does not carry -- which directory the runs came from, and when this was rendered. -->
+  <main class="wrap" id="root">
+    <div class="head-strip">
+      <span id="subtitle"></span>
+      <span id="clock"></span>
+    </div>
+    <div id="runs"></div>
+  </main>
+
+  <script>
+    /*__EMBEDDED_DATA__*/
+
+    /**
+     * Whole seconds as `1h 4m`, `4m 10s` or `10s`.
+     *
+     * Coarsens as the magnitude grows: seconds stop mattering once a run has been
+     * going for an hour, and showing them implies a precision the projection lacks.
+     */
+    function formatDuration(ms) {
+      const total = Math.max(0, Math.round(ms / 1000));
+      const hours = Math.trunc(total / 3600);
+      const minutes = Math.trunc((total % 3600) / 60);
+      const seconds = total % 60;
+      if (hours > 0) return hours + "h " + minutes + "m";
+      if (minutes > 0) return minutes + "m " + seconds + "s";
+      return seconds + "s";
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    /** Text nodes throughout, never innerHTML: run labels carry user-supplied paths. */
+    function metaItem(parent, text, strong) {
+      if (parent.childElementCount > 0) parent.appendChild(el("span", "", "·"));
+      parent.appendChild(el("span", strong ? "strong" : "", text));
+    }
+
+    function stateOf(run) {
+      if (run.stale) return "stale";
+      return run.status.state;
+    }
+
+    function badgeText(run) {
+      const state = stateOf(run);
+      if (state === "stale") return "no longer reporting";
+      if (state === "running") return "running";
+      if (state === "done") return "done";
+      return "failed";
+    }
+
+    function renderRun(run, now) {
+      const status = run.status;
+      const state = stateOf(run);
+      // .panel from the source rather than a bespoke card, so a row here and a card on a
+      // report page are visibly the same object.
+      const card = el("div", "panel run");
+      card.style.padding = "16px 18px";
+
+      const head = el("div", "between");
+      const left = el("div");
+      left.appendChild(el("div", "card-title", status.label || status.runId));
+      left.appendChild(el("div", "eyebrow", status.kind));
+      head.appendChild(left);
+      head.appendChild(el("span", "chip chip-" + state,
+        state === "stale" ? "no longer reporting" : state));
+      card.appendChild(head);
+
+      const percent = status.total > 0
+        ? Math.min(100, Math.round((status.settled / status.total) * 100))
+        : 0;
+      const track = el("div", "track");
+      const fill = el("div", state === "running" ? "" : state);
+      fill.style.width = (state === "done" ? 100 : percent) + "%";
+      track.appendChild(fill);
+      card.appendChild(track);
+
+      const meta = el("div", "fine");
+      meta.style.marginTop = "0";
+      const parts = [];
+      if (status.detail && status.detail.phase) parts.push(status.detail.phase);
+      if (status.total > 0) parts.push(status.settled + "/" + status.total);
+      if (status.detail && typeof status.detail.iteration === "number") {
+        const max = status.detail.maxIterations;
+        parts.push("iteration " + status.detail.iteration + (max ? "/" + max : ""));
+      }
+      if (status.detail && status.detail.trainScore) parts.push("train " + status.detail.trainScore);
+      if (status.detail && status.detail.testScore) parts.push("test " + status.detail.testScore);
+      parts.push(formatDuration((state === "running" ? now : status.updatedAt) - status.startedAt) + " elapsed");
+      if (state === "running" && typeof run.remainingMs === "number") {
+        parts.push("~" + formatDuration(run.remainingMs) + " left");
+      }
+      if (state !== "running") parts.push(formatDuration(now - status.updatedAt) + " ago");
+      meta.textContent = parts.join("  \u00b7  ");
+      card.appendChild(meta);
+
+      if (typeof status.pid === "number" || status.commandLine) {
+        const prov = el("div", "fine mono");
+        prov.textContent = [
+          typeof status.pid === "number" ? "pid " + status.pid : "",
+          status.commandLine || "",
+        ].filter(Boolean).join("  \u00b7  ");
+        card.appendChild(prov);
+      }
+
+      if (run.detailUrl) {
+        const row = el("div", "fine");
+        const link = el("a", "", "open report \u2192");
+        link.href = run.detailUrl;
+        row.appendChild(link);
+        card.appendChild(row);
+      }
+
+      if (status.state === "failed" && status.error) {
+        const note = el("div", "note");
+        note.style.borderLeftColor = "var(--bad)";
+        note.style.marginTop = "12px";
+        const nb = el("div", "nb", "failed");
+        nb.style.color = "var(--bad)";
+        note.appendChild(nb);
+        note.appendChild(el("div", "", status.error));
+        card.appendChild(note);
+      }
+      if (state === "stale") {
+        const note = el("div", "note warn");
+        note.style.marginTop = "12px";
+        note.appendChild(el("div", "nb", "no longer reporting"));
+        note.appendChild(el("div", "",
+          "This run stopped updating its status " + formatDuration(now - status.updatedAt) +
+          " ago. It was most likely killed; nothing will finish it."));
+        card.appendChild(note);
+      }
+
+      if (run.retryUrl) card.appendChild(retryControl(run));
+      if (run.detailUrl) makeCardClickable(card, run.detailUrl);
+      return card;
+    }
+
+    /**
+     * Retry button, stating what the retry will do before it is confirmed.
+     *
+     * RETRY, not restart: it resumes from persisted iterations where they exist. The plan
+     * line is shown above the button and repeated in the dialog, because "from iteration 3"
+     * and "from the start" differ by tens of minutes and the reader is agreeing to one of
+     * them. The button stops propagation so it does not also trigger the card's
+     * click-through.
+     */
+    function retryControl(run) {
+      const wrap = el("div");
+      wrap.style.marginTop = "0.6rem";
+      const label = run.retryResumeFrom > 0 ? "Retry from iteration " + (run.retryResumeFrom + 1) : "Retry from the start";
+      const button = el("button", "btn sm", label);
+      button.type = "button";
+
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const command = run.retryCommand || "(unknown command)";
+        const plan = run.retryPlan || label;
+        if (!window.confirm(plan + "\n\n" + command + "\n\nThese jobs can take an hour.")) return;
+        button.disabled = true;
+        button.textContent = "Retrying…";
+        try {
+          const response = await fetch(run.retryUrl, { method: "POST" });
+          const body = await response.json();
+          if (response.ok) {
+            button.textContent =
+              body.resumedFrom > 0
+                ? "Retrying from iteration " + (body.resumedFrom + 1) + " — it will appear as a new run"
+                : "Retrying — it will appear as a new run";
+          } else {
+            // Surfaced rather than swallowed: a refused retry has a reason, and the reason
+            // is what tells the reader whether to try something else.
+            button.textContent = "Could not retry: " + (body.error || response.status);
+            button.disabled = false;
+          }
+        } catch (error) {
+          button.textContent = "Could not retry: " + error;
+          button.disabled = false;
+        }
+      });
+
+      wrap.appendChild(button);
+      if (run.retryPlan) wrap.appendChild(el("div", "fine", run.retryPlan));
+      return wrap;
+    }
+
+    /**
+     * Enlarge a run's hit area to its whole card, with keyboard parity.
+     *
+     * `tabindex` and the Enter/Space handling are what make a clickable div reachable
+     * without a mouse -- a plain div is neither focusable nor actuable, so without them
+     * the enlarged target is mouse-only and the row is unreachable by keyboard except
+     * through the small anchor inside it.
+     */
+    function makeCardClickable(card, href) {
+      card.classList.add("clickable");
+      card.tabIndex = 0;
+      card.setAttribute("role", "link");
+
+      card.addEventListener("click", (event) => {
+        // The inner anchor handles its own clicks, including modifier-clicks;
+        // intercepting them here would break cmd-click-to-new-tab.
+        if (event.target.closest("a")) return;
+        window.location.href = href;
+      });
+      card.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        // Space scrolls the page by default, which is the wrong response to activating
+        // a focused control.
+        event.preventDefault();
+        window.location.href = href;
+      });
+    }
+
+    function renderSection(root, title, runs, now) {
+      if (runs.length === 0) return;
+      const sec = document.createElement("section");
+      sec.className = "sec";
+      const head = el("div", "sec-head");
+      const left = el("div");
+      left.appendChild(el("div", "eyebrow", title.eyebrow));
+      const h2 = el("h2", "", title.heading);
+      left.appendChild(h2);
+      head.appendChild(left);
+      head.appendChild(el("p", "desc", title.description));
+      sec.appendChild(head);
+
+      const group = el("div", "runs");
+      for (const run of runs) group.appendChild(renderRun(run, now));
+      sec.appendChild(group);
+      root.appendChild(sec);
+    }
+
+    function render() {
+      const data = typeof EMBEDDED_DATA === "undefined" ? { runs: [] } : EMBEDDED_DATA;
+      const now = typeof data.now === "number" ? data.now : Date.now();
+      // #runs, not #root: the wrapper also holds the head strip, and clearing the
+      // wrapper would delete it on every poll.
+      const root = document.getElementById("runs");
+      root.textContent = "";
+
+      const runs = Array.isArray(data.runs) ? data.runs : [];
+      // Split by what the viewer can act on rather than by raw state: an active run is
+      // one still worth waiting for, and a stale one is the case this dashboard exists
+      // to make visible, so it gets its own section instead of hiding among the rest.
+      const active = runs.filter((run) => run.status.state === "running" && !run.stale);
+      const stalled = runs.filter((run) => run.stale);
+      const finished = runs.filter((run) => run.status.state !== "running");
+
+      document.getElementById("subtitle").textContent = data.generatedFrom
+        ? "Status files in " + data.generatedFrom
+        : "";
+      document.getElementById("clock").textContent =
+        (data.staticMode ? "Snapshot taken " : "Updated ") + new Date(now).toLocaleTimeString();
+
+      if (runs.length === 0) {
+        const empty = el("div", "empty");
+        empty.appendChild(document.createTextNode("No runs recorded yet. Start one with "));
+        empty.appendChild(el("code", "", "bun scripts/optimize-description.ts"));
+        empty.appendChild(document.createTextNode(" or "));
+        empty.appendChild(el("code", "", "bun scripts/measure-triggering.ts"));
+        empty.appendChild(document.createTextNode(" and this page will pick it up."));
+        root.appendChild(empty);
+        return;
+      }
+
+      // Sections rather than bare headings, and each carries a description: the source pairs
+      // every heading with an explanation of what the reader is looking at, and "stale" in
+      // particular needs one -- it is a derived state, not something a run reports.
+      renderSection(root, {
+        eyebrow: "live", heading: "Active",
+        description: "Runs still reporting progress. The counts advance as attempts settle, and " +
+          "a projected remainder is extrapolated from completions rather than assumed.",
+      }, active, now);
+      renderSection(root, {
+        eyebrow: "unknown", heading: "No longer reporting",
+        description: "These claim to be running but stopped refreshing their status. A process " +
+          "killed outright cannot record its own ending, so this state is inferred from silence.",
+      }, stalled, now);
+      renderSection(root, {
+        eyebrow: "settled", heading: "Recently finished",
+        description: "Runs that ended, cleanly or otherwise. A failure ended the run; it did not " +
+          "invalidate whatever was measured before it.",
+      }, finished, now);
+    }
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+{
+  "skill_name": "agent-creator",
+  "description": "Use when the thing being built, fixed, or reasoned about is a Claude Code subagent — the markdown file under agents/, its frontmatter, its system prompt, and the tool grant that bounds it. Covers deciding whether the work wants a subagent at all rather than a skill, choosing which tools to grant and which to deny and what happens when one appears in both, writing a description so Claude actually delegates instead of doing the work inline, adding delegation examples, running a static check over the file before spending eval budget, building a set of test queries to check whether delegation happens, and diagnosing an agent that never fires, collided with another of the same name, or whose frontmatter field silently did nothing.",
+  "results": [
+    {
+      "query": "i want to build an agent that reads through like 30-40 log files after an incident and just hands back a one paragraph summary — worth making it a subagent or should i just have claude do it inline?",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "we've been telling claude by hand for two weeks now to check for n+1 queries and missing null checks on every pr, can you turn that into an actual agent definition instead of me retyping it every time",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "my subagent has permissionMode: plan in its frontmatter and it's shipped in a plugin but plan mode never actually kicks in, what's going on",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "for my code review agent should i grant Bash or just Read/Grep/Glob, and if a tool shows up in both tools and disallowedTools which one wins",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "help me write the description for my new triage agent — i want it to have those example/commentary blocks like the good ones do",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "before i burn eval budget on this, is there a quick static check i can run against my new agent file to catch obvious mistakes in the yaml or tool grant",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "i need like 20 test queries to check whether claude actually delegates to my new agent instead of just doing the work itself, with some genuinely hard negatives mixed in",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "ran the delegation eval and the held-out score is way worse than the training score, feels like the description just memorized the training queries, what do i do",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "my flake-triage style agent keeps firing on AuthTest.testExpiredToken even though that one fails identically every single run, and separately it never gets used when someone just says 'eh i'll rerun it' — feels like two different bugs",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "somebody already dropped an agent named code-reviewer under .claude/agents in this project and now i'm adding a plugin one with the same name — is there a defined precedence order or does one just silently win",
+      "should_trigger": true,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "OrderSyncTest.testConcurrentWrites keeps failing on and off in CI, can you just add a retry wrapper so it stops blocking my merges",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "can you write a full test suite for our new checkout flow, we don't have one yet",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our CI suite takes like 45 minutes now, can you help make it faster",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "i've got 40 log files from last night's incident, can you just read through them and tell me what actually happened, one paragraph is fine",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "we keep re-explaining the same pdf table extraction routine to claude every single week, can you make that stick so we stop repeating ourselves",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "how do i stop claude from being able to write files at all for the rest of this session",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "can you actually run the flake-triage agent on OrderSyncTest.testConcurrentWrites and tell me if it's a real regression",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "nobody ever asks for our api-conventions skill even when they clearly should, can you rewrite its description so claude actually reaches for it",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "here's a messy csv export, can you turn it into a clean xlsx with proper headers and formatting",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "i need a one-page word doc summary of this incident for leadership, formatted with headings",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 20,
+    "passed": 20,
+    "failed": 0
+  }
+}

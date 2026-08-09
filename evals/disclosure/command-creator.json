@@ -1,0 +1,45 @@
+{
+  "skill_name": "command-creator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Make me a /standup command that pastes yesterdays commits and my open PRs into the prompt before Claude reads it.",
+      "expected_output": "A command with load-time shell injection and an argument hint.",
+      "expectations": [
+        "A command with load-time shell injection and an argument hint."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My /review-pr prints a literal placeholder when I pass only one argument. Fix the argument handling.",
+      "expected_output": "A corrected argument mapping accounting for zero-based indexing and missing arguments.",
+      "expectations": [
+        "A corrected argument mapping accounting for zero-based indexing and missing arguments."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want /deploy to only run when I actually type it, never when Claude decides on its own.",
+      "expected_output": "disable-model-invocation set true, with the consequence for subagent preloading explained.",
+      "expectations": [
+        "disable-model-invocation set true, with the consequence for subagent preloading explained."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Write a /triage command that takes an issue number and a priority and drafts a response.",
+      "expected_output": "Named arguments declared in frontmatter and referenced in the body.",
+      "expectations": [
+        "Named arguments declared in frontmatter and referenced in the body."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Should this be a command or a skill? It needs a template file it fills in.",
+      "expected_output": "A recommendation of a skill because bundled files are needed, with the migration path.",
+      "expectations": [
+        "A recommendation of a skill because bundled files are needed, with the migration path."
+      ]
+    }
+  ]
+}

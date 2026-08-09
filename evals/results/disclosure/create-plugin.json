@@ -1,0 +1,64 @@
+{
+  "skill_name": "create-plugin",
+  "skill_path": "skills/create-plugin",
+  "exit_reason": "max_iterations (1)",
+  "token_method": "tiktoken:cl100k_base",
+  "tokens_are_estimated": false,
+  "holdout": 0,
+  "train_size": 5,
+  "holdout_size": 0,
+  "runs_per_scenario": 1,
+  "baseline_body_tokens": 4828,
+  "best_body_tokens": 4828,
+  "baseline_context_tokens": 337854.6,
+  "best_context_tokens": 337854.6,
+  "best_layout_path": "skills/create-plugin",
+  "applied_edits": [],
+  "files": [
+    {
+      "path": "references/path-anchors.md",
+      "loadMode": "read",
+      "bytes": 5736,
+      "tokens": 1270,
+      "signposted": true,
+      "pulls": 3,
+      "countedRuns": 5,
+      "pullRate": 0.6,
+      "verdict": "keep"
+    },
+    {
+      "path": "references/shared-code-architecture.md",
+      "loadMode": "read",
+      "bytes": 14188,
+      "tokens": 3124,
+      "signposted": true,
+      "pulls": 1,
+      "countedRuns": 5,
+      "pullRate": 0.2,
+      "verdict": "keep"
+    }
+  ],
+  "iterations": [
+    {
+      "iteration": 1,
+      "label": "baseline (as authored)",
+      "candidateId": null,
+      "rationale": "2 bundled file(s), 4828 body tokens",
+      "bodyTokens": 4828,
+      "train": {
+        "scenarios": 5,
+        "runs": 5,
+        "assertionsPassed": 4,
+        "assertionsTotal": 5,
+        "passRate": 0.8,
+        "meanContextTokens": 337854.6,
+        "runsWithoutSkill": 0
+      },
+      "holdout": null,
+      "accepted": true,
+      "note": "the layout every candidate is measured against"
+    }
+  ],
+  "notes": [],
+  "applied_to": null
+}

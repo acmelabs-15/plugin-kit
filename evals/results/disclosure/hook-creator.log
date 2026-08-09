@@ -1,0 +1,13 @@
+Warning: no held-out scenarios, so candidates are selected on the same scenarios that proposed them. Add scenarios, or raise --holdout, before trusting the result.
+
+Baseline: 4929 body tokens, 814141 context tokens/run, pass 60% (3/5)
+  keep       1/5 examples/protected-branch-guard/README.md (1978 tokens, not signposted)
+  keep       3/5 examples/protected-branch-guard/handlers/guard-push.ts (1066 tokens, not signposted)
+  keep       1/5 examples/protected-branch-guard/handlers/session-context.ts (603 tokens, not signposted)
+  signpost   0/5 examples/protected-branch-guard/handlers/tidy-edit.ts (759 tokens, not signposted)
+  keep       2/5 examples/protected-branch-guard/hooks.json (288 tokens, not signposted)
+  keep       2/5 references/events.md (3693 tokens)
+  keep       1/5 references/handlers.md (4394 tokens)
+  keep       0/5 scripts/lib/events.ts (4029 tokens)
+  misfiled   1/5 scripts/test-hook.ts (7125 tokens)
+Results saved to: evals/results/disclosure/hook-creator/2026-08-08_200549

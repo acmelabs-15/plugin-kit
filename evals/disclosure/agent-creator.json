@@ -1,0 +1,45 @@
+{
+  "skill_name": "agent-creator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want a subagent that reviews our terraform changes for security problems and reports back. It should not be able to change anything.",
+      "expected_output": "An agent markdown file with a read-only tool grant and a description written for delegation.",
+      "expectations": [
+        "An agent markdown file with a read-only tool grant and a description written for delegation."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My code-auditor agent exists but Claude never delegates to it, it just does the review inline. Fix that.",
+      "expected_output": "A revised description with a deliverable clause and delegation-oriented phrasing, plus example blocks.",
+      "expectations": [
+        "A revised description with a deliverable clause and delegation-oriented phrasing, plus example blocks."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "This agent has every tool available and its job is just to summarize test output. Tighten it up.",
+      "expected_output": "A narrowed tools grant justified against what the system prompt actually needs.",
+      "expectations": [
+        "A narrowed tools grant justified against what the system prompt actually needs."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I set permissionMode on my agent to keep it safe but it does nothing when installed from our plugin. What is going on?",
+      "expected_output": "An explanation that permissionMode is ignored for plugin subagents, plus the tool-grant alternative.",
+      "expectations": [
+        "An explanation that permissionMode is ignored for plugin subagents, plus the tool-grant alternative."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Should the flaky-test triage thing be a subagent or a skill? Talk me through it and then build the right one.",
+      "expected_output": "A reasoned recommendation against the context-window and tool-grant tradeoff, then the corresponding artifact.",
+      "expectations": [
+        "A reasoned recommendation against the context-window and tool-grant tradeoff, then the corresponding artifact."
+      ]
+    }
+  ]
+}

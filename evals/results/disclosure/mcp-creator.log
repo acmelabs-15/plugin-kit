@@ -1,0 +1,8 @@
+Warning: no held-out scenarios, so candidates are selected on the same scenarios that proposed them. Add scenarios, or raise --holdout, before trusting the result.
+
+Baseline: 4808 body tokens, 449463 context tokens/run, pass 100% (5/5)
+  keep       3/5 examples/naming-walkthrough.md (2785 tokens)
+  keep       3/5 examples/plugin-mcp.json (295 tokens)
+  inline     4/5 references/server-entry.md (4456 tokens)
+  keep       2/5 references/tool-surface.md (3849 tokens)
+Results saved to: evals/results/disclosure/mcp-creator/2026-08-08_200549

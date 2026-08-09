@@ -1,0 +1,141 @@
+{
+  "skill_name": "hook-creator",
+  "skill_path": "skills/hook-creator",
+  "exit_reason": "max_iterations (1)",
+  "token_method": "tiktoken:cl100k_base",
+  "tokens_are_estimated": false,
+  "holdout": 0,
+  "train_size": 5,
+  "holdout_size": 0,
+  "runs_per_scenario": 1,
+  "baseline_body_tokens": 4929,
+  "best_body_tokens": 4929,
+  "baseline_context_tokens": 814141.2,
+  "best_context_tokens": 814141.2,
+  "best_layout_path": "skills/hook-creator",
+  "applied_edits": [],
+  "files": [
+    {
+      "path": "examples/protected-branch-guard/README.md",
+      "loadMode": "specimen",
+      "bytes": 8344,
+      "tokens": 1978,
+      "signposted": false,
+      "pulls": 1,
+      "countedRuns": 5,
+      "pullRate": 0.2,
+      "verdict": "keep"
+    },
+    {
+      "path": "examples/protected-branch-guard/handlers/guard-push.ts",
+      "loadMode": "specimen",
+      "bytes": 4393,
+      "tokens": 1066,
+      "signposted": false,
+      "pulls": 3,
+      "countedRuns": 5,
+      "pullRate": 0.6,
+      "verdict": "keep"
+    },
+    {
+      "path": "examples/protected-branch-guard/handlers/session-context.ts",
+      "loadMode": "specimen",
+      "bytes": 2519,
+      "tokens": 603,
+      "signposted": false,
+      "pulls": 1,
+      "countedRuns": 5,
+      "pullRate": 0.2,
+      "verdict": "keep"
+    },
+    {
+      "path": "examples/protected-branch-guard/handlers/tidy-edit.ts",
+      "loadMode": "specimen",
+      "bytes": 3227,
+      "tokens": 759,
+      "signposted": false,
+      "pulls": 0,
+      "countedRuns": 5,
+      "pullRate": 0,
+      "verdict": "signpost"
+    },
+    {
+      "path": "examples/protected-branch-guard/hooks.json",
+      "loadMode": "specimen",
+      "bytes": 1168,
+      "tokens": 288,
+      "signposted": false,
+      "pulls": 2,
+      "countedRuns": 5,
+      "pullRate": 0.4,
+      "verdict": "keep"
+    },
+    {
+      "path": "references/events.md",
+      "loadMode": "read",
+      "bytes": 15008,
+      "tokens": 3693,
+      "signposted": true,
+      "pulls": 2,
+      "countedRuns": 5,
+      "pullRate": 0.4,
+      "verdict": "keep"
+    },
+    {
+      "path": "references/handlers.md",
+      "loadMode": "read",
+      "bytes": 17698,
+      "tokens": 4394,
+      "signposted": true,
+      "pulls": 1,
+      "countedRuns": 5,
+      "pullRate": 0.2,
+      "verdict": "keep"
+    },
+    {
+      "path": "scripts/lib/events.ts",
+      "loadMode": "execute",
+      "bytes": 16157,
+      "tokens": 4029,
+      "signposted": true,
+      "pulls": 0,
+      "countedRuns": 5,
+      "pullRate": 0,
+      "verdict": "keep"
+    },
+    {
+      "path": "scripts/test-hook.ts",
+      "loadMode": "execute",
+      "bytes": 29707,
+      "tokens": 7125,
+      "signposted": true,
+      "pulls": 1,
+      "countedRuns": 5,
+      "pullRate": 0.2,
+      "verdict": "misfiled"
+    }
+  ],
+  "iterations": [
+    {
+      "iteration": 1,
+      "label": "baseline (as authored)",
+      "candidateId": null,
+      "rationale": "9 bundled file(s), 4929 body tokens",
+      "bodyTokens": 4929,
+      "train": {
+        "scenarios": 5,
+        "runs": 5,
+        "assertionsPassed": 3,
+        "assertionsTotal": 5,
+        "passRate": 0.6,
+        "meanContextTokens": 814141.2,
+        "runsWithoutSkill": 0
+      },
+      "holdout": null,
+      "accepted": true,
+      "note": "the layout every candidate is measured against"
+    }
+  ],
+  "notes": [],
+  "applied_to": null
+}

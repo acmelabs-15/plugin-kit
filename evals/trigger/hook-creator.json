@@ -1,0 +1,82 @@
+[
+  {
+    "query": "every time claude tries to force push to main I want it actually blocked, not just told not to in the CLAUDE.md every session",
+    "should_trigger": true
+  },
+  {
+    "query": "my post-tool-use hook shows up fine in /hooks but it just never runs when I edit a file, been staring at this for an hour",
+    "should_trigger": true
+  },
+  {
+    "query": "I've got a guard that exits 2 and also prints its json decision to stdout to explain the block, but claude still never shows the user why it was denied",
+    "should_trigger": true
+  },
+  {
+    "query": "the branch-protection check needs to hit a policy service our security team already runs for every repo, I don't want to hardcode the rule into this one project",
+    "should_trigger": true
+  },
+  {
+    "query": "before I turn this thing loose on a real session, is there a way to feed it a fake tool-call payload and just check it does what I think it does",
+    "should_trigger": true
+  },
+  {
+    "query": "want claude to just know when a session starts what branch we're on and whether there's uncommitted junk lying around, without me typing it every time",
+    "should_trigger": true
+  },
+  {
+    "query": "we want this same push guard to also work when people are using cowork, not just the regular cli",
+    "should_trigger": true
+  },
+  {
+    "query": "our bash guard spawns a process for literally every ls and cat claude runs, that can't be right, how do I make it only care about git push",
+    "should_trigger": true
+  },
+  {
+    "query": "trying to figure out whether this entry should go in the plugin's hooks.json or just my own personal settings file since it's really just for me",
+    "should_trigger": true
+  },
+  {
+    "query": "after claude writes a ts file can we just always strip trailing whitespace and make sure it ends with one newline, I'm tired of asking for it",
+    "should_trigger": true
+  },
+  {
+    "query": "make sure claude only pushes to prod when it's actually confident the change is safe and nothing looks off",
+    "should_trigger": false
+  },
+  {
+    "query": "we've got a plugin with a skill, an mcp server, and a hook in it — can you tell me what still works if someone installs it through cowork versus just claude code",
+    "should_trigger": false
+  },
+  {
+    "query": "I just want to flat out block anyone from ever running rm -rf in this repo, no exceptions, no nuance needed",
+    "should_trigger": false
+  },
+  {
+    "query": "set up a /deploy command that kicks off our release pipeline whenever I type it",
+    "should_trigger": false
+  },
+  {
+    "query": "can you build an mcp server that wraps our internal permissions api so claude can call it directly to check things",
+    "should_trigger": false
+  },
+  {
+    "query": "spin up an agent that can spend real time digging into why our CI keeps flaking and come back with a report",
+    "should_trigger": false
+  },
+  {
+    "query": "set up a SessionStart hook so claude code on the web can run our tests and linters when a session kicks off",
+    "should_trigger": false
+  },
+  {
+    "query": "this vendor's csv export is always a mess, can you clean it up into a real spreadsheet for me",
+    "should_trigger": false
+  },
+  {
+    "query": "turn these rough meeting notes into a polished word doc with a table of contents",
+    "should_trigger": false
+  },
+  {
+    "query": "grab the tables out of this pdf report and get them somewhere I can actually filter and sort them",
+    "should_trigger": false
+  }
+]

@@ -1,0 +1,565 @@
+{
+  "exit_reason": "all_passed (iteration 2)",
+  "original_description": "Creates and revises a Claude Code hook — the hooks.json entry and the handler behind it: which event to match, what its matcher compares against, which handler type fits, and the exit-code and JSON contract the handler returns. Use when a hook is the artifact being produced: adding one, deciding whether it should block, or fixing a hook that never fires or fires on everything. Do not use to write the linter, formatter or test command a hook merely calls — that is ordinary code work. Do not use when the artifact is a SKILL.md, a subagent, an MCP server, a slash command, or the plugin carrying them. Do not use to audit a hook without changing it: hook-reviewer does that read-only.",
+  "best_description": "Use when the user is building, testing, or fixing a Claude Code hook — behaviour that must fire automatically on an event (a tool about to run, a file written, a session starting or ending), whatever Claude decides. Covers picking the event and matcher, writing the handler, its exit codes and JSON, whether it blocks, and debugging one that never fires or fires on everything.\n\nSkip when the user is only describing how they want Claude to behave or judge — be careful, be confident, follow a rule — with no event or hook named; that is guidance, not a hook. Skip for preparing a repo so Claude Code on the web can run tests and linters at session start (session-start-hook owns that). Skip for writing the lint/test/format command a hook merely calls, for skills, subagents, MCP servers, slash commands or plugins, and for read-only hook audits (hook-reviewer).",
+  "best_score": "7/8",
+  "best_train_score": "12/12",
+  "best_test_score": "7/8",
+  "final_description": "Use when the user is building, testing, or fixing a Claude Code hook — behaviour that must fire automatically on an event (a tool about to run, a file written, a session starting or ending), whatever Claude decides. Covers picking the event and matcher, writing the handler, its exit codes and JSON, whether it blocks, and debugging one that never fires or fires on everything.\n\nSkip when the user is only describing how they want Claude to behave or judge — be careful, be confident, follow a rule — with no event or hook named; that is guidance, not a hook. Skip for preparing a repo so Claude Code on the web can run tests and linters at session start (session-start-hook owns that). Skip for writing the lint/test/format command a hook merely calls, for skills, subagents, MCP servers, slash commands or plugins, and for read-only hook audits (hook-reviewer).",
+  "iterations_run": 2,
+  "holdout": 0.4,
+  "train_size": 12,
+  "test_size": 8,
+  "history": [
+    {
+      "iteration": 1,
+      "description": "Creates and revises a Claude Code hook — the hooks.json entry and the handler behind it: which event to match, what its matcher compares against, which handler type fits, and the exit-code and JSON contract the handler returns. Use when a hook is the artifact being produced: adding one, deciding whether it should block, or fixing a hook that never fires or fires on everything. Do not use to write the linter, formatter or test command a hook merely calls — that is ordinary code work. Do not use when the artifact is a SKILL.md, a subagent, an MCP server, a slash command, or the plugin carrying them. Do not use to audit a hook without changing it: hook-reviewer does that read-only.",
+      "train_passed": 10,
+      "train_failed": 2,
+      "train_total": 12,
+      "train_results": [
+        {
+          "query": "want claude to just know when a session starts what branch we're on and whether there's uncommitted junk lying around, without me typing it every time",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we want this same push guard to also work when people are using cowork, not just the regular cli",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "after claude writes a ts file can we just always strip trailing whitespace and make sure it ends with one newline, I'm tired of asking for it",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "before I turn this thing loose on a real session, is there a way to feed it a fake tool-call payload and just check it does what I think it does",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "every time claude tries to force push to main I want it actually blocked, not just told not to in the CLAUDE.md every session",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "my post-tool-use hook shows up fine in /hooks but it just never runs when I edit a file, been staring at this for an hour",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we've got a plugin with a skill, an mcp server, and a hook in it — can you tell me what still works if someone installs it through cowork versus just claude code",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "turn these rough meeting notes into a polished word doc with a table of contents",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "this vendor's csv export is always a mess, can you clean it up into a real spreadsheet for me",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "make sure claude only pushes to prod when it's actually confident the change is safe and nothing looks off",
+          "should_trigger": false,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": false
+        },
+        {
+          "query": "set up a SessionStart hook so claude code on the web can run our tests and linters when a session kicks off",
+          "should_trigger": false,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": false
+        },
+        {
+          "query": "grab the tables out of this pdf report and get them somewhere I can actually filter and sort them",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        }
+      ],
+      "test_passed": 6,
+      "test_failed": 2,
+      "test_total": 8,
+      "test_results": [
+        {
+          "query": "our bash guard spawns a process for literally every ls and cat claude runs, that can't be right, how do I make it only care about git push",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "the branch-protection check needs to hit a policy service our security team already runs for every repo, I don't want to hardcode the rule into this one project",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "I've got a guard that exits 2 and also prints its json decision to stdout to explain the block, but claude still never shows the user why it was denied",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "trying to figure out whether this entry should go in the plugin's hooks.json or just my own personal settings file since it's really just for me",
+          "should_trigger": true,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": false
+        },
+        {
+          "query": "set up a /deploy command that kicks off our release pipeline whenever I type it",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "spin up an agent that can spend real time digging into why our CI keeps flaking and come back with a report",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "I just want to flat out block anyone from ever running rm -rf in this repo, no exceptions, no nuance needed",
+          "should_trigger": false,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": false
+        },
+        {
+          "query": "can you build an mcp server that wraps our internal permissions api so claude can call it directly to check things",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        }
+      ],
+      "passed": 10,
+      "failed": 2,
+      "total": 12,
+      "results": [
+        {
+          "query": "want claude to just know when a session starts what branch we're on and whether there's uncommitted junk lying around, without me typing it every time",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we want this same push guard to also work when people are using cowork, not just the regular cli",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "after claude writes a ts file can we just always strip trailing whitespace and make sure it ends with one newline, I'm tired of asking for it",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "before I turn this thing loose on a real session, is there a way to feed it a fake tool-call payload and just check it does what I think it does",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "every time claude tries to force push to main I want it actually blocked, not just told not to in the CLAUDE.md every session",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "my post-tool-use hook shows up fine in /hooks but it just never runs when I edit a file, been staring at this for an hour",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we've got a plugin with a skill, an mcp server, and a hook in it — can you tell me what still works if someone installs it through cowork versus just claude code",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "turn these rough meeting notes into a polished word doc with a table of contents",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "this vendor's csv export is always a mess, can you clean it up into a real spreadsheet for me",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "make sure claude only pushes to prod when it's actually confident the change is safe and nothing looks off",
+          "should_trigger": false,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": false
+        },
+        {
+          "query": "set up a SessionStart hook so claude code on the web can run our tests and linters when a session kicks off",
+          "should_trigger": false,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": false
+        },
+        {
+          "query": "grab the tables out of this pdf report and get them somewhere I can actually filter and sort them",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "description": "Use when the user is building, testing, or fixing a Claude Code hook — behaviour that must fire automatically on an event (a tool about to run, a file written, a session starting or ending), whatever Claude decides. Covers picking the event and matcher, writing the handler, its exit codes and JSON, whether it blocks, and debugging one that never fires or fires on everything.\n\nSkip when the user is only describing how they want Claude to behave or judge — be careful, be confident, follow a rule — with no event or hook named; that is guidance, not a hook. Skip for preparing a repo so Claude Code on the web can run tests and linters at session start (session-start-hook owns that). Skip for writing the lint/test/format command a hook merely calls, for skills, subagents, MCP servers, slash commands or plugins, and for read-only hook audits (hook-reviewer).",
+      "train_passed": 12,
+      "train_failed": 0,
+      "train_total": 12,
+      "train_results": [
+        {
+          "query": "want claude to just know when a session starts what branch we're on and whether there's uncommitted junk lying around, without me typing it every time",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we want this same push guard to also work when people are using cowork, not just the regular cli",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "after claude writes a ts file can we just always strip trailing whitespace and make sure it ends with one newline, I'm tired of asking for it",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "before I turn this thing loose on a real session, is there a way to feed it a fake tool-call payload and just check it does what I think it does",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "every time claude tries to force push to main I want it actually blocked, not just told not to in the CLAUDE.md every session",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "my post-tool-use hook shows up fine in /hooks but it just never runs when I edit a file, been staring at this for an hour",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we've got a plugin with a skill, an mcp server, and a hook in it — can you tell me what still works if someone installs it through cowork versus just claude code",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "turn these rough meeting notes into a polished word doc with a table of contents",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "this vendor's csv export is always a mess, can you clean it up into a real spreadsheet for me",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "make sure claude only pushes to prod when it's actually confident the change is safe and nothing looks off",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "set up a SessionStart hook so claude code on the web can run our tests and linters when a session kicks off",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "grab the tables out of this pdf report and get them somewhere I can actually filter and sort them",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        }
+      ],
+      "test_passed": 7,
+      "test_failed": 1,
+      "test_total": 8,
+      "test_results": [
+        {
+          "query": "our bash guard spawns a process for literally every ls and cat claude runs, that can't be right, how do I make it only care about git push",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "the branch-protection check needs to hit a policy service our security team already runs for every repo, I don't want to hardcode the rule into this one project",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "I've got a guard that exits 2 and also prints its json decision to stdout to explain the block, but claude still never shows the user why it was denied",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "trying to figure out whether this entry should go in the plugin's hooks.json or just my own personal settings file since it's really just for me",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "set up a /deploy command that kicks off our release pipeline whenever I type it",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "spin up an agent that can spend real time digging into why our CI keeps flaking and come back with a report",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "I just want to flat out block anyone from ever running rm -rf in this repo, no exceptions, no nuance needed",
+          "should_trigger": false,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": false
+        },
+        {
+          "query": "can you build an mcp server that wraps our internal permissions api so claude can call it directly to check things",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        }
+      ],
+      "passed": 12,
+      "failed": 0,
+      "total": 12,
+      "results": [
+        {
+          "query": "want claude to just know when a session starts what branch we're on and whether there's uncommitted junk lying around, without me typing it every time",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we want this same push guard to also work when people are using cowork, not just the regular cli",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "after claude writes a ts file can we just always strip trailing whitespace and make sure it ends with one newline, I'm tired of asking for it",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "before I turn this thing loose on a real session, is there a way to feed it a fake tool-call payload and just check it does what I think it does",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "every time claude tries to force push to main I want it actually blocked, not just told not to in the CLAUDE.md every session",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "my post-tool-use hook shows up fine in /hooks but it just never runs when I edit a file, been staring at this for an hour",
+          "should_trigger": true,
+          "trigger_rate": 1,
+          "triggers": 2,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "we've got a plugin with a skill, an mcp server, and a hook in it — can you tell me what still works if someone installs it through cowork versus just claude code",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "turn these rough meeting notes into a polished word doc with a table of contents",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "this vendor's csv export is always a mess, can you clean it up into a real spreadsheet for me",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "make sure claude only pushes to prod when it's actually confident the change is safe and nothing looks off",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "set up a SessionStart hook so claude code on the web can run our tests and linters when a session kicks off",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        },
+        {
+          "query": "grab the tables out of this pdf report and get them somewhere I can actually filter and sort them",
+          "should_trigger": false,
+          "trigger_rate": 0,
+          "triggers": 0,
+          "runs": 2,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

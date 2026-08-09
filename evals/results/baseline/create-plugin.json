@@ -1,0 +1,171 @@
+{
+  "skill_name": "create-plugin",
+  "description": "Scaffolds the plugin that carries other components — the directory tree, a valid `.claude-plugin/plugin.json`, the marketplace entry, and `claude plugin validate --strict` until it passes. Use when the plugin itself is the artifact: starting one, deciding which surfaces it must reach, adding a component directory, or fixing a plugin whose components are not loading and the manifest or layout is suspected. Do not use to write the components themselves — skill-creator, agent-creator, hook-creator, mcp-creator and command-creator each own their own artifact, and this skill hands off to them. Do not use to review an existing component's quality: the five reviewer agents do that read-only.",
+  "results": [
+    {
+      "query": "just noticed my plugin.json never had a version field set - does that actually matter or is it just cosmetic housekeeping?",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "i moved my security review agent into agents/review/security.md and now claude invokes it as my-plugin:review:security instead of just 'security' - is that a bug on my end?",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "set permissionMode in one of my plugin's agent frontmatter files but it doesn't seem to change anything at all, is that expected or did i mess something up",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "copied the allowed-tools grant straight out of our mcp server's readme and it still prompts for permission on literally every call even though i whitelisted it, what am i missing",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "we're shipping a plugin whose mcp server needs a computed auth header (headersHelper) - will that actually authenticate when loaded through the plugin's .mcp.json on desktop, or should i expect it to just silently fail?",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "a teammate installed my plugin and a hook broke immediately because i'd hardcoded my own machine's absolute path in the command - what should i be using instead so this doesn't happen again",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "where should my plugin persist a config file or install marker so it survives an update but doesn't leak across someone's other projects?",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "two of my skills need the exact same zod schema and http client - can they just import from a folder one level up, or does that quietly break once someone actually installs the thing",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "should every script in my plugin read process.env.CLAUDE_PLUGIN_ROOT itself, or is there a cleaner pattern for that i should be following",
+      "should_trigger": true,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "claude plugin validate --strict keeps rejecting my manifest with 'invalid version' for \"1.0\" - once that's clean can you also tell me which surfaces this thing will actually reach and what's still untested?",
+      "should_trigger": true,
+      "trigger_rate": 1,
+      "triggers": 2,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "our desktop chat users need this shipped as an mcpb bundle - can you package up the manifest and stdio server for that?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "we're rolling this plugin out across a managed fleet - what admin settings let them override or lock down what we ship to everyone?",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "add a hook to my plugin that runs eslint before every commit",
+      "should_trigger": false,
+      "trigger_rate": 0.5,
+      "triggers": 1,
+      "runs": 2,
+      "pass": false
+    },
+    {
+      "query": "write a reviewer agent for this repo that checks pull requests for security issues",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "my skill never triggers even though i think i wrote a clear description, can you fix it",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "build me a remote mcp server with oauth so it works on claude.ai and mobile too",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "before i write a single line of code, grill me on the requirements for this feature one question at a time",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "the xlsx export from our billing tool has misplaced headers and a bunch of junk rows, can you clean it into a real spreadsheet",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "turn these release notes into a polished word doc with a table of contents and proper headings",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    },
+    {
+      "query": "set up a sessionstart hook in this repo so claude code on the web can run our test suite automatically",
+      "should_trigger": false,
+      "trigger_rate": 0,
+      "triggers": 0,
+      "runs": 2,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 20,
+    "passed": 10,
+    "failed": 10
+  }
+}

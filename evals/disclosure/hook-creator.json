@@ -1,0 +1,45 @@
+{
+  "skill_name": "hook-creator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Every time Claude tries to force push to main I want it actually blocked, not just told not to in CLAUDE.md.",
+      "expected_output": "A PreToolUse hook entry with a Bash matcher and a handler that exits 2 with a reason on stderr.",
+      "expectations": [
+        "A PreToolUse hook entry with a Bash matcher and a handler that exits 2 with a reason on stderr."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My PostToolUse hook shows up in /hooks but never runs when I edit a file. Work out why.",
+      "expected_output": "A diagnosis naming the matcher or event mismatch, with the corrected configuration.",
+      "expectations": [
+        "A diagnosis naming the matcher or event mismatch, with the corrected configuration."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want Claude to get a summary of the repo state at the start of every session.",
+      "expected_output": "A SessionStart hook whose handler prints context to stdout on exit 0.",
+      "expectations": [
+        "A SessionStart hook whose handler prints context to stdout on exit 0."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "My guard exits 2 and prints its JSON decision to stdout to explain the block, but the user never sees why. Fix it.",
+      "expected_output": "An explanation that stdout is ignored on exit 2, with the reason moved to stderr.",
+      "expectations": [
+        "An explanation that stdout is ignored on exit 2, with the reason moved to stderr."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Write me a hook that blocks edits to any file under infra/ unless the branch name starts with infra-.",
+      "expected_output": "A hook with a narrow matcher or if filter, and a handler tested against a synthetic payload.",
+      "expectations": [
+        "A hook with a narrow matcher or if filter, and a handler tested against a synthetic payload."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "plugin-kit",
+  "description": "Builds every Claude Code component and measures whether it works: a SKILL.md and its bundled files, a subagent definition, a hooks.json entry and its handler, an MCP server wiring, a slash command, and the plugin that carries them — each with a read-only reviewer that audits it and a measured loop that shows whether a change helped",
+  "version": "0.4.0",
+  "author": {
+    "name": "Peter Kloss",
+    "email": "pkloss@gmail.com"
+  },
+  "homepage": "https://github.com/acmelabs-15/plugin-kit",
+  "repository": "https://github.com/acmelabs-15/plugin-kit",
+  "license": "MIT",
+  "keywords": [
+    "skill-authoring",
+    "agent-authoring",
+    "hooks",
+    "mcp",
+    "slash-commands",
+    "packaging",
+    "evals",
+    "plugin",
+    "claude-code"
+  ]
+}

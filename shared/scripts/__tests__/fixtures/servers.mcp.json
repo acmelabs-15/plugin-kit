@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ticketing": {
+      "type": "http",
+      "url": "https://tickets.example.com/mcp",
+      "headers": { "Authorization": "Bearer super-secret-value" }
+    }
+  }
+}
