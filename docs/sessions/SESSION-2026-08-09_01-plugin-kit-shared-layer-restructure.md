@@ -18,7 +18,7 @@ tags:
 - **Branch**: `restructure-shared-layer`
 - **Objective**: execute the 9-step restructure of the `shared/` layer toward the design target recorded in `docs/architecture.md` (a plain project doc, not a knowledge-graph note)
 - **Handover brief**: `docs/continuation.md`
-- **Position**: step 1 of 9 COMPLETE; step 2 of 9 next
+- **Position**: steps 1 and 2 of 9 COMPLETE; step 3 of 9 next
 
 ## Ledger
 
@@ -69,6 +69,37 @@ Six corrections applied across `docs/architecture.md` and `shared/references/pur
 - `docs/architecture.md:434` asserts a 25,000-token combined re-attach budget with no justification, while the 5,000-token figure directly below it is fully argued
 - `skills/plugin-creator/references/shared-code-architecture.md` argues for a build step, contradicting the no-build-step decision
 - Next: step 2 of 9 — retire hooks (`shared/rules/hooks.ts`, the `registry.ts` import and target-type entry, and `agents/hook-reviewer.md`)
+
+### Event 8 — step 2 scope was under-stated by the handover
+
+- Handover framed the retirement as "three edits, clean dependency; nothing else breaks"
+- True of the import graph: only `registry.ts` imported `hooksRules`
+- False of the description surface: `hook-reviewer` was named inside the `description:` frontmatter of all five surviving reviewers, plus routing rows in `README.md` and `skills/plugin-creator/SKILL.md`
+- The house rule that a removal is not done until every description naming the artifact is enumerated is what surfaced this; the import-graph check alone would have shipped five descriptions pointing at a deleted agent
+
+### Event 9 — decision locked: keep the exclusion, drop the pointer
+
+- Each reviewer description still excludes hook review, but no longer names an agent that does not exist
+- Clause applied verbatim across five files: "Do not use to review a hook — no agent in this plugin covers hook review."
+- Rejected: dropping the hook clause entirely, which would have removed the negative that keeps the five reviewers off hook audits nothing else catches
+
+### Event 10 — step 2 of 9 COMPLETE, commit `e11b23b`
+
+- Deleted `shared/rules/hooks.ts` (409 lines) and `agents/hook-reviewer.md`
+- Registry import and entry removed; `TARGET_TYPES` narrowed to five by derivation, verified rather than assumed
+- `ArtifactKind` and `ARTIFACT_KINDS` in `envelope.ts` narrowed so the envelope vocabulary stops advertising a kind nothing produces; no stored envelope carries `artifact: "hooks"`, so nothing on disk newly fails
+- `compareRuns`, `explainIncomparability` and `COMPARABILITY_KEYS` inspected and left untouched, as a later step reserves them
+- Two docblocks counting a "seventh artifact" corrected to five
+- Suite went 1,276 pass / 1 fail to 1,269 pass / 0 fail; the deleted `describe` block carried the failing assertion, so the tautology was never repaired
+- `evals/RETIRED-ARTIFACTS.md` created as a mapping note beside the seven immutable eval records naming the retired artifacts
+
+### Event 11 — carried forward from step 2
+
+- All five reviewer descriptions were already 289 to 943 characters over the 1,536 cap before this session touched them; the edit added a uniform 51
+- Unresolved: whether `<example>` blocks count against that cap. Stripped of examples every description lands between 855 and 1,139
+- `README.md` still advertises `hook-creator` as shipped when it lives in parked `future/`
+- `future/hook-testing/hook-creator/SKILL.md:214` instructs running `skill-creator:hook-reviewer`, which no longer resolves if that subtree is unparked
+- Next: step 3 of 9 — give the ten domain-free modules a `shared/util/` home and add the import-direction test
 
 ## Observations
 
