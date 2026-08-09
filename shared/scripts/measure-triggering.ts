@@ -440,19 +440,24 @@ function stringField(value: unknown): string {
 /**
  * Read the artifact's `name`, `description` and full text.
  *
- * Two readers, split by artifact type, because they answer to different masters. A
- * skill or command goes through the hand-rolled reader `parseSkillMd` uses, which is
- * bug-compatible with the Python original on purpose and whose flattening other
- * callers depend on. An agent goes through the conformant YAML reader instead.
+ * The measurement path reads frontmatter with a conformant YAML parser. It wants the
+ * string that ships, and `parseSkillMd`'s hand-rolled reader -- bug-compatible with
+ * the Python original on purpose, and left that way for every other caller that
+ * depends on its flattening -- does not return it.
  *
- * The split exists because agent descriptions are block scalars containing blank
- * lines -- between the opening paragraph and the `<example>` blocks that every
- * `agents/*-reviewer.md` carries. The hand-rolled reader ends a block scalar at the
- * first line not opening with two spaces or a tab, and a blank line opens with
- * neither, so it stopped at the first paragraph break and returned about a fifth of
- * the shipped description with every `<example>` missing. Measuring a fifth of a
- * description and then writing that fifth back as the new one is the failure this
- * split removes; it is not a style preference about line breaks.
+ * That reader ends a block scalar at the first line not opening with two spaces or a
+ * tab. A blank line opens with neither, so it stopped at the first paragraph break.
+ * Agent descriptions lost 78-81%, every `<example>` block with them; four of five
+ * skills lost 22-40%. Measuring a fifth of a description and then writing that fifth
+ * back through `rewriteFrontmatter` as the new one is the failure this removes, so
+ * it is not a style preference about line breaks.
+ *
+ * `command` is the single exception, and it is a deliberate non-change rather than a
+ * judgement that the legacy reader suits it: this repo ships no command artifact --
+ * no `commands/` directory, none declared in the plugin manifest -- so the branch is
+ * dead in practice and a speculative fix to it would be unexercised and unverified.
+ * `command-creator` is a skill and `command-reviewer` an agent; both already read
+ * conformantly. Ship a command artifact and this is the line to revisit.
  */
 export async function readTargetDefinition(
   targetPath: string,
@@ -460,7 +465,7 @@ export async function readTargetDefinition(
 ): Promise<ParsedSkill> {
   const file = await resolveTargetFile(targetPath, targetType);
   const content = await Bun.file(file).text();
-  if (targetType !== "agent") return parseFrontmatter(content);
+  if (targetType === "command") return parseFrontmatter(content);
 
   // Raised as the same error type the hand-rolled reader throws, so a caller's
   // failure handling does not have to branch on which reader ran.

@@ -330,6 +330,42 @@ describe("resolving and reading a target definition", () => {
         "</example>",
     );
   });
+
+  // The same defect, on the other artifact type that reaches this reader. Four of the
+  // five shipped skills lost 22-40% of their description this way -- less spectacular
+  // than the agents' 78-81% only because their second paragraph is shorter, not because
+  // anything protected them.
+  test("a skill description keeps everything after a blank line", async () => {
+    const skill = `${root}/src-skill-blank`;
+    await Bun.write(
+      `${skill}/SKILL.md`,
+      [
+        "---",
+        "name: blank-line-skill",
+        "description: |",
+        "  Use when the first paragraph is only part of the trigger.",
+        "",
+        "  Do not use when the second paragraph rules the case out.",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+    );
+
+    const { name, description } = await readTargetDefinition(skill, "skill");
+
+    expect(name).toBe("blank-line-skill");
+    expect(description).toContain("Use when the first paragraph");
+    // The negative clause lives past the blank line, and a description that keeps only
+    // the positive half triggers on cases its author explicitly excluded.
+    expect(description).toContain("Do not use when the second paragraph");
+    expect(description).toBe(
+      "Use when the first paragraph is only part of the trigger.\n" +
+        "\n" +
+        "Do not use when the second paragraph rules the case out.",
+    );
+  });
 });
 
 describe("trigger matching names the real skill", () => {
