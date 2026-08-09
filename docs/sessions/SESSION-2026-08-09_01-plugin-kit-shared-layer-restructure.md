@@ -18,7 +18,7 @@ tags:
 - **Branch**: `restructure-shared-layer`
 - **Objective**: execute the 9-step restructure of the `shared/` layer toward the design target recorded in `docs/architecture.md` (a plain project doc, not a knowledge-graph note)
 - **Handover brief**: `docs/continuation.md`
-- **Position**: steps 1 and 2 of 9 COMPLETE; step 3 of 9 next
+- **Position**: all 9 steps COMPLETE; sequence finished
 
 ## Ledger
 
@@ -229,6 +229,39 @@ Data flow, load-bearing numbers, and record integrity. Findings below are the on
 - Correct characterisation: the pinned-specifier mechanism is sound but was intermittently flaky on this machine. That is a smaller and different claim than the one I made
 - Decision 4.3 stands unchanged and the exact pin stays. Had I acted on the wrong conclusion I would have reverted a correct decision on two data points
 - Same failure shape this session has caught repeatedly in others: a confident claim from too little evidence. Worth noting that the reviewer is not exempt from it
+
+### Event 27 — steps 4 through 9 COMPLETE; sequence finished
+
+| Step | Commit | Outcome |
+|:--|:--|:--|
+| 4 Zod schemas | `969a29e` | Two layers per artifact; pure layer needs no filesystem |
+| 5 envelope to Zod | `0a6956d` | Schema converted, domain logic verified untouched |
+| 6 re-home | `d729a25` | Function-named tree; same 1,330 tests, 32 files, 12,618 assertions |
+| 7 measure-disclosure | `9cbef19` | Measure split from optimize over shared machinery |
+| 8 report.ts | `e4d90a4` | One renderer, four envelope shapes |
+| 9 measure-outcomes | `b9f8f3c` | Benchmark as a script, per-artifact baselines |
+| path repair | `cf83ad7` | 24 shipped invocation paths corrected after the re-home |
+
+- Suite grew 1,271 to 1,399 pass, 0 fail throughout; typecheck exit 0 at every commit
+- Step 6 was scoped move-only: the architecture doc names files that do not exist as such, so reaching its finer decomposition would be a rewrite rather than a move. `shared/tools/` was added for four utilities the doc predates
+- Step 9's command case is the finding worth keeping: a command has no baseline because the user typed it, so the only available comparison measures the body's content rather than the artifact's contribution. Labelled at five layers so no consumer can conflate it
+
+### Event 28 — defects found while executing, not planned for
+
+- `shared/util/browser.ts:148` spawned the dashboard generator through a string-built path that step 3 had silently broken two steps earlier, resolving to a directory that never existed. No test covered it. Third instance this session of a runtime path invisible to import rewriting
+- The driver's script paths went stale twice: repaired in step 7, broken again by step 6's re-home, repaired again. A path in executable code that no test exercises will keep going stale
+- `README.md` layout tree is stale in a way that predates this session: it still describes the pre-shared-layer world and now contradicts prose six lines below it. Left unfixed, because repairing it means authoring a new repository map rather than swapping a path
+- Step 9 declined to emit `benchmark.json`, because its `configuration` field is a four-value vocabulary the viewer matches exactly, and mapping the command's `body_withheld` onto `without_skill` would render a body-content delta in the viewer's artifact-delta column
+
+### Event 29 — carried forward, none blocking
+
+- Rate-limited runs still recorded as clean non-triggers in `measure-triggering.ts:727-731`; step 9 deliberately did not reproduce the pattern but did not fix it either
+- `evals/drivers/run-measurement.ts:99-105` can still splice new output over an existing record
+- `MEASUREMENTS.md:86` states six false fires where the records hold seven
+- Five agents ship and none has ever been measured
+- `measure-disclosure` has an `Operation` union member but does not emit an envelope; needs a decision about output shape
+- `disclosure.ts:306` still scans the skill with `**/*` excluding nothing
+- The architecture doc's finer decomposition — `validate/collector.ts`, `discover/find.ts`, per-rule files — remains unbuilt, and the doc itself is not yet reconciled with `shared/tools/` or the function-named tree as built
 
 ## Observations
 
