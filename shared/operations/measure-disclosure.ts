@@ -391,6 +391,14 @@ async function main(): Promise<void> {
         exitReason: "measurement_only",
         appliedTo: null,
         notes: [],
+        // The install conflict is the only warning this caller has to carry: the renderer
+        // derives the rest from the split score it is handed. Passed as `invalidating`
+        // because it is — a sweep answered by an installed copy floors every pull rate at
+        // zero, so the file table below it is a table of nothing.
+        warnings:
+          output.install_conflict === null
+            ? []
+            : [{ severity: "invalidating" as const, text: output.install_conflict }],
       },
       { autoRefresh: false },
     );

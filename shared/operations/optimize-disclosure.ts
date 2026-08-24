@@ -1593,6 +1593,31 @@ async function main(): Promise<void> {
   console.log(json);
   if (resultsDir !== undefined) await Bun.write(`${resultsDir}/results.json`, `${json}\n`);
 
+  // Every scenario run installs its own aliased copy of the layout into a throwaway project
+  // root and runs with `--setting-sources project`, so the run is designed to keep the machine
+  // out of the measurement. What `detectInstallState` records is the MACHINE's state anyway,
+  // and for THIS operation that is the most consequential thing it can report: content served
+  // to the model through the skill system never produces a `Read`, so a sweep that reached an
+  // installed copy instead of the layout under test scores every bundled file at a pull rate
+  // of zero. The output is a clean-looking table of `prune` and `signpost` verdicts, and it is
+  // a measurement of nothing.
+  //
+  // Sighted here, above every consumer, because all four of them need it and two are optional.
+  // The envelope fields can only live in an envelope, but the report banner and the stderr line
+  // are not envelope-shaped: gating them behind `--envelope` meant a run with neither that flag
+  // nor `--results-dir` measured nothing and said nothing, which is worse than an ungated tool
+  // because a reader believes this one has a guard.
+  const sighting = await detectInstallState({
+    artifact: "skill",
+    name: output.skill_name,
+    sourcePath: skillPath,
+  });
+  const conflict = installConflict({
+    operation: "optimize-disclosure",
+    needs: "absent",
+    found: sighting.state,
+  });
+
   const finalReport = generateDisclosureReport(
     {
       skillName: output.skill_name,
@@ -1612,6 +1637,10 @@ async function main(): Promise<void> {
       exitReason: output.exit_reason,
       appliedTo,
       notes: output.notes,
+      // The fourth surface, and the one a person actually opens after a run this long. The
+      // other three reach a terminal that has scrolled and two envelope fields; this reaches
+      // the reader looking at the verdict table the conflict invalidates.
+      warnings: conflict === null ? [] : [{ severity: "invalidating" as const, text: conflict }],
     },
     { autoRefresh: false },
   );
@@ -1624,31 +1653,6 @@ async function main(): Promise<void> {
     console.error(`Results saved to: ${resultsDir}`);
   }
   if (appliedTo !== null) console.error(`Selected layout written to: ${appliedTo}`);
-
-  // Every scenario run installs its own aliased copy of the layout into a throwaway project
-  // root and runs with `--setting-sources project`, so the run is designed to keep the machine
-  // out of the measurement. What `detectInstallState` records is the MACHINE's state anyway,
-  // and for THIS operation that is the most consequential thing it can report: content served
-  // to the model through the skill system never produces a `Read`, so a sweep that reached an
-  // installed copy instead of the layout under test scores every bundled file at a pull rate
-  // of zero. The output is a clean-looking table of `prune` and `signpost` verdicts, and it is
-  // a measurement of nothing.
-  //
-  // Detected OUTSIDE the envelope block, and deliberately. Two of the three places this is
-  // reported are envelope fields and can only live there, but the stderr line is not: gating
-  // it meant a run with neither `--envelope` nor `--results-dir` measured nothing and said
-  // nothing, which is worse than an ungated tool because a reader believes this one has a
-  // guard.
-  const sighting = await detectInstallState({
-    artifact: "skill",
-    name: output.skill_name,
-    sourcePath: skillPath,
-  });
-  const conflict = installConflict({
-    operation: "optimize-disclosure",
-    needs: "absent",
-    found: sighting.state,
-  });
 
   const envelopePath =
     flagString(flags, "envelope") ??

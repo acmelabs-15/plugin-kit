@@ -45,6 +45,22 @@ export interface IterationRecord {
   readonly note: string;
 }
 
+/**
+ * A condition a reader has to know about before believing anything under it.
+ *
+ * The two severities are not degrees of one thing. `qualifying` says the figures rest on less
+ * evidence than the run count suggests, and the response is to discount them. `invalidating`
+ * says the run did not measure what it set out to, and the response is to discard it — a
+ * disclosure sweep that reached an installed copy of the skill scores every bundled file at a
+ * pull rate of zero, because content served through the skill system never produces a `Read`,
+ * so its confident column of `prune` verdicts is output rather than evidence. Rendering both
+ * at one severity would leave the reader to work out which they were holding.
+ */
+export interface DisclosureWarning {
+  readonly severity: "invalidating" | "qualifying";
+  readonly text: string;
+}
+
 /** A phase in flight, so a live report is distinguishable from a hung one. */
 export interface DisclosureProgress {
   readonly iteration: number;
@@ -83,6 +99,20 @@ export interface DisclosureReportInput {
    * precisely the person about to adopt the layout.
    */
   readonly notes?: readonly string[];
+  /**
+   * Conditions that change how the whole page should be read, rendered above the figures.
+   *
+   * Above rather than beside or below, and that placement is the point. The failure this
+   * exists for produces a report that looks fine — every pull rate zero, every verdict
+   * `prune`, nothing on the page admitting the run was answered by an installed copy instead
+   * of the layout under test. A reader must not be able to reach that table without passing
+   * the sentence saying it means nothing.
+   *
+   * A caller passes only what it alone knows, which in practice is the install conflict. The
+   * conditions visible in the split score are derived here instead — see the derivation in
+   * {@link generateDisclosureReport}.
+   */
+  readonly warnings?: readonly DisclosureWarning[];
   readonly inProgress?: DisclosureProgress;
 }
 
@@ -96,9 +126,12 @@ export interface DisclosureReportOptions {
 /**
  * The only bespoke CSS in this report.
  *
- * Three rules, each earning its place: a bar built from the shared surface tokens, a
- * verdict pill that reuses `.chip` and only recolours it, and a right-aligned numeric
- * cell the shared `.tbl` does not define for this column count.
+ * Four rules, each earning its place: a bar built from the shared surface tokens, a
+ * verdict pill that reuses `.chip` and only recolours it, a right-aligned numeric
+ * cell the shared `.tbl` does not define for this column count, and two tones for the
+ * warning callout. The callout is the shared `.note` recoloured — the theme's own
+ * `.note.warn` tints with `--opus`, a model-identity colour, which would read as a label
+ * about which model ran rather than about how far to trust the page.
  */
 const REPORT_CSS = `
   .wrap{ max-width:1080px; }
@@ -116,6 +149,8 @@ const REPORT_CSS = `
   tr.rejected td{ opacity:.62; }
   tr.accepted td:first-child{ box-shadow:inset 2px 0 0 var(--good); }
   .why{ color:var(--muted); font-size:12px; line-height:1.55; }
+  .note.invalidated{ border-left-color:var(--bad); } .note.invalidated .nb{ color:var(--bad); }
+  .note.qualified{ border-left-color:var(--warn); } .note.qualified .nb{ color:var(--warn); }
 `;
 
 function bar(fraction: number, tone: "" | "good" | "warn" | "bad" = ""): string {
@@ -178,6 +213,48 @@ function iterationRow(record: IterationRecord, maxBodyTokens: number): string {
 `;
 }
 
+/**
+ * The warning callout, rendered before the metric tiles and therefore before everything.
+ *
+ * One block rather than one per warning, taking the tone of the worst of them: a page with two
+ * callouts invites a reader to read the first and skip the second, and the whole reason this is
+ * at the top is that the thing it has to say is easy to miss.
+ *
+ * Each row leads with what to DO about it, in words that stand alone. "Discard" and "discount"
+ * are the difference between a run that measured the wrong thing and a run that measured the
+ * right thing thinly, and a reader should not have to open the source to tell which they have.
+ */
+function warningBlock(warnings: readonly DisclosureWarning[]): string {
+  if (warnings.length === 0) return "";
+  const invalidated = warnings.some((warning) => warning.severity === "invalidating");
+  const rows = warnings
+    .map((warning) => {
+      const lead =
+        warning.severity === "invalidating"
+          ? "Invalidates this run — discard the figures below."
+          : "Qualifies these figures — discount them.";
+      return `\n        <li><b>${lead}</b> ${htmlEscape(warning.text)}</li>`;
+    })
+    .join("");
+  const headline = invalidated
+    ? "this run did not measure what it set out to"
+    : "read these figures with care";
+  const summary = invalidated
+    ? `At least one condition below invalidated the measurement. Every figure and verdict on
+      this page is output rather than evidence — a layout change justified by them would be
+      fixing a problem this run is not in a position to have found.`
+    : `Nothing invalidated the measurement, but the conditions below mean parts of it rest on
+      less evidence than the numbers suggest.`;
+  return `    <div class="note ${invalidated ? "invalidated" : "qualified"}">
+      <div class="nb">${headline}</div>
+      <div>${summary}</div>
+      <ul class="why">${rows}
+      </ul>
+    </div>
+
+`;
+}
+
 function progressRow(progress: DisclosureProgress, now: number): string {
   const percent = progress.total > 0 ? progress.settled / progress.total : 0;
   const meta = [`<b>${htmlEscape(progress.phase)}</b>`];
@@ -220,6 +297,31 @@ export function generateDisclosureReport(
   const latest = input.iterations[input.iterations.length - 1];
   const guardScore = latest === undefined ? null : (latest.holdout ?? latest.train);
 
+  // Derived here rather than asked of the caller. Both producers would have to read these off
+  // the same `SplitScore` the tiles below are computed from, so deriving once is what stops the
+  // two of them disagreeing — and it spares each from reproducing the walk that decides which
+  // iteration the page is describing. A caller passes only what it alone can know.
+  const derived: DisclosureWarning[] = [];
+  if (guardScore !== null && guardScore.runsWithoutSkill > 0) {
+    derived.push({
+      severity: "qualifying",
+      text:
+        `${guardScore.runsWithoutSkill} run(s) completed without the skill body ever reaching ` +
+        `context, so they are dropped from every pull rate below and the verdicts rest on ` +
+        `fewer runs than the run count implies.`,
+    });
+  }
+  if (guardScore !== null && guardScore.assertionsTotal === 0) {
+    derived.push({
+      severity: "qualifying",
+      text:
+        `No scenario carried expectations, so the pass rate is measured against nothing and ` +
+        `says only that the runs completed. Nothing on this page checks that the skill still ` +
+        `works.`,
+    });
+  }
+  const warnings = [...(input.warnings ?? []), ...derived];
+
   // Said in the report rather than only in the terminal. A body measured at 4,800
   // estimated tokens against a 5,000-token budget has not been shown to be inside it,
   // and a reader who does not know which number they are looking at cannot tell.
@@ -254,7 +356,7 @@ ${REPORT_CSS}
       rather than an optimization.</p>
     </div>
 
-    <div class="g4">
+${warningBlock(warnings)}    <div class="g4">
       <div class="metric">
         <div class="ml">body tokens</div>
         <div class="mv">${input.bestBodyTokens}</div>

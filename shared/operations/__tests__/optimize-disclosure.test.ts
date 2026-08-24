@@ -1305,6 +1305,69 @@ describe("generateDisclosureReport", () => {
     expect(generateDisclosureReport(base)).not.toContain("before adopting this layout");
   });
 
+  test("an invalidating warning lands above the verdict table, not below it", () => {
+    const voided = generateDisclosureReport({
+      ...base,
+      warnings: [
+        {
+          severity: "invalidating" as const,
+          text: "`optimize-disclosure` needs the target NOT to be installed, and it is (installed).",
+        },
+      ],
+    });
+    expect(voided).toContain("this run did not measure what it set out to");
+    expect(voided).toContain("discard the figures below");
+    expect(voided).toContain("needs the target NOT to be installed");
+    // The placement is the fix, not a detail of it: a table of `prune` verdicts produced by a
+    // void run looks exactly like a table produced by a good one, so a reader must not be able
+    // to reach the verdicts without passing the sentence that says they mean nothing.
+    expect(voided.indexOf("discard the figures below")).toBeLessThan(
+      voided.indexOf("What actually got read"),
+    );
+    expect(generateDisclosureReport(base)).not.toContain("discard the figures below");
+  });
+
+  test("a qualifying warning says discount rather than discard", () => {
+    const thin = generateDisclosureReport({
+      ...base,
+      warnings: [{ severity: "qualifying" as const, text: "One run per scenario." }],
+    });
+    expect(thin).toContain("read these figures with care");
+    expect(thin).toContain("discount them");
+    expect(thin).not.toContain("did not measure what it set out to");
+  });
+
+  test("what the score already shows is warned about without a caller passing it", () => {
+    const hollow = generateDisclosureReport({
+      ...base,
+      iterations: [
+        {
+          ...(base.iterations[0] as (typeof base.iterations)[number]),
+          holdout: score({ runsWithoutSkill: 2, assertionsPassed: 0, assertionsTotal: 0 }),
+        },
+      ],
+    });
+    expect(hollow).toContain("2 run(s) completed without the skill body");
+    expect(hollow).toContain("No scenario carried expectations");
+    expect(generateDisclosureReport(base)).not.toContain("read these figures with care");
+  });
+
+  test("one invalidating warning sets the tone for the whole block", () => {
+    const mixed = generateDisclosureReport({
+      ...base,
+      warnings: [
+        { severity: "qualifying" as const, text: "Thin evidence." },
+        { severity: "invalidating" as const, text: "Answered by an installed copy." },
+      ],
+    });
+    expect(mixed).toContain('class="note invalidated"');
+    expect(mixed).not.toContain('class="note qualified"');
+    // Both keep their own instruction. Escalating the block must not silently restate a
+    // qualifying condition as a fatal one.
+    expect(mixed).toContain("discount them");
+    expect(mixed).toContain("discard the figures below");
+  });
+
   test("survives a run with nothing measured yet", () => {
     const empty = generateDisclosureReport({ ...base, files: [], iterations: [] });
     expect(empty).toContain("No bundled files.");
