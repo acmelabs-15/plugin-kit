@@ -30,11 +30,20 @@ export interface ValidationResult {
   readonly valid: boolean;
   readonly errors: readonly string[];
   readonly warnings: readonly string[];
+  /**
+   * Facts about the body's structure. NOT findings, and never part of a verdict.
+   *
+   * Kept in its own array rather than folded into `warnings` precisely so that it
+   * cannot become one by accident: `valid` reads `errors`, the summary line counts
+   * `warnings`, and nothing anywhere reads this.
+   */
+  readonly genres: readonly string[];
 }
 
 interface Collector {
   readonly errors: string[];
   readonly warnings: string[];
+  readonly genres: string[];
 }
 
 /** The Agent Skills open standard's complete frontmatter field set. */
@@ -506,6 +515,167 @@ async function checkReferenceTableOfContents(skillDir: string, out: Collector): 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Structural genres — INFORMATIONAL ONLY
+// ---------------------------------------------------------------------------
+//
+// WHY THESE REPORT AND NEVER WARN, and what a future author has to change before
+// promoting one.
+//
+// The table-of-contents rule above warns because its threshold is published by the
+// vendor and the form is house-locked. These three have neither. Of the fourteen
+// structural genres catalogued across four vendors, THIRTEEN HAVE NO MEASURED
+// EFFECT — they are shipped practice or asserted guidance, counted but never tested.
+// A rule that says "this reference is over 100 lines and has no table of contents"
+// states a fact. A rule that says "add an anti-rationalization table" is guidance
+// dressed as enforcement, and it would be enforcing one vendor's house style: that
+// table appears in 22 of 24 skills in a single pack and in 0 of 20 of Anthropic's.
+//
+// The calibration to carry is that a six-rule "standard skill shape" was proposed
+// here once and TWO OF ITS SIX RULES WERE REFUTED BY MEASUREMENT WITHIN HOURS. One
+// of the refuted rules capped how many references a skill may bundle, which is why
+// the manifest reporter below counts forms and pointedly does not cap anything.
+//
+// So: these lines state what is present. They do not say what should be. Promoting
+// any of them to a warning needs an experiment first — an ablation that strips the
+// structure from real skills and runs both arms against the same scenario set — not
+// a majority of vendors doing it, which is exactly the evidence that failed before.
+
+/** Genre 1: `## Step 3`, `### Phase 2`, or `## 4. Do the thing`. */
+const STEP_HEADING_PATTERNS: readonly RegExp[] = [
+  /^#{2,4}\s*(?:Step|Phase)\s*(\d+)\b/i,
+  /^#{2,4}\s*(\d+)\.\s/,
+];
+
+/** Below this a body has headings that happen to be numbered, not a step spine. */
+const STEP_SPINE_MIN = 3;
+
+/** Genre 3: the heading, and the header row whose first cell names the excuse. */
+const RATIONALIZATION_HEADING = /rationaliz/i;
+const RATIONALIZATION_HEADER_ROW = /^\|\s*(Rationaliz\w*|Excuse|Objection)\s*\|[^|]*\|\s*$/i;
+const TABLE_BODY_ROW = /^\|.*\|.*\|\s*$/;
+const RATIONALIZATION_WINDOW = 5;
+const RATIONALIZATION_MIN_ROWS = 3;
+
+/** Genres 10 and 11: a pointer to a bundled file, with or without its firing condition. */
+const POINTER_PATH = /(?:[\w.-]+\/)*[\w-]+\.(?:md|ts|tsx|js|py|sh|json|ya?ml|txt|csv|html)\b/;
+const FIRING_CLAUSE = /\b(?:when|before|while|open it)\b/i;
+
+function stepNumberOf(line: string): number | undefined {
+  for (const pattern of STEP_HEADING_PATTERNS) {
+    const match = pattern.exec(line);
+    if (match?.[1] !== undefined) return Number(match[1]);
+  }
+  return undefined;
+}
+
+/**
+ * Genre 1, as a fact: are the step numbers contiguous and ascending?
+ *
+ * A gap or a repeat is the finding, per the catalogue — not because a gap is known
+ * to cost anything, but because it is the one property of this genre that can be
+ * checked without an opinion. Whether numbered steps beat topic organisation at all
+ * is the one MEASURED claim in the catalogue, and it is external to this repository.
+ */
+function describeOrderedSteps(lines: readonly string[]): string {
+  const numbers = lines
+    .map(stepNumberOf)
+    .filter((value): value is number => value !== undefined);
+  if (numbers.length < STEP_SPINE_MIN) {
+    return `ordered workflow: no numbered step spine (${numbers.length} numbered step heading(s), fewer than ${STEP_SPINE_MIN})`;
+  }
+  const first = numbers[0] ?? 0;
+  for (const [index, value] of numbers.entries()) {
+    const expected = first + index;
+    if (value === expected) continue;
+    const anomaly =
+      value < expected
+        ? `numbering repeats or goes backwards at ${value}`
+        : `numbering gap at ${expected}`;
+    return `ordered workflow: ${numbers.length} numbered steps present, ${anomaly} (found ${numbers.join(", ")})`;
+  }
+  return `ordered workflow: steps ${first}-${numbers[numbers.length - 1]}, contiguous`;
+}
+
+/**
+ * Genre 3, as a fact WITH its provenance attached in the same sentence.
+ *
+ * The note travels with the line deliberately. "anti-rationalization table: absent"
+ * on its own reads as a gap to close, which is precisely the reading the evidence
+ * does not support — so the sentence that states the fact also states that nobody
+ * has measured whether the table does anything.
+ */
+function describeAntiRationalization(lines: readonly string[]): string {
+  const provenance =
+    "single-vendor shipped practice (22 of 24 in one pack, 0 of 20 in Anthropic's) with no measured effect; reported as a fact, not a recommendation";
+  for (const [index, line] of lines.entries()) {
+    if (!line.startsWith("#") || !RATIONALIZATION_HEADING.test(line)) continue;
+    const window = lines.slice(index + 1, index + 1 + RATIONALIZATION_WINDOW);
+    const headerAt = window.findIndex((entry) => RATIONALIZATION_HEADER_ROW.test(entry.trim()));
+    if (headerAt === -1) continue;
+    // The separator row sits between the header and the body, so body rows start two
+    // lines down. Counted rather than assumed: a table with a header and one example
+    // is a different artifact from the genre, which is a list of rebutted excuses.
+    let rows = 0;
+    for (const entry of lines.slice(index + 1 + headerAt + 2)) {
+      if (!TABLE_BODY_ROW.test(entry.trim())) break;
+      rows += 1;
+    }
+    if (rows >= RATIONALIZATION_MIN_ROWS) {
+      return `anti-rationalization table: present, ${rows} row(s) — ${provenance}`;
+    }
+  }
+  return `anti-rationalization table: absent — ${provenance}`;
+}
+
+/**
+ * Genres 10 and 11, as counts: pointers that carry a firing condition, and pointers
+ * that are a bare name.
+ *
+ * THE LINE IS THE UNIT, deliberately, where the catalogue's signature says "in the
+ * same sentence". A sentence splitter has to break on `.` and every pointer here
+ * contains one inside a filename; the splitter that protects `guide.md` then breaks
+ * `guide.md When the work needs it`, which would file the clearest possible instance
+ * of the conditional form under the bare form. Over-inclusion is the harmless
+ * direction for a count nobody acts on, and a mis-split is not.
+ *
+ * NO CAP IS APPLIED TO EITHER COUNT and none may be added. A cap on how many
+ * references a skill bundles was proposed and refuted: it came from a figure about
+ * whole skills attached to one task, not files inside one, and one shipped skill
+ * routes 66 bundled files through a single manifest of this genre.
+ */
+function describeManifestForms(lines: readonly string[]): string {
+  let conditional = 0;
+  let bare = 0;
+  for (const line of lines) {
+    if (line.startsWith("#") || !POINTER_PATH.test(line)) continue;
+    if (FIRING_CLAUSE.test(line)) conditional += 1;
+    else bare += 1;
+  }
+  if (conditional + bare === 0) return "reference pointers: none found in the body";
+  return (
+    `reference pointers: ${conditional} carrying a firing condition, ${bare} bare-name — ` +
+    "both forms are unvalidated and under measurement; no count cap applies"
+  );
+}
+
+/**
+ * The informational section. Adds to `genres` and touches nothing else.
+ *
+ * Fence-aware for the same reason the table-of-contents rule is: a skill body that
+ * demonstrates a numbered step or a pointer inside a fenced sample is showing one,
+ * not using one, and counting the sample would report the example as the artifact.
+ */
+function reportStructuralGenres(content: string, out: Collector): void {
+  const body = content.replace(FRONTMATTER_PATTERN, "");
+  const lines = linesOutsideFences(body);
+  out.genres.push(
+    describeOrderedSteps(lines),
+    describeAntiRationalization(lines),
+    describeManifestForms(lines),
+  );
+}
+
 async function checkDanglingReferences(
   content: string,
   skillDir: string,
@@ -570,10 +740,10 @@ export async function validateSkill(
   tier: Tier = "standard",
 ): Promise<ValidationResult> {
   const loaded = await loadFrontmatter(skillDir);
-  if (!loaded.ok) return { valid: false, errors: [loaded.error], warnings: [] };
+  if (!loaded.ok) return { valid: false, errors: [loaded.error], warnings: [], genres: [] };
 
   const { content, frontmatter: parsed } = loaded;
-  const out: Collector = { errors: [], warnings: [] };
+  const out: Collector = { errors: [], warnings: [], genres: [] };
   checkAllowedKeys(parsed, tier, out);
   const name = checkName(parsed, out);
   checkDescription(parsed, tier, out);
@@ -582,8 +752,16 @@ export async function validateSkill(
   await checkBodySize(content, out);
   await checkReferenceTableOfContents(skillDir, out);
   await checkDanglingReferences(content, skillDir, out);
+  reportStructuralGenres(content, out);
 
-  return { valid: out.errors.length === 0, errors: out.errors, warnings: out.warnings };
+  // `valid` reads `errors` and nothing else, which is what makes the genre lines
+  // structurally incapable of changing a verdict rather than merely intended not to.
+  return {
+    valid: out.errors.length === 0,
+    errors: out.errors,
+    warnings: out.warnings,
+    genres: out.genres,
+  };
 }
 
 const TIER_LABEL: Readonly<Record<Tier, string>> = {
@@ -608,6 +786,20 @@ export function formatResult(result: ValidationResult, skillDir: string, tier: T
   if (result.warnings.length > 0) {
     lines.push(`## Warnings (${result.warnings.length})`, "");
     for (const warning of result.warnings) lines.push(`- ${warning}`);
+    lines.push("");
+  }
+  // Below the findings and above the verdict, with no count in its heading. A count
+  // would invite comparison with the warning count above it, and these are not
+  // findings to be driven to zero — several of them read "absent" on a healthy skill.
+  if (result.genres.length > 0) {
+    lines.push("## Structural genres (informational)", "");
+    lines.push(
+      "Facts about how this body is put together. Nothing here is a finding, and none of",
+      "it affects the verdict: thirteen of the fourteen catalogued genres have no measured",
+      "effect, so presence is reported and never prescribed.",
+      "",
+    );
+    for (const genre of result.genres) lines.push(`- ${genre}`);
     lines.push("");
   }
   lines.push(

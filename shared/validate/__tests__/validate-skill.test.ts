@@ -16,6 +16,7 @@ import {
   resolvePath,
   validateSkill,
   type Tier,
+  type ValidationResult,
 } from "../validate-skill.ts";
 
 const TMP_ROOT = `${Bun.env.TMPDIR ?? "/tmp"}/skill-creator-validate-${Bun.nanoseconds()}`;
@@ -577,9 +578,226 @@ describe("resolveTier", () => {
   });
 });
 
+describe("structural genres (informational, never a finding)", () => {
+  /** Only the genre line for one detector, so the three cannot mask each other. */
+  function genre(result: { readonly genres: readonly string[] }, prefix: string): string {
+    return result.genres.find((line) => line.startsWith(prefix)) ?? "";
+  }
+
+  async function bodied(body: string): Promise<ValidationResult> {
+    return await validateSkill(await makeSkill({ frontmatter: VALID, body }));
+  }
+
+  const STEPS = ["# Demo", "", "## Step 1: One", "", "## Step 2: Two", "", "## Step 3: Three", ""];
+
+  describe("genre 1: the ordered-step spine", () => {
+    test("contiguous ascending steps are reported with their range", async () => {
+      const line = genre(await bodied(STEPS.join("\n")), "ordered workflow");
+      expect(line).toContain("steps 1-3");
+      expect(line).toContain("contiguous");
+    });
+
+    test("a numbering gap is the finding, and the gap is named", async () => {
+      const line = genre(
+        await bodied(["# Demo", "", "## Step 1: One", "", "## Step 2: Two", "", "## Step 4: Four", ""].join("\n")),
+        "ordered workflow",
+      );
+      expect(line).toContain("numbering gap at 3");
+      expect(line).toContain("1, 2, 4");
+    });
+
+    test("a repeat is distinguished from a gap, because they are different mistakes", async () => {
+      const line = genre(
+        await bodied(["# Demo", "", "## Step 1: One", "", "## Step 2: Two", "", "## Step 2: Again", ""].join("\n")),
+        "ordered workflow",
+      );
+      expect(line).toContain("repeats or goes backwards");
+    });
+
+    test("`## 3. Thing` counts as a step heading too, not only Step and Phase", async () => {
+      const line = genre(
+        await bodied(["# Demo", "", "## 1. One", "", "## 2. Two", "", "## 3. Three", ""].join("\n")),
+        "ordered workflow",
+      );
+      expect(line).toContain("steps 1-3");
+    });
+
+    test("two numbered headings are not a spine, and absence is stated", async () => {
+      const line = genre(
+        await bodied(["# Demo", "", "## Step 1: One", "", "## Step 2: Two", ""].join("\n")),
+        "ordered workflow",
+      );
+      expect(line).toContain("no numbered step spine");
+    });
+
+    test("steps inside a fenced sample are being shown, not used", async () => {
+      const line = genre(
+        await bodied(["# Demo", "", "```markdown", ...STEPS, "```", ""].join("\n")),
+        "ordered workflow",
+      );
+      expect(line).toContain("no numbered step spine");
+    });
+  });
+
+  describe("genre 3: the anti-rationalization table", () => {
+    const TABLE = [
+      "## Common Rationalizations",
+      "",
+      "| Rationalization | Reality |",
+      "| --- | --- |",
+      "| It is a small change | Small changes ship the same bugs |",
+      "| The tests are slow | Slower than the outage |",
+      "| I checked it manually | Manual checks are not repeatable |",
+      "",
+    ];
+
+    test("the table is reported present with its row count", async () => {
+      const line = genre(await bodied(["# Demo", "", ...TABLE].join("\n")), "anti-rationalization");
+      expect(line).toContain("present");
+      expect(line).toContain("3 row(s)");
+    });
+
+    test("absence is reported too, since a healthy skill may simply not have one", async () => {
+      const line = genre(await bodied("# Demo\n\nJust prose.\n"), "anti-rationalization");
+      expect(line).toContain("absent");
+    });
+
+    test("the provenance travels WITH the fact, present or absent", async () => {
+      // Without the note, "absent" reads as a gap to close — which is the reading the
+      // evidence does not support, since nobody has measured whether the table works.
+      for (const body of ["# Demo\n\nJust prose.\n", ["# Demo", "", ...TABLE].join("\n")]) {
+        const line = genre(await bodied(body), "anti-rationalization");
+        expect(line).toContain("single-vendor");
+        expect(line).toContain("no measured effect");
+        expect(line).toContain("not a recommendation");
+      }
+    });
+
+    test("a heading with a two-row table is not the genre", async () => {
+      const line = genre(
+        await bodied(
+          [
+            "# Demo",
+            "",
+            "## Common Rationalizations",
+            "",
+            "| Rationalization | Reality |",
+            "| --- | --- |",
+            "| Only one | Not a list |",
+            "",
+          ].join("\n"),
+        ),
+        "anti-rationalization",
+      );
+      expect(line).toContain("absent");
+    });
+
+    test("a table quoted inside a fence is a sample, not an adoption", async () => {
+      const line = genre(
+        await bodied(["# Demo", "", "```markdown", ...TABLE, "```", ""].join("\n")),
+        "anti-rationalization",
+      );
+      expect(line).toContain("absent");
+    });
+  });
+
+  describe("genres 10 and 11: the manifest-form split", () => {
+    test("pointers are split by whether they carry a firing condition", async () => {
+      const line = genre(
+        await bodied(
+          [
+            "# Demo",
+            "",
+            "Read references/layout.md when the body outgrows one screen.",
+            "Open references/api.md before you touch a handler.",
+            "See references/glossary.md.",
+            "",
+          ].join("\n"),
+        ),
+        "reference pointers",
+      );
+      expect(line).toContain("2 carrying a firing condition");
+      expect(line).toContain("1 bare-name");
+    });
+
+    test("no pointers at all is stated rather than reported as two zeros", async () => {
+      expect(genre(await bodied("# Demo\n\nProse only.\n"), "reference pointers")).toContain(
+        "none found",
+      );
+    });
+
+    test("pointers inside a fenced sample are not counted", async () => {
+      const line = genre(
+        await bodied(
+          ["# Demo", "", "```markdown", "Read references/layout.md when it is needed.", "```", ""].join("\n"),
+        ),
+        "reference pointers",
+      );
+      expect(line).toContain("none found");
+    });
+
+    test("the count carries the refuted cap explicitly, so nobody re-adds one", async () => {
+      // A cap on bundled references was proposed and refuted — it came from a figure
+      // about whole skills attached to a task, not files inside one.
+      const line = genre(
+        await bodied(
+          ["# Demo", "", ...Array.from({ length: 20 }, (_, i) => `See references/f${i}.md.`), ""].join("\n"),
+        ),
+        "reference pointers",
+      );
+      expect(line).toContain("20 bare-name");
+      expect(line).toContain("no count cap applies");
+    });
+  });
+
+  test("the section can never change the verdict or the warning count", async () => {
+    // The structural guarantee, asserted rather than trusted. A body dense with every
+    // genre and one with none must agree on everything except `genres`.
+    const dense = await bodied(
+      [
+        "# Demo",
+        "",
+        "## Step 1: One",
+        "## Step 2: Two",
+        "## Step 3: Three",
+        "",
+        "## Common Rationalizations",
+        "",
+        "| Rationalization | Reality |",
+        "| --- | --- |",
+        "| A | B |",
+        "| C | D |",
+        "| E | F |",
+        "",
+        "Read references/layout.md when needed.",
+        "",
+      ].join("\n"),
+    );
+    const bare = await bodied("# Demo\n\nProse only.\n");
+
+    expect(dense.valid).toBe(bare.valid);
+    expect(dense.valid).toBe(true);
+    expect(dense.warnings.length).toBe(bare.warnings.length);
+    expect(dense.errors).toEqual(bare.errors);
+    // Both still REPORT, which is the point — absence is a fact worth stating.
+    expect(dense.genres).toHaveLength(3);
+    expect(bare.genres).toHaveLength(3);
+  });
+
+  test("the rendered section is labelled informational and carries no count", async () => {
+    const dir = await makeSkill({ frontmatter: VALID, body: STEPS.join("\n") });
+    const output = formatResult(await validateSkill(dir), dir, "extended");
+    expect(output).toContain("## Structural genres (informational)");
+    expect(output).toContain("none of");
+    expect(output).toContain("affects the verdict");
+    // A count in the heading would invite comparison with the warning count above it.
+    expect(output).not.toContain("## Structural genres (3)");
+  });
+});
+
 describe("formatResult", () => {
   test("renders a passing result as markdown", () => {
-    const output = formatResult({ valid: true, errors: [], warnings: [] }, "/a/demo-skill", "standard");
+    const output = formatResult({ valid: true, errors: [], warnings: [], genres: [] }, "/a/demo-skill", "standard");
     expect(output).toContain("# Skill validation: `demo-skill`");
     expect(output).toContain("**Tier**: standard");
     expect(output).toContain("**Skill is valid.**");
@@ -588,7 +806,7 @@ describe("formatResult", () => {
 
   test("renders errors and warnings as markdown lists", () => {
     const output = formatResult(
-      { valid: false, errors: ["boom"], warnings: ["careful"] },
+      { valid: false, errors: ["boom"], warnings: ["careful"], genres: [] },
       "/a/demo-skill",
       "extended",
     );
@@ -600,7 +818,7 @@ describe("formatResult", () => {
   });
 
   test("emits no ANSI escape codes", () => {
-    const output = formatResult({ valid: false, errors: ["x"], warnings: [] }, "/a/b", "standard");
+    const output = formatResult({ valid: false, errors: ["x"], warnings: [], genres: [] }, "/a/b", "standard");
     expect(output).not.toContain("\x1b[");
   });
 });
