@@ -35,7 +35,9 @@ What is not uniform is what happens when a *different* runtime ignores them. Ext
 
 `when_to_use` · `argument-hint` · `model` · `effort` · `context` / `agent` / `background` · `shell` · `hooks` · `arguments`
 
-Ignored, the skill still works, just less well. Trigger text is lost, a model override does not apply, an autocomplete hint does not appear. Note `allowed-tools` belongs here too: ignoring it produces *more* permission prompts, never fewer. **Add these freely.**
+Ignored, the skill still works, just less well. Trigger text is lost, a model override does not apply, an autocomplete hint does not appear. Note `allowed-tools` belongs here too: ignoring it produces *more* permission prompts, never fewer. **Add these freely** — with one exception that is not about another runtime at all.
+
+**`allowed-tools` costs the skill every headless run inside Claude Code** (measured 2026-08-24). A skill declaring it never loads under `claude -p`, or under an SDK run with no permission-prompt tool, unless the caller passes `--allowedTools Skill`. The classification above is unchanged and still correct on its own axis — a runtime that ignores the field gives you more prompts, never fewer — but this failure is local rather than cross-runtime, it is deterministic, and it is total: the skill does not load at all. Interactive sessions are unaffected. Read `skills/skill-creator/references/skill-frontmatter.md` for the mechanism, the upstream issues, the one-line diagnostic, and what to do when a skill's callers include headless, CI or SDK runs.
 
 ### Fail-open — ignoring removes a restriction
 
