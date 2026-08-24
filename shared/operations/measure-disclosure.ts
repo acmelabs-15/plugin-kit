@@ -280,6 +280,30 @@ export const MEASURE_FLAGS: Spec = {
 };
 
 /* istanbul ignore next -- @preserve */
+/**
+ * Where the dashboard should look for this run's report.
+ *
+ * `serveReport` serves the real report when `detail.reportPath` is set and falls back to
+ * the progress page when it is not. A measurement run only ever published `resultsDir`,
+ * so although it writes `report.html` it never said where, and every link from the
+ * dashboard dead-ended on a status table. The two optimizer loops set it and did not
+ * have the problem.
+ *
+ * Resolved BEFORE the file exists, which is safe: the dashboard checks the file and falls
+ * through while it is missing. One run therefore links to its progress while measuring
+ * and to its report once written, with no second status write to keep in step.
+ *
+ * An explicit `--report` wins over the copy in `--results-dir`, because it is the path
+ * the caller asked for by name. Both receive identical HTML.
+ */
+export function liveReportPath(
+  reportFlag: string,
+  resultsDir: string | undefined,
+): string | undefined {
+  if (reportFlag !== "none") return reportFlag;
+  return resultsDir === undefined ? undefined : `${resultsDir}/report.html`;
+}
+
 async function main(): Promise<void> {
   const { flags } = parseCli(MEASURE_FLAGS, USAGE);
 
@@ -302,15 +326,22 @@ async function main(): Promise<void> {
   setGraderBare(flagBoolean(flags, "grader-bare"));
 
   const resultsDir = flagString(flags, "results-dir");
+  const reportPath = flagString(flags, "report") ?? "none";
   const runsPerScenario = flagNumber(flags, "runs-per-scenario");
   const verbose = flagBoolean(flags, "verbose");
+
+  const dashboardReport = liveReportPath(reportPath, resultsDir);
 
   const reporter = ProgressReporter.start({
     kind: "disclosure-loop",
     label: `${baseName(skillPath)} — disclosure measurement`,
     total: scenarios.length * runsPerScenario,
     subject: baseName(skillPath),
-    detail: { phase: "measurement", ...(resultsDir === undefined ? {} : { resultsDir }) },
+    detail: {
+      phase: "measurement",
+      ...(resultsDir === undefined ? {} : { resultsDir }),
+      ...(dashboardReport === undefined ? {} : { reportPath: dashboardReport }),
+    },
   });
 
   let output: MeasureOutput;
@@ -350,7 +381,6 @@ async function main(): Promise<void> {
   // The report renderer speaks the optimizer's vocabulary, so a measurement is shown as the
   // one iteration it is: baseline in, baseline out, no candidates. Better a familiar table
   // with an honest single row than a second renderer to keep in step with this one.
-  const reportPath = flagString(flags, "report") ?? "none";
   if (reportPath !== "none" || resultsDir !== undefined) {
     const html = generateDisclosureReport(
       {

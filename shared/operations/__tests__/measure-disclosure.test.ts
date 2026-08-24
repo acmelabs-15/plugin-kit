@@ -16,7 +16,7 @@
 import { afterAll, expect, spyOn, test } from "bun:test";
 import { rm } from "node:fs/promises";
 
-import { warnOnInstallConflict } from "../measure-disclosure.ts";
+import { liveReportPath, warnOnInstallConflict } from "../measure-disclosure.ts";
 
 const TMP = `${Bun.env["TMPDIR"] ?? "/tmp"}/measure-disclosure-${Bun.nanoseconds()}`;
 
@@ -85,4 +85,25 @@ test("nothing installed under the name says nothing", async () => {
   } finally {
     stderr.mockRestore();
   }
+});
+
+// The dashboard serves a run's real report only when `detail.reportPath` is set, and
+// falls back to the progress page when it is not. A measurement published `resultsDir`
+// alone, so every dashboard link for a measured sweep dead-ended on a status table while
+// the report sat written on disk beside it. These pin the path the run now advertises.
+
+test("a results directory advertises the report written inside it", () => {
+  expect(liveReportPath("none", "/tmp/out")).toBe("/tmp/out/report.html");
+});
+
+test("an explicit --report wins, because it is the path the caller named", () => {
+  expect(liveReportPath("/tmp/elsewhere.html", "/tmp/out")).toBe("/tmp/elsewhere.html");
+});
+
+test("an explicit --report stands on its own with no results directory", () => {
+  expect(liveReportPath("/tmp/elsewhere.html", undefined)).toBe("/tmp/elsewhere.html");
+});
+
+test("a run writing no report advertises none, rather than a path that never appears", () => {
+  expect(liveReportPath("none", undefined)).toBeUndefined();
 });
