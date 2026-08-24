@@ -439,10 +439,20 @@ There is no single correct threshold, so `validate` carries **named tiers**
 | **Post-compaction retention** | **first 5,000 tokens per skill** | **optimize-disclosure** |
 | Combined re-attach budget | 25,000 tokens across all skills | optimize-disclosure |
 
-The 5,000-token figure is the real justification for `optimize disclosure`. Skill
-content stays in context for the whole session, and after auto-compaction only the
-first 5,000 tokens of each skill are re-attached. A body over that threshold
-silently loses its tail — a measurable pass/fail, not a style opinion.
+The 5,000-token figure is the real justification for `optimize disclosure`, and as
+of 2026-08-24 it is sourced: Anthropic's Claude Code skills documentation
+(code.claude.com/docs/en/skills, "Skill content lifecycle") states verbatim that
+auto-compaction re-attaches "the most recent invocation of each skill after the
+summary, keeping the first 5,000 tokens of each", and that "Re-attached skills
+share a combined budget of 25,000 tokens." The mechanism is two-part, which this
+paragraph previously understated as silent tail loss: a body over 5,000 tokens is
+truncated at re-attachment, AND older skills can be dropped entirely when the
+combined budget fills, newest-first. The same page notes re-invoking a skill after
+compaction restores its full content. Consequence for the gate: warn at 5,000 is
+the compaction-survival boundary the docs define; a body between 5,000 and the
+fail threshold passes the gate but loses its tail on every compaction until
+re-invoked. A measurable pass/fail, not a style opinion — now with the measurement's
+source attached.
 
 ---
 

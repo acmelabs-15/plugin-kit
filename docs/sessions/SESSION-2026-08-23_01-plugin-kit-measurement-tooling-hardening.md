@@ -193,6 +193,12 @@ Verification exceeded the brief: regression tests were proven against pre-change
 
 Deliberately untouched, queued for the verdict-layer redesign: `decideFileVerdict` still prunes on raw zero, and the optimizer's proposer prompt still shows only pull rates. Feeding recall to both is one change and lands with the three-layer guidance rewrite.
 
+## Event — 2026-08-24: the 5,000-token claim is sourced, and the framing corrected
+
+The load-bearing number behind the whole disclosure operation is verified rather than invented. Anthropic's Claude Code skills documentation, "Skill content lifecycle", states verbatim that auto-compaction re-attaches "the most recent invocation of each skill after the summary, keeping the first 5,000 tokens of each", and that "Re-attached skills share a combined budget of 25,000 tokens", filled newest-first so "older skills can be dropped entirely after compaction". Independently verified against the live page rather than taken from the research agent's report; the quote sits at the page's line 503. This closes the continuation document's open question "Where the 25,000-token figure comes from."
+
+Two corrections fall out. The architecture document's "silently loses its tail" framing understated a two-part mechanism — per-skill truncation at 5,000 AND whole-skill dropping under the shared budget — and is now corrected in place with the source attached. And the gate's two thresholds acquire their real meaning: warn at 5,000 is the compaction-survival boundary the docs define; the band between warn and fail passes the gate but loses its tail on every compaction until the skill is re-invoked, which the docs name as the recovery. The measured ask-user-question skill sits at 5,795 body tokens — inside that band — so its trailing sections, including four of its six reference pointers, are exactly what a compacted session stops seeing. That fact belongs in the guidance rewrite's rationale for what stays in a body's first 5,000 tokens.
+
 ## Observations
 
 ### Landed today
