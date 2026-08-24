@@ -39,6 +39,7 @@ export async function mapWithConcurrency<T, R>(
   concurrency: number,
   worker: (item: T, index: number) => Promise<R>,
   onSettled?: (settled: number, total: number) => void,
+  onStarted?: (inFlight: number, started: number, total: number) => void,
 ): Promise<R[]> {
   if (!Number.isInteger(concurrency) || concurrency < 1) {
     throw new RangeError(`concurrency must be a positive integer, got ${concurrency}`);
@@ -47,6 +48,13 @@ export async function mapWithConcurrency<T, R>(
   const results = new Array<R>(items.length);
   let failure: Failure | undefined;
   let settled = 0;
+  // Reported separately from `settled` because they answer different questions, and only
+  // one of them was ever asked. A pool of long tasks settles nothing until the first
+  // finishes, so a caller watching `onSettled` alone shows 0/N for as long as the slowest
+  // first task takes -- measured at about 90 seconds on a real sweep -- while every worker
+  // is in fact busy. That reads as a hung run rather than a working one.
+  let started = 0;
+  let inFlight = 0;
 
   // One iterator shared by every runner. `next()` is atomic on a single thread,
   // so this hands out each index exactly once with no cursor bookkeeping.
@@ -56,12 +64,16 @@ export async function mapWithConcurrency<T, R>(
     for (const [index, item] of queue) {
       // Caught here rather than around the loop: letting the body throw would
       // close the shared iterator and starve the other runners.
+      started += 1;
+      inFlight += 1;
+      onStarted?.(inFlight, started, items.length);
       try {
         results[index] = await worker(item, index);
       } catch (error) {
         failure ??= { error };
       } finally {
         settled += 1;
+        inFlight -= 1;
         onSettled?.(settled, items.length);
       }
     }

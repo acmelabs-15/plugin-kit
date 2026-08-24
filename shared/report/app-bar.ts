@@ -277,7 +277,16 @@ function script(options: AppBarOptions): string {
       meta.className = "sc-run-meta";
       const mLeft = document.createElement("span");
       mLeft.className = "sc-meta-count";
-      mLeft.textContent = run.status.total > 0 ? run.status.settled + "/" + run.status.total : "";
+      // In-flight is appended rather than replacing the settled count, because they answer
+      // different questions and only one was ever shown. Nothing settles until the first
+      // task finishes, so a long-task pool read 0/N for as long as its slowest first task
+      // took while every worker was busy -- which reads as a hung run.
+      var inFlight = run.status.detail && run.status.detail.inFlight;
+      var counted = run.status.total > 0 ? run.status.settled + "/" + run.status.total : "";
+      if (state === "running" && inFlight > 0) {
+        counted = counted + " \u00b7 " + inFlight + " running";
+      }
+      mLeft.textContent = counted;
       meta.appendChild(mLeft);
       if (state === "running" && run.status.detail && run.status.detail.phase) {
         const mid = document.createElement("span");

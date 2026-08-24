@@ -68,6 +68,14 @@ export interface RunDetail {
   /** Free-form phase name, e.g. "baseline evaluation" or "improving description". */
   readonly phase?: string;
   /**
+   * How many units are in flight right now.
+   *
+   * `settled` alone cannot distinguish a run that has not started from one whose every
+   * worker is busy on a slow first task, and those look identical for as long as that
+   * task takes. Reported so a reader can tell a working run from a hung one.
+   */
+  readonly inFlight?: number;
+  /**
    * Absolute path to this run's own detail page.
    *
    * NOTE THE NESTING: this is `status.detail.reportPath`, not `status.reportPath`. The

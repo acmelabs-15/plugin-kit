@@ -493,6 +493,8 @@ export interface MeasureParams {
   readonly grade: boolean;
   readonly logDir?: string | undefined;
   readonly onProgress?: (settled: number, total: number) => void;
+  /** Called as each run STARTS, so a caller can show a busy pool before anything settles. */
+  readonly onStarted?: (inFlight: number, started: number, total: number) => void;
 }
 
 /**
@@ -535,6 +537,7 @@ export async function measureLayout(params: MeasureParams): Promise<readonly Sce
         logDir: params.logDir,
       }),
     params.onProgress,
+    params.onStarted,
   );
 }
 // ---------------------------------------------------------------------------

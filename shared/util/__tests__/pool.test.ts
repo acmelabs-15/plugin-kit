@@ -263,3 +263,51 @@ describe("onSettled progress reporting", () => {
     expect(await mapWithConcurrency([1, 2], 2, async (n) => n + 1)).toEqual([2, 3]);
   });
 });
+
+// The signal that was missing. A pool of slow tasks settles nothing until the first one
+// finishes, so a caller watching only `onSettled` cannot tell a busy pool from a dead one
+// -- measured at about 90 seconds of a progress bar reading 0/N on a real sweep.
+test("onStarted fires as work begins, before anything has settled", async () => {
+  const seen: number[] = [];
+  let releaseAll: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    releaseAll = resolve;
+  });
+
+  const done = mapWithConcurrency(
+    [1, 2, 3, 4],
+    2,
+    async () => {
+      await gate;
+      return 0;
+    },
+    undefined,
+    (inFlight) => seen.push(inFlight),
+  );
+
+  // Both workers are inside the task and nothing can have settled yet.
+  await Promise.resolve();
+  expect(seen).toEqual([1, 2]);
+
+  releaseAll();
+  await done;
+  // The remaining two start as slots free, so every item is accounted for.
+  expect(seen.length).toBe(4);
+});
+
+test("in-flight never exceeds the concurrency cap", async () => {
+  const peaks: number[] = [];
+  await mapWithConcurrency(
+    Array.from({ length: 12 }, (_, i) => i),
+    3,
+    async () => {
+      await new Promise((r) => setTimeout(r, 1));
+      return 0;
+    },
+    undefined,
+    (inFlight) => peaks.push(inFlight),
+  );
+  expect(Math.max(...peaks)).toBeLessThanOrEqual(3);
+  expect(peaks.length).toBe(12);
+});
+

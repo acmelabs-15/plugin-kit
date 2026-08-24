@@ -62,6 +62,9 @@ export interface MeasureDisclosureParams {
   readonly permissionMode?: string | undefined;
   readonly logDir?: string | undefined;
   readonly onProgress?: ((settled: number, total: number) => void) | undefined;
+  readonly onStarted?:
+    | ((inFlight: number, started: number, total: number) => void)
+    | undefined;
 }
 
 /**
@@ -92,6 +95,12 @@ export interface MeasureOutput {
   readonly runs_per_scenario: number;
   /** Runs that finished without the skill ever reaching context. Excluded from every rate below. */
   readonly runs_without_skill: number;
+  /**
+   * Of the runs that DID load, how many did so by the model reading SKILL.md itself
+   * rather than by the skill system injecting it. Healthy is zero; anything else means
+   * the numbers describe a model rummaging in the skill directory.
+   */
+  readonly runs_loaded_via_file: number;
   readonly body_tokens: number;
   readonly context_tokens: number;
   readonly pass_rate: number;
@@ -173,6 +182,7 @@ export async function measureDisclosure(
     grade: true,
     logDir: params.logDir,
     onProgress: params.onProgress,
+    onStarted: params.onStarted,
   });
 
   // `holdout: null` and `gateReason: null` say the same thing they say in the optimizer:
@@ -191,6 +201,14 @@ export async function measureDisclosure(
     inlineThreshold: params.inlineThreshold,
   });
 
+  if (layout.train.runsLoadedViaFile > 0) {
+    console.error(
+      `Warning: on ${layout.train.runsLoadedViaFile} run(s) the body reached context because ` +
+        `the model READ SKILL.md itself, not because the skill system delivered it. Those runs ` +
+        `describe a model already inside the skill directory choosing what to read next, which ` +
+        `is not what a pull rate is meant to measure. Check that the Skill tool is granted.`,
+    );
+  }
   if (layout.train.runsWithoutSkill > 0) {
     console.error(
       `Warning: the skill never loaded on ${layout.train.runsWithoutSkill} run(s). Those runs ` +
@@ -214,6 +232,7 @@ export async function measureDisclosure(
     scenario_count: params.scenarios.length,
     runs_per_scenario: params.runsPerScenario,
     runs_without_skill: layout.train.runsWithoutSkill,
+    runs_loaded_via_file: layout.train.runsLoadedViaFile,
     body_tokens: layout.bodyTokens,
     context_tokens: layout.train.meanContextTokens,
     pass_rate: layout.train.passRate,
@@ -358,6 +377,10 @@ async function main(): Promise<void> {
       permissionMode: flagString(flags, "permission-mode"),
       logDir: resultsDir === undefined ? undefined : `${resultsDir}/logs`,
       onProgress: (settled) => reporter.report(settled),
+      // Reported so the dashboard can distinguish a busy pool from a hung one. Nothing
+      // settles until the first run finishes, which on a real sweep is about 90 seconds
+      // of a bar reading 0/N while every worker is in fact working.
+      onStarted: (inFlight) => reporter.update({ inFlight }),
     });
   } catch (error) {
     await reporter.finish("failed", error instanceof Error ? error.message : String(error));
@@ -408,6 +431,7 @@ async function main(): Promise<void> {
               scenarios: output.scenario_count,
               runs: output.scenario_count * output.runs_per_scenario,
               runsWithoutSkill: output.runs_without_skill,
+              runsLoadedViaFile: output.runs_loaded_via_file,
               // Recomputed rather than carried: `output` is the JSON shape and has no
               // load-rate field, and inventing one there would be a second place for the
               // same fact to drift. Error-free runs are the planned count less the runs
