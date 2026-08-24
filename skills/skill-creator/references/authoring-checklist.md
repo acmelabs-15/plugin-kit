@@ -23,13 +23,14 @@ The `skill-creator:skill-reviewer` agent runs this same audit automatically and 
 - [ ] No universal-quantifier pushiness (`even if they don't…`, `whenever the user mentions…`, `always use this skill`). See `description-writing.md` for what that phrasing costs, measured
 - [ ] **Under the 1,024-character cap**, measured rather than eyeballed — over it the tail is silently truncated and stops triggering. Past ~500, check that each clause is still buying something; `description-writing.md` has what to cut and what never to
 
-## Content quality (9)
+## Content quality (10)
 
 - [ ] Body explains *why* rather than issuing MUSTs and ALWAYSes; second person is fine
 - [ ] SKILL.md is **under 500 lines and under 5,000 tokens** — check both; a 480-line file with dense paragraphs can still blow the token budget
 - [ ] Detail that is not procedure or workflow has moved into `references/`
 - [ ] Prescriptiveness is matched to fragility *per section* — a fragile sequence is spelled out and said to be exact, a genuine judgement call is explained rather than over-specified
 - [ ] Where several approaches are valid, one is the stated default and the alternatives sit in a clause. A menu of equals hands the decision back
+- [ ] The body's **shape is chosen rather than imitated** — a numbered workflow as its spine, and every table, checklist, diagram or specimen present because its mechanism fits this problem. `../../../shared/references/body-structure.md` catalogs the available shapes and labels each measured, merely shipped, or refuted; two structural rules that sounded right were killed by measurement, so "other skills do this" is not a reason
 - [ ] A **gotchas section** exists if the domain has real gotchas, and it is in the body rather than behind a pointer — the model cannot open a file about a trap it does not know exists
 - [ ] Bundled specimens and examples are complete and correct — an example that does not work teaches the wrong thing more confidently than no example
 - [ ] Scripts run, and their usage is documented where the skill invokes them
@@ -38,15 +39,15 @@ The `skill-creator:skill-reviewer` agent runs this same audit automatically and 
 ## Progressive disclosure (8)
 
 - [ ] Core workflow and pointers in SKILL.md
-- [ ] Every reference file over 100 lines opens with the standard table-of-contents block — a `## Table of Contents` heading, then flat anchor-link bullets naming each H2 in order — so a partial read still returns the file's map. Whole-specimen files (no H1, content is the artifact) are exempt; the form itself is specified in `../../shared/references/progressive-disclosure.md`
+- [ ] Every reference file over 100 lines opens with the standard table-of-contents block — a `## Table of Contents` heading, then flat anchor-link bullets naming each H2 in order — so a partial read still returns the file's map. Whole-specimen files (no H1, content is the artifact) are exempt; the form itself is specified in `../../../shared/references/progressive-disclosure.md`
 - [ ] `scripts/` holds only files the model is told to **run** — nothing in there is read into context
 - [ ] `references/` holds files the model is told to **read**; `examples/`, if present, holds whole **specimens** of the skill's input or output
 - [ ] `assets/` holds files **copied into the output** — templates, fonts, images, boilerplate
 - [ ] **Every** bundled file is named somewhere in SKILL.md. An unreferenced file is invisible and its zero pull rate says nothing about its value
-- [ ] Every pointer states the **condition** that should make you open the file, not just its path, and says what goes wrong if you skip it where that is not obvious
+- [ ] Every reference is **named where its content is relevant**, so a reader meets the pointer at the moment the file would help. Check coverage, not phrasing — no pointer form has measured evidence, so none of them is a guarantee you can lean on
 - [ ] Each reference answers its question completely, or says where the other half is. Two files always needed together are one file
 
-Load mode decides placement, not file type. `progressive-disclosure.md` has the ordered decision rule, the hard cases, and the pointer-condition standard these two boxes check.
+Load mode decides placement, not file type. `progressive-disclosure.md` has the ordered decision rule and the hard cases, and — for the two boxes above — what is and is not known about pointers: no form has evidence behind it, the file-plus-condition-plus-cost rule is struck, and moving a pointer into the step that needs it was tested and halved reach.
 
 ## Testing (6)
 
