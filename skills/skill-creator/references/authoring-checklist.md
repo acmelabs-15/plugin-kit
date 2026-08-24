@@ -4,7 +4,7 @@ A mechanical pre-flight, run before you spend eval budget on a draft — and run
 
 Be clear about what this is and is not. It catches defects that are *cheap to find by reading* — a dangling reference, a description with no negative space, 900 lines in SKILL.md. Every one of those would otherwise cost a full iteration to discover, and an iteration costs subagent runs, wall-clock and the user's attention. What the checklist cannot tell you is whether the skill **works**. Only measurement does that. Treat a clean checklist as permission to start evaluating, never as evidence of quality.
 
-The `skill-creator:skill-reviewer` agent runs this same audit automatically and reports a verdict; this file is the manual form, and the reference for what the agent is checking.
+The `plugin-kit:skill-reviewer` agent runs this same audit automatically and reports a verdict; this file is the manual form, and the reference for what the agent is checking.
 
 ---
 

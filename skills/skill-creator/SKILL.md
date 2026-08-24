@@ -82,7 +82,7 @@ Frontmatter, body size, dangling references, and Bun purity where the skill ship
 
 Before rewriting a description in response to a collision, read `../../shared/references/description-writing.md`, section "The honest limit": the failure lives in the pair rather than in either description, so editing your own is mostly not the fix.
 
-Then run the `skill-creator:skill-reviewer` agent on the skill directory, and loop that too — fix, re-run, stop when it comes back clean or the remainder are findings you can defend out loud. It audits statically and never executes the skill, so it complements the measured loop below rather than replacing it: nothing static tells you whether the skill helps. Treat a failing verdict as gating the eval run, since every finding otherwise costs a full iteration to discover. Read `references/authoring-checklist.md` when you cannot run that agent — outside Claude Code, or when the user wants to see the audit rather than a verdict.
+Then run the `plugin-kit:skill-reviewer` agent on the skill directory, and loop that too — fix, re-run, stop when it comes back clean or the remainder are findings you can defend out loud. It audits statically and never executes the skill, so it complements the measured loop below rather than replacing it: nothing static tells you whether the skill helps. Treat a failing verdict as gating the eval run, since every finding otherwise costs a full iteration to discover. Read `references/authoring-checklist.md` when you cannot run that agent — outside Claude Code, or when the user wants to see the audit rather than a verdict.
 
 ### Write the evals
 
@@ -209,13 +209,13 @@ The same loop measures a subagent's delegation (`--target-type agent`) and a sla
 
 ## Progressive disclosure optimization
 
-Description optimization decides whether the skill is reached. This decides what it costs once it is, and it is the same shape of loop: measure, propose, re-measure, select on a held-out split. The evidence is the **pull rate** — how often each bundled file was actually read — with expectation pass rate alongside as the guardrail, since a restructure that cuts tokens and breaks the work is a regression rather than an optimization.
+Description optimization decides whether the skill is reached. This decides what it costs once it is, and it is the same shape of loop: measure, propose, re-measure, select on a held-out split. The evidence is **recall** — how often each bundled file was reached by the runs that needed it — with the raw pull rate beside it and expectation pass rate as the guardrail, since a restructure that cuts tokens and breaks the work is a regression rather than an optimization.
 
 ```bash
 bun ../../shared/operations/optimize-disclosure.ts --skill-path <skill-dir> --scenarios evals/evals.json
 ```
 
-Read `../../shared/references/disclosure-optimization.md` when the run finishes and you are deciding what to adopt: it has the verdict table the report prints against, where *prune* and *signpost* look identical in the data and need opposite fixes. Read `../../shared/references/progressive-disclosure.md` instead when you are doing this by judgement — it is the doctrine the script automates, including why a pointer without a condition is the usual reason a file goes unread.
+Read `../../shared/references/disclosure-optimization.md` when the run finishes and you are deciding what to adopt: it has the verdict table the report prints against, where *prune* and *signpost* look identical in the data and need opposite fixes. Read `../../shared/references/progressive-disclosure.md` instead when you are doing this by judgement — it is the doctrine the script automates.
 
 ---
 
