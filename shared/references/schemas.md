@@ -6,6 +6,23 @@ Field names are literal. The viewer in particular matches them exactly and rende
 
 Exactly one structure here is machine-checked rather than trusted: `envelope.json` is refused at the moment it is written if a required field is missing. Everything else on this page is a convention, and a convention is only as good as the reader who remembers it.
 
+## Table of Contents
+
+- [evals.json](#evalsjson)
+- [eval_metadata.json](#eval_metadatajson)
+- [grading.json](#gradingjson)
+- [metrics.json](#metricsjson)
+- [timing.json](#timingjson)
+- [benchmark.json](#benchmarkjson)
+- [comparison.json](#comparisonjson)
+- [analysis.json](#analysisjson)
+- [feedback.json](#feedbackjson)
+- [Description-optimization outputs](#description-optimization-outputs)
+- [Disclosure outputs](#disclosure-outputs)
+- [envelope.json — the results envelope](#envelopejson--the-results-envelope)
+- [Run status files](#run-status-files)
+- [history.json — documented but unused](#historyjson--documented-but-unused)
+
 ---
 
 ## evals.json

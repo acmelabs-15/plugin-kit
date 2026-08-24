@@ -11,6 +11,17 @@ nohup bun ../operations/optimize-description.ts --eval-set <path> --skill-path <
 
 That is a complete invocation. The script starts the dashboard itself and opens a window.
 
+## Table of Contents
+
+- [Nothing waits on a timeout](#nothing-waits-on-a-timeout)
+- [The attempts a trigger sweep does not run](#the-attempts-a-trigger-sweep-does-not-run)
+- [The dashboard](#the-dashboard)
+- [Screenshotting a page](#screenshotting-a-page)
+- [A report is a snapshot; the status file is the truth](#a-report-is-a-snapshot-the-status-file-is-the-truth)
+- [A crash no longer costs the completed work](#a-crash-no-longer-costs-the-completed-work)
+- [How a stopped run is reported](#how-a-stopped-run-is-reported)
+- [Progress inside the description report](#progress-inside-the-description-report)
+
 ## Nothing waits on a timeout
 
 Worth knowing, because it is the usual reason someone wraps these in a guessed wall-clock cap and then

@@ -2,6 +2,17 @@
 
 An agent's body can be flawless and never run. Everything in this file is about the decision that happens before the body exists as far as Claude is concerned.
 
+## Table of Contents
+
+- [Agent, skill, both, or neither](#agent-skill-both-or-neither)
+- [Where the decision is made](#where-the-decision-is-made)
+- [The three invocation paths](#the-three-invocation-paths)
+- [Discovery precedence](#discovery-precedence)
+- [Plugin subfolder scoping](#plugin-subfolder-scoping)
+- ["Use proactively"](#use-proactively)
+- [The `<example>` / `<commentary>` convention](#the-example--commentary-convention)
+- [Why a vague description loses to a specific sibling](#why-a-vague-description-loses-to-a-specific-sibling)
+
 ---
 
 ## Agent, skill, both, or neither

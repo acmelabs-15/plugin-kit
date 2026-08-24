@@ -8,6 +8,15 @@ The short version:
 
 The package is a **dependency**, not a build target. Nothing builds it on its own and no source file imports from `dist/` — the build reads source and writes artifacts, never the reverse. Getting that direction backwards is the tempting mistake: it looks like it would make the shared code more explicit, and instead it makes committed source depend on generated output, which nothing in the surrounding ecosystem does.
 
+## Table of Contents
+
+- [Why a build step, and not a dependency](#why-a-build-step-and-not-a-dependency)
+- [The layout](#the-layout)
+- [The build step](#the-build-step)
+- [What this costs](#what-this-costs)
+- [Declare each package's public surface](#declare-each-packages-public-surface)
+- [Why the ecosystem gives no cover here](#why-the-ecosystem-gives-no-cover-here)
+
 ## Why a build step, and not a dependency
 
 Because the install target runs no install step. From Anthropic's plugin reference:

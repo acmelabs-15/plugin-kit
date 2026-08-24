@@ -10,6 +10,15 @@ Reach for it when the human review cannot settle whether a new version is better
 the old one. It is a stricter instrument than the eval loop's usual grading and most
 skills never need it.
 
+## Table of Contents
+
+- [Role](#role)
+- [Inputs](#inputs)
+- [Process](#process)
+- [Output Format](#output-format)
+- [Field Descriptions](#field-descriptions)
+- [Guidelines](#guidelines)
+
 ---
 
 Compare two outputs without knowing which skill produced them.

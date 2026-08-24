@@ -4,6 +4,18 @@ The capability that makes an invocation-first entry point worth more than a save
 
 Everything here is safe to copy verbatim. This file is read into context rather than rendered as a command, so the syntax below arrives intact.
 
+## Table of Contents
+
+- [The two syntaxes](#the-two-syntaxes)
+- [The recognition rule](#the-recognition-rule)
+- [Output is never re-scanned](#output-is-never-re-scanned)
+- [What Claude sees, and does not](#what-claude-sees-and-does-not)
+- [Security posture](#security-posture)
+- [Failure and cost](#failure-and-cost)
+- [Patterns worth stealing, and what they turn into](#patterns-worth-stealing-and-what-they-turn-into)
+- [Arguments inside injected commands are not escaped](#arguments-inside-injected-commands-are-not-escaped)
+- [Review checklist](#review-checklist)
+
 ---
 
 ## The two syntaxes

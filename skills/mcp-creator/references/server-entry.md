@@ -2,6 +2,19 @@
 
 Open this while writing or debugging a `.mcp.json` entry. The schema is small. The parts that cost people time are which transport to declare, which file wins, which placeholder resolves where, and what the server ends up being called.
 
+## Table of Contents
+
+- [Scope markers](#scope-markers)
+- [Where a server can be configured](#where-a-server-can-be-configured)
+- [Fields common to every transport](#fields-common-to-every-transport)
+- [Transports](#transports)
+- [`stdio` command resolution](#stdio-command-resolution)
+- [Interpolation](#interpolation)
+- [Where the credential comes from](#where-the-credential-comes-from)
+- [Scope precedence](#scope-precedence)
+- [Naming derivations, side by side](#naming-derivations-side-by-side)
+- [Verification](#verification)
+
 ## Scope markers
 
 Every option below is marked with where it is meaningful.

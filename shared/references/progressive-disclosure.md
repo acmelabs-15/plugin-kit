@@ -10,6 +10,20 @@ Skills load in three levels, and the whole point of the directory taxonomy is to
 
 Every rule below carries what backs it. **(published, Anthropic)** is a documented mechanism, quoted. **(published guidance, unquantified)** is asserted by Anthropic without published evidence or derivation, whether or not it names a number. **(house rule)** is this repository's own, and says what it rests on. **(measured here)** means this repository ran the experiment and reports the number. **(unmeasured)** means the rule is held because it is coherent, not because anyone tested it. Several rules that lived here for a long time turned out to belong in that last category once someone checked, and two of them were wrong.
 
+## Table of Contents
+
+- [Size limits](#size-limits)
+- [What survives compaction](#what-survives-compaction)
+- [Fan-out is unbounded; depth is bounded at one](#fan-out-is-unbounded-depth-is-bounded-at-one)
+- [Pointers, and what is actually known about them](#pointers-and-what-is-actually-known-about-them)
+- [Author for the weaker tier](#author-for-the-weaker-tier)
+- [Two things that belong in the body regardless of size](#two-things-that-belong-in-the-body-regardless-of-size)
+- [Diagrams cost tokens on every invocation](#diagrams-cost-tokens-on-every-invocation)
+- [The taxonomy is decided by load mode, not content genre](#the-taxonomy-is-decided-by-load-mode-not-content-genre)
+- [The placement rule](#the-placement-rule)
+- [The status of `examples/`](#the-status-of-examples)
+- [When a fifth directory earns its place](#when-a-fifth-directory-earns-its-place)
+
 ---
 
 ## Size limits
@@ -20,7 +34,18 @@ Only the line figure is Anthropic's, and it ships with no derivation. The token 
 
 When you approach the limit, the answer is another layer of hierarchy with clear pointers about where to go next, not tighter prose (unmeasured). Move detail into `references/` and leave a sentence in SKILL.md saying what is in there and when to read it.
 
-**Reference files can be large** (published guidance, unquantified). A 2,000-line `references/api.md` is fine — it is only paid for when read. Past roughly 100 lines it carries a table of contents, for a mechanical reason given under depth below. Telling SKILL.md what to grep for instead — "search `references/tables.md` for the table name" — costs a fraction of reading it, and nobody has tested whether the model complies (unmeasured).
+**Reference files can be large** (published guidance, unquantified). A 2,000-line `references/api.md` is fine — it is only paid for when read. Past roughly 100 lines it carries a table of contents in the standard form specified immediately below, for a mechanical reason given under depth later on. Telling SKILL.md what to grep for instead — "search `references/tables.md` for the table name" — costs a fraction of reading it, and nobody has tested whether the model complies (unmeasured).
+
+**The table of contents has a standard form** (house rule, locked 2026-08-24). A literal `## Table of Contents` heading, then a flat bulleted list of GitHub-style anchor links naming every H2 section in document order — no nesting, no tables, H2 entries only, and the table of contents itself excluded — placed after the H1 and the file's orientation prose. That heading is **the first H2 in the file**, and the position is stated that way because it is deliberately checkable: a reader or a validator confirms it by finding the first line that opens a section, with no judgement involved.
+
+```markdown
+- [Size limits](#size-limits)
+- [What survives compaction](#what-survives-compaction)
+```
+
+Whole-specimen files are exempt — an `examples/` file whose content *is* the artifact, carrying no H1 and no wrapper prose around it. Injecting a map into one edits the specimen somebody is meant to copy, and specimen content is consumed whole rather than partially read, so the mechanism that motivates the rule does not reach it.
+
+The heading-plus-bullets shell is deliberate rather than cosmetic. It is the deterministic signature the validator checks for, so a file carrying the same map in any other form — a prose sentence naming the sections, a table, a nested list — reads as missing one.
 
 **Information lives in one place** (unmeasured). If something is in SKILL.md *and* in a reference file, one of them will drift and the model will read both. Prefer the reference file for anything detailed, and keep SKILL.md to procedure, workflow and pointers.
 

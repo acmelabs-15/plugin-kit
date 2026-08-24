@@ -2,6 +2,16 @@
 
 A skill bundled in a plugin is the same artifact as a standalone one — same `SKILL.md`, same frontmatter, same taxonomy. What changes is where it lives, how it is discovered, how you test it, and how it is distributed.
 
+## Table of Contents
+
+- [Layout](#layout)
+- [Auto-discovery](#auto-discovery)
+- [Local testing](#local-testing)
+- [No packaging](#no-packaging)
+- [`commands/` is a legacy format](#commands-is-a-legacy-format)
+- [Manifest](#manifest)
+- [Hooks](#hooks)
+
 ---
 
 ## Layout

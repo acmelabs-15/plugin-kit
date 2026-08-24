@@ -12,6 +12,13 @@ like an argument for a conclusion it was supposed to test.
 For the other analyst pass — the rare post-hoc one that unblinds a comparison verdict and
 writes a structured suggestion document — that is `comparison-analysis.md`.
 
+## Table of Contents
+
+- [Role](#role)
+- [Inputs](#inputs)
+- [Process](#process)
+- [Guidelines](#guidelines)
+
 ---
 
 ## Role

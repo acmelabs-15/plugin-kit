@@ -10,6 +10,13 @@ Before the field list, three things that shape everything below.
 
 **"Standalone" here means a file in `.claude/agents/` or `~/.claude/agents/`, not portability.** The Agent Skills open standard defines exactly one artifact, `SKILL.md`. There is no agent concept in the specification, so nothing in this file carries a portability guarantee outside Claude Code — unlike `../../../shared/references/portability.md`, where the portable subset is a real and enforceable thing.
 
+## Table of Contents
+
+- [Scope table](#scope-table)
+- [The three that go silent inside a plugin](#the-three-that-go-silent-inside-a-plugin)
+- [The fields](#the-fields)
+- [Three worked examples](#three-worked-examples)
+
 ---
 
 ## Scope table

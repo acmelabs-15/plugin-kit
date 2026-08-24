@@ -8,6 +8,18 @@ All fields are optional. Only `description` is recommended.
 
 Booleans accept `yes`, `no`, `on`, `off`, `1`, `0` in any letter case as well as `true` and `false`, from v2.1.218. Earlier versions recognise only `true` and `false`, and the standard's own parser reads `yes` as the string `"yes"` — so write `true` and `false` and the question never arises.
 
+## Table of Contents
+
+- [Scope markers](#scope-markers)
+- [Identity and discovery](#identity-and-discovery)
+- [The invocation contract](#the-invocation-contract)
+- [What it may do](#what-it-may-do)
+- [How it runs](#how-it-runs)
+- [Automatic activation](#automatic-activation)
+- [Bookkeeping](#bookkeeping)
+- [Outside Claude Code, the field set collapses](#outside-claude-code-the-field-set-collapses)
+- [A note on malformed YAML](#a-note-on-malformed-yaml)
+
 ---
 
 ## Scope markers

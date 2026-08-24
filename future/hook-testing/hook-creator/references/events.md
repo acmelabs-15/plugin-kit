@@ -4,6 +4,20 @@ Thirty-one events. For each one: when it fires, what its payload carries beyond 
 
 That last column varies per event and nothing tells you when you get it wrong. A `matcher: "Bash"` on `SessionStart` is compared against how the session started, matches none of `startup`/`resume`/`clear`/`compact`/`fork`, and the hook silently never fires. The symptom is a hook that appears correctly in `/hooks` and does nothing.
 
+## Table of Contents
+
+- [Which event?](#which-event)
+- [Common input fields](#common-input-fields)
+- [Matcher evaluation](#matcher-evaluation)
+- [Session lifecycle](#session-lifecycle)
+- [Turn lifecycle](#turn-lifecycle)
+- [Around a tool call](#around-a-tool-call)
+- [Subagents and tasks](#subagents-and-tasks)
+- [Context and configuration](#context-and-configuration)
+- [Display, notification, worktrees, elicitation](#display-notification-worktrees-elicitation)
+- [Events with no matcher at all](#events-with-no-matcher-at-all)
+- [Events where exit 2 does nothing](#events-where-exit-2-does-nothing)
+
 ## Which event?
 
 Start from what has to happen. Thirty-one names do not sort themselves, and the branch structure is the whole content here, so it is a tree rather than a list.

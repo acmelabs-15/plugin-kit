@@ -8,6 +8,14 @@ the numbers pick.
 The loop applies to any artifact whose routing is a model judgement — a skill, a
 subagent's delegation, a slash command. `--target-type` selects which.
 
+## Table of Contents
+
+- [Step 1: Generate the trigger eval queries](#step-1-generate-the-trigger-eval-queries)
+- [Step 2: Review the set with the user](#step-2-review-the-set-with-the-user)
+- [Step 3: Run the loop](#step-3-run-the-loop)
+- [Reading the results](#reading-the-results)
+- [Step 4: Apply the result](#step-4-apply-the-result)
+
 ## Step 1: Generate the trigger eval queries
 
 Twenty queries, roughly half should-trigger and half should-not, shaped

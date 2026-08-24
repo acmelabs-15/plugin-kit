@@ -6,6 +6,18 @@ A server's tools are a routing surface before they are an API. The model sees a 
 
 That makes tool design the same problem as description writing, and `../../../shared/references/description-writing.md` is the argument and the evidence. Read it first. This file is what changes when the artifact is a tool rather than a skill: there are usually several of them, they compete with each other and with built-ins, their arguments are structured, and their output lands in the context window and stays there.
 
+## Table of Contents
+
+- [Naming](#naming)
+- [Descriptions as a routing surface](#descriptions-as-a-routing-surface)
+- [Input schemas](#input-schemas)
+- [Response shape is a context bill](#response-shape-is-a-context-bill)
+- [Errors are instructions](#errors-are-instructions)
+- [Consolidation](#consolidation)
+- [The checklist](#the-checklist)
+- [Measuring whether the surface routes](#measuring-whether-the-surface-routes)
+- [The scoring pass](#the-scoring-pass)
+
 ---
 
 ## Naming
@@ -255,4 +267,6 @@ A tool that scores well on its own scenarios and appears in another tool's `lost
 
 **What a passing score does not tell you.** These scenarios were derived from the surface as it stands, so they cover what the tools claim to do. A capability the surface lacks entirely produces no scenario and no failure, which is why the inventory goes in front of the user before the run rather than after it.
 
-**When the server is not yours to edit**, the description is not a lever and pretending otherwise wastes the loop. Two remain: narrow the grant so there are fewer wrong tools to pick from, and put routing guidance in the body of the skill that fronts the server ("to find an issue use `search_issues`; there is no need to list projects first").
+### When the server is not yours to edit
+
+The description is not a lever and pretending otherwise wastes the loop. Two remain: narrow the grant so there are fewer wrong tools to pick from, and put routing guidance in the body of the skill that fronts the server ("to find an issue use `search_issues`; there is no need to list projects first").

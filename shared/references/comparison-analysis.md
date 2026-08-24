@@ -13,6 +13,16 @@ This is the rare half of the analyst work. For the pass that runs every iteratio
 freeform notes over a finished `benchmark.json` — that is `benchmark-notes.md`, and the
 two write different artifacts.
 
+## Table of Contents
+
+- [Role](#role)
+- [Inputs](#inputs)
+- [Process](#process)
+- [Output Format](#output-format)
+- [Guidelines](#guidelines)
+- [Categories for Suggestions](#categories-for-suggestions)
+- [Priority Levels](#priority-levels)
+
 ---
 
 Analyze blind comparison results to understand why the winner won, and generate improvement suggestions.

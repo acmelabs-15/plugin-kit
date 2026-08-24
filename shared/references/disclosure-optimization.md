@@ -6,6 +6,16 @@ Read this when a disclosure run has finished and you are deciding what to adopt,
 
 If you only want the numbers — which bundled files get pulled, at what rate, at what token cost — reach for `../operations/measure-disclosure.ts` instead. Same sweep, same grading, same file table; no candidates, no selection, no `--apply`. It is the cheaper half of the run above, and the one to start with.
 
+## Table of Contents
+
+- [Run it on the weaker tier](#run-it-on-the-weaker-tier)
+- [What one run measures](#what-one-run-measures)
+- [The decision rule](#the-decision-rule)
+- [How selection works, and why it uses a held-out split](#how-selection-works-and-why-it-uses-a-held-out-split)
+- [Reading the report](#reading-the-report)
+- [What the measurement cannot see](#what-the-measurement-cannot-see)
+- [Cost](#cost)
+
 ```bash
 bun ../operations/measure-disclosure.ts \
   --skill-path ../my-skill \

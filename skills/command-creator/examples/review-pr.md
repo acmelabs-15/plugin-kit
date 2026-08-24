@@ -2,6 +2,13 @@
 
 The other end of the range from `minimal-command.md`: named arguments, load-time shell injection, a scoped tool grant, and a body written to survive every one of them failing. The render is shown below the source, because a command with injection is not finished until you have seen what it renders to.
 
+## Table of Contents
+
+- [The file](#the-file)
+- [What it renders to](#what-it-renders-to)
+- [Annotations](#annotations)
+- [What was deliberately left out](#what-was-deliberately-left-out)
+
 ---
 
 ## The file

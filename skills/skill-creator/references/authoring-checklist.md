@@ -35,9 +35,10 @@ The `skill-creator:skill-reviewer` agent runs this same audit automatically and 
 - [ ] Scripts run, and their usage is documented where the skill invokes them
 - [ ] Any bundled script that runs for minutes reports progress to a status file, and the skill documents launching it detached — a long job that prints nothing is indistinguishable from a hung one
 
-## Progressive disclosure (7)
+## Progressive disclosure (8)
 
 - [ ] Core workflow and pointers in SKILL.md
+- [ ] Every reference file over 100 lines opens with the standard table-of-contents block — a `## Table of Contents` heading, then flat anchor-link bullets naming each H2 in order — so a partial read still returns the file's map. Whole-specimen files (no H1, content is the artifact) are exempt; the form itself is specified in `../../shared/references/progressive-disclosure.md`
 - [ ] `scripts/` holds only files the model is told to **run** — nothing in there is read into context
 - [ ] `references/` holds files the model is told to **read**; `examples/`, if present, holds whole **specimens** of the skill's input or output
 - [ ] `assets/` holds files **copied into the output** — templates, fonts, images, boilerplate

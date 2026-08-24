@@ -6,6 +6,18 @@ The framing to fix first, because almost every portability mistake downstream co
 
 So "does this work in Claude Desktop?" is not a question with one answer. It is three questions, and the useful reflex is to name the tab.
 
+## Table of Contents
+
+- [The surfaces, and what each consumes](#the-surfaces-and-what-each-consumes)
+- [Compatibility matrix](#compatibility-matrix)
+- [Looks portable but isn't](#looks-portable-but-isnt)
+- [Reaching more than one surface](#reaching-more-than-one-surface)
+- [MCPB, concretely](#mcpb-concretely)
+- [Two directories, two submissions](#two-directories-two-submissions)
+- [Managed and enterprise Desktop](#managed-and-enterprise-desktop)
+- [Unverified](#unverified)
+- [Where to go next](#where-to-go-next)
+
 ---
 
 ## The surfaces, and what each consumes

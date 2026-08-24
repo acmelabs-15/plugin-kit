@@ -19,6 +19,19 @@ A hook entry is an event name, an optional matcher, and a list of handlers. The 
 
 A plugin's `hooks/hooks.json` takes the same object plus an optional top-level `description`.
 
+## Table of Contents
+
+- [Fields every handler type shares](#fields-every-handler-type-shares)
+- [`command`](#command)
+- [`http`](#http)
+- [`mcp_tool`](#mcp_tool)
+- [`prompt`](#prompt)
+- [`agent`](#agent)
+- [JSON output](#json-output)
+- [Environment available to a handler](#environment-available-to-a-handler)
+- [Paths and quoting](#paths-and-quoting)
+- [Where a hook can live](#where-a-hook-can-live)
+
 ## Fields every handler type shares
 
 | Field | Required | What it does |

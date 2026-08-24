@@ -4,6 +4,18 @@ This is the file to open when the question is *"what text will the model actuall
 
 Everything here is safe to copy verbatim. This file is read into context, not rendered as a command, so the placeholders below arrive intact rather than being substituted on the way in.
 
+## Table of Contents
+
+- [When substitution happens](#when-substitution-happens)
+- [The four argument forms](#the-four-argument-forms)
+- [Named arguments](#named-arguments)
+- [Too few arguments, too many, and none](#too-few-arguments-too-many-and-none)
+- [Escaping a literal dollar sign](#escaping-a-literal-dollar-sign)
+- [The `${CLAUDE_*}` substitutions](#the-claude_-substitutions)
+- [Stacking commands in one message](#stacking-commands-in-one-message)
+- [Worked pairs](#worked-pairs)
+- [Checklist for a render review](#checklist-for-a-render-review)
+
 ---
 
 ## When substitution happens

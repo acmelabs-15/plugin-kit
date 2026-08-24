@@ -4,6 +4,15 @@
 
 The plugin is called **`acme-devtools`**. That name is not decoration — it is an infix in every tool name below, and changing it changes all of them.
 
+## Table of Contents
+
+- [The manifest it assumes](#the-manifest-it-assumes)
+- [The four servers, and why each is shaped that way](#the-four-servers-and-why-each-is-shaped-that-way)
+- [The derived tool names](#the-derived-tool-names)
+- [The grant that looks right and matches nothing](#the-grant-that-looks-right-and-matches-nothing)
+- [The same names in three other places](#the-same-names-in-three-other-places)
+- [The README stanza](#the-readme-stanza)
+
 ---
 
 ## The manifest it assumes

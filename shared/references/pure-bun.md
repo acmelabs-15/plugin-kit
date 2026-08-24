@@ -15,6 +15,14 @@ A script that genuinely cannot be Bun is a design signal worth examining before 
 
 `../tools/check-bun-purity.ts` enforces everything below, and `../validate/validate.ts --target-type skill` runs it as part of a skill's checks. Run it before claiming the standard holds.
 
+## Table of Contents
+
+- [A `node:` import is Bun, not Node](#a-node-import-is-bun-not-node)
+- [The prefer-order](#the-prefer-order)
+- [What the rule forbids, and what each one costs](#what-the-rule-forbids-and-what-each-one-costs)
+- [Shipping a single-file executable](#shipping-a-single-file-executable)
+- [Verifying it](#verifying-it)
+
 ---
 
 ## A `node:` import is Bun, not Node

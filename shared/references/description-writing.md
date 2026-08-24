@@ -8,6 +8,16 @@ The rule this file argues for is short:
 
 The rest of this file is why that rule exists, four criteria you can check mechanically, and — importantly — an honest account of what following it does *not* buy you.
 
+## Table of Contents
+
+- [The failure mode: topic-matching](#the-failure-mode-topic-matching)
+- [Four checkable criteria](#four-checkable-criteria)
+- [Length is a budget, not a limit](#length-is-a-budget-not-a-limit)
+- [The honest limit: this is good citizenship, not self-defence](#the-honest-limit-this-is-good-citizenship-not-self-defence)
+- [Your trigger eval set decides whether any of this is visible](#your-trigger-eval-set-decides-whether-any-of-this-is-visible)
+- [Two further cautions](#two-further-cautions)
+- [Provenance](#provenance)
+
 ---
 
 ## The failure mode: topic-matching
