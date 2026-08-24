@@ -160,21 +160,36 @@ shape is now written down.
 
 ## Observations
 
+### Survey result and method
+
 - [outcome] Exactly one live in-class instance exists across all of `shared/`, and it was already known before the sweep #survey #code-quality
 - [fact] The params-field scanner produced nine hits at current HEAD, of which eight were disproved by hand — a 1-in-9 signal rate #tooling #precision
 - [technique] A heuristic scanner was validated against a known-positive blob before its output was trusted, which is what made the eight false positives safe to discard #method #validation
+
+### Flag readers and dead defaults
+
 - [problem] `flagString` treats an empty string as absent while `stringFlag` treats it as present, so the same flag value means two different things depending on which reader a call site uses #cli-flags #trap
 - [insight] The divergent readers invert the verdict on four dead-default sites, so the analysis cannot be done without first knowing which reader each site uses #cli-flags #analysis
 - [fact] `parseArgs` pre-populates every flag declaring a spec default, making a `??` fallback at the read site unreachable for those flags #cli-flags
 - [outcome] All four unreachable `??` fallbacks carry the same value as the default they cannot override, so none is a defect #cli-flags #benign
+
+### Compiler options
+
 - [constraint] Neither `noUnusedParameters` nor `noUnusedLocals` can catch this class, because both track bindings while the class lives in a property of a params object #typescript #tooling
 - [fact] `noUnusedParameters` flags one pre-existing site and `noUnusedLocals` flags eighteen, all of the latter being genuine dead imports #typescript #metrics
 - [decision] Both compiler options are recommended for hygiene but explicitly not as a guard against this class, so their presence cannot imply coverage #typescript #recommendation
+
+### Cost, fixes and hygiene
+
 - [decision] Maintaining the scanner is not recommended: one dead field and zero live defects do not justify a detector needing a reviewer on every hit #tooling #cost
 - [solution] `--grader-model` now reaches argv, verified before and after against a recording stub rather than by reading the diff #cli-flags #verification
 - [risk] Dead imports overstate a module's dependencies, so anyone reading an import list to judge coupling gets a wrong answer #code-quality #coupling
 - [insight] Ranking by whether a caller could believe the parameter works separates dead code from actively misleading surface, and reverses the order severity alone would give #method #triage
-- [problem] This note was invisible to every permalink lookup until repaired on 2026-08-23, because its own frontmatter carried `permalink: plugin-kit/analysis/analysis-003-inert-parameter-and-flag-survey` — a permalink left stale from when the note was numbered 003, carrying a legacy project prefix that current writes do not produce. It resolved by title and appeared in a directory listing throughout, which is what made the fault hard to see. A rename updates the title and the filename but leaves the frontmatter `permalink:` line untouched, and the index derives from that line, so a forced single-file resync re-read the stale value rather than repairing it — the index was faithful to the file and the file was wrong. Repaired by editing the one line; no content change, no rewrite and no resync were needed #index-corruption #stale-permalink
+
+### Index corruption incident
+
+- [problem] This note was invisible to every permalink lookup until repaired on 2026-08-23, because its own frontmatter carried `permalink: plugin-kit/analysis/analysis-003-inert-parameter-and-flag-survey` — a permalink left stale from when the note was numbered 003, carrying a legacy project prefix that current writes do not produce. It resolved by title and appeared in a directory listing throughout, which is what made the fault hard to see. A rename updates the title and the filename but leaves the frontmatter `permalink:` line untouched, and the index derives from that line, so a forced single-file resync re-read the stale value rather than repairing it — the index was faithful to the file and the file was wrong. Repaired by editing the one line; no content change, no rewrite and no resync were needed. This observation quotes the bad permalink verbatim, so the note will keep matching any search for that string — the match is the record of the incident rather than the fault, and whoever re-runs the check should read it rather than count it #index-corruption #stale-permalink
+- [insight] The legacy project prefix is not a corruption signal on its own: two root-level notes in this project carry it while their title, filename and permalink all agree, so they resolve normally. The discriminator is the prefix **together with** a number that disagrees with the title and the filename — a sweep keyed on the prefix alone returns those two as false positives, and someone will run exactly that sweep #index-corruption #discriminator
 
 ## Relations
 
