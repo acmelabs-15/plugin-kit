@@ -7,10 +7,8 @@ metadata:
 allowed-tools: Read, Grep, Glob
 argument-hint: "[what the agent should do]"
 model: opus
-description: |
-  Use when the thing being built, fixed, or reasoned about is a Claude Code subagent — the markdown file under agents/, its frontmatter, its system prompt, and the tool grant that bounds it. Covers deciding whether the work wants a subagent at all rather than a skill, choosing which tools to grant and which to deny and what happens when one appears in both, writing a description so Claude actually delegates instead of doing the work inline, adding delegation examples, running a static check over the file before spending eval budget, building a set of test queries to check whether delegation happens, and diagnosing an agent that never fires, collided with another of the same name, or whose frontmatter field silently did nothing.
-
-  Skip when the artifact is a skill, a hook, an MCP server, a slash command, or the plugin around them — each has its own creator. Skip for a read-only audit of an agent you are not changing (agent-reviewer).
+# Keep description as ONE double-quoted line: a blank line in a block scalar silently truncates it.
+description: "Use when the thing being built, fixed, or reasoned about is a Claude Code subagent — the markdown file under agents/, its frontmatter, its system prompt, and the tool grant that bounds it. Covers deciding whether the work wants a subagent at all rather than a skill, choosing which tools to grant and which to deny and what happens when one appears in both, writing a description so Claude actually delegates instead of doing the work inline, adding delegation examples, running a static check over the file before spending eval budget, building a set of test queries to check whether delegation happens, and diagnosing an agent that never fires, collided with another of the same name, or whose frontmatter field silently did nothing. Skip when the artifact is a skill, a hook, an MCP server, a slash command, or the plugin around them — each has its own creator. Skip for a read-only audit of an agent you are not changing (agent-reviewer)."
 ---
 
 # Agent Creator

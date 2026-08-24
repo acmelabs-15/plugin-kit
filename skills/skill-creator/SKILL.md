@@ -7,10 +7,8 @@ compatibility: "Claude Code. Bundled scripts need Bun on PATH; the measured loop
 metadata:
   component-type: skill
 model: opus
-description: |
-  Use when the thing being built, fixed, or shipped is a Claude skill itself — a SKILL.md plus whatever references, scripts, or assets ride along with it. Covers the whole life of one: capturing a workflow into a first draft, editing or restructuring an existing skill, debugging frontmatter and packaging errors, bundling a skill into a portable .skill file to hand to someone, running evals and benchmarks to prove a change helped, and rewriting a description so Claude actually fires the skill on the phrasings real users type (or stops firing it on the wrong ones).
-
-  Reach for this whenever a skill is the object being worked on rather than a tool being used. Not for building the neighbouring component types — subagents, hooks, MCP servers, slash commands, or a whole plugin — which have their own creators. Not for a read-only audit or rating of skills you aren't changing, and not for tasks that merely happen to invoke a skill along the way.
+# Keep description as ONE double-quoted line: a blank line in a block scalar silently truncates it.
+description: "Use when the thing being built, fixed, or shipped is a Claude skill itself — a SKILL.md plus whatever references, scripts, or assets ride along with it. Covers the whole life of one: capturing a workflow into a first draft, editing or restructuring an existing skill, debugging frontmatter and packaging errors, bundling a skill into a portable .skill file to hand to someone, running evals and benchmarks to prove a change helped, and rewriting a description so Claude actually fires the skill on the phrasings real users type (or stops firing it on the wrong ones). Reach for this whenever a skill is the object being worked on rather than a tool being used. Not for building the neighbouring component types — subagents, hooks, MCP servers, slash commands, or a whole plugin — which have their own creators. Not for a read-only audit or rating of skills you aren't changing, and not for tasks that merely happen to invoke a skill along the way."
 ---
 
 # Skill Creator

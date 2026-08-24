@@ -7,10 +7,8 @@ metadata:
 allowed-tools: Read, Grep, Glob
 argument-hint: "[what the command should do]"
 model: opus
-description: |
-  Use when the thing being built or fixed is a slash command — something a user invokes by typing /name. Covers deciding whether it belongs in a command file or its own skill folder, wiring up arguments and deciding what happens when someone omits one, the order in which argument substitution and load-time shell injection actually run, previewing the exact text Claude will receive once everything is rendered, the autocomplete hint, running a static check over the frontmatter before setting up an eval loop, and controlling whether Claude may invoke it unprompted or only a human may.
-
-  Skip when the artifact needs bundled scripts, references or assets — that is a skill, and skill-creator writes those. Skip when it is a subagent, a hook, an MCP server, or the plugin around them, and skip for read-only audits (command-reviewer).
+# Keep description as ONE double-quoted line: a blank line in a block scalar silently truncates it.
+description: "Use when the thing being built or fixed is a slash command — something a user invokes by typing /name. Covers deciding whether it belongs in a command file or its own skill folder, wiring up arguments and deciding what happens when someone omits one, the order in which argument substitution and load-time shell injection actually run, previewing the exact text Claude will receive once everything is rendered, the autocomplete hint, running a static check over the frontmatter before setting up an eval loop, and controlling whether Claude may invoke it unprompted or only a human may. Skip when the artifact needs bundled scripts, references or assets — that is a skill, and skill-creator writes those. Skip when it is a subagent, a hook, an MCP server, or the plugin around them, and skip for read-only audits (command-reviewer)."
 ---
 
 # Command Creator

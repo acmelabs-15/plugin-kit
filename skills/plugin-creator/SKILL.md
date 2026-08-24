@@ -15,10 +15,8 @@ model: opus
 metadata: { component-type: plugin }
 license: MIT
 compatibility: "Claude Code — CLI, IDE, and the Desktop Code and Cowork tabs. Needs the `claude` CLI on PATH for the `claude plugin validate` gate, and Bun for any script it writes into a plugin."
-description: |
-  Use when the plugin itself is what is being built or debugged — the directory tree, .claude-plugin/plugin.json and its version field, the marketplace entry, and getting claude plugin validate --strict to pass. Covers where each component must sit for Claude Code to find it, why a component is not loading, how a path inside a plugin has to be anchored so it survives somebody else installing it rather than pointing at your machine, where a plugin may persist data across an update, how a subfolder scopes a component name, sharing code between two components, and which frontmatter or config a component silently ignores because it is running inside a plugin rather than standing alone.
-
-  Skip when the work is the content of one component — skill-creator, agent-creator, mcp-creator and command-creator each own their own artifact. Skip for read-only component audits (the reviewer agents).
+# Keep description as ONE double-quoted line: a blank line in a block scalar silently truncates it.
+description: "Use when the plugin itself is what is being built or debugged — the directory tree, .claude-plugin/plugin.json and its version field, the marketplace entry, and getting claude plugin validate --strict to pass. Covers where each component must sit for Claude Code to find it, why a component is not loading, how a path inside a plugin has to be anchored so it survives somebody else installing it rather than pointing at your machine, where a plugin may persist data across an update, how a subfolder scopes a component name, sharing code between two components, and which frontmatter or config a component silently ignores because it is running inside a plugin rather than standing alone. Skip when the work is the content of one component — skill-creator, agent-creator, mcp-creator and command-creator each own their own artifact. Skip for read-only component audits (the reviewer agents)."
 ---
 
 # Create a plugin
