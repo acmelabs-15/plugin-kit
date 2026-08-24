@@ -185,6 +185,14 @@ Owner ruling, stated twice and standing: callers do not pass `--num-workers` to 
 
 Consequence and improvement candidate: the default is optimal for exactly one running instance. A multi-arm launch at defaults stacks arms times twenty children — six arms would be 120 on 10 cores, inside the measured fivefold-slowdown zone from the worker-curve data. The fix belongs here rather than in callers' flags: make the derivation instance-aware (divide the machine budget across live sweep instances, discoverable from the status directory the dashboard already globs), so the ruling and the thrashing evidence stop needing each other reconciled per launch. Until it lands, concurrent A/B arms — which are run concurrently so API drift hits both equally — are the one case the default does not cover.
 
+## Event — 2026-08-24: recall and over-fetch land in the disclosure tooling, commit `1b3ff64`
+
+The reporting half of the recall metric ANALYSIS-004 prescribes is implemented. Per-file recall (reads over should-have-reached, off the same counted-runs filter the pull rate uses) and over-fetch (over the empty-array negative rows) now land in results.json, the CLI lines, the HTML report and the optimizer's envelope rows, from both `measure-disclosure` and `optimize-disclosure` through the shared fold. Recall is `null` when no scenario declares the file — null and zero argue for opposite actions and are kept distinct, as are absent and empty `expects_references` at every surface. Over-fetch is null rather than 0% when a set carries no negative row, closing the flattering-clean-bill failure mode before it shipped.
+
+Verification exceeded the brief: regression tests were proven against pre-change behaviour in an isolated git worktree, one mutation per figure — recall disabled (7 failures across every surface), absent collapsed into empty (exactly the 2 tests built for that collapse), over-fetch as 0% with no negatives (4 failures). Suite 1528 to 1555, tsc clean, independently re-run before commit. `schemas.md`'s doc-ahead-of-code line about `expects_references` is now true and names both entry points plus the one live annotated corpus.
+
+Deliberately untouched, queued for the verdict-layer redesign: `decideFileVerdict` still prunes on raw zero, and the optimizer's proposer prompt still shows only pull rates. Feeding recall to both is one change and lands with the three-layer guidance rewrite.
+
 ## Observations
 
 ### Landed today
