@@ -354,3 +354,4 @@ Every recall figure in Finding 1 divides by a hand annotation — someone wrote 
 - pairs_with [[ANALYSIS-002: Inert Parameter and Flag Survey]]
 - depends_on [[SESSION-2026-08-23_01: Plugin Kit Measurement Tooling Hardening]]
 - extended_by [[ANALYSIS-005: Structural Genres of Skill Content]]
+- extended_by [[ANALYSIS-006: Weak-Model Routing for Progressive Disclosure]]

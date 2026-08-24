@@ -333,3 +333,4 @@ The ask-user-question skill has the same gap in full: **all six** of its referen
 - extends [[ANALYSIS-004: What Makes a Bundled Reference Get Read]]
 - depends_on [[ANALYSIS-003: Measurement Fault Classes]]
 - pairs_with [[ANALYSIS-002: Inert Parameter and Flag Survey]]
+- pairs_with [[ANALYSIS-006: Weak-Model Routing for Progressive Disclosure]]

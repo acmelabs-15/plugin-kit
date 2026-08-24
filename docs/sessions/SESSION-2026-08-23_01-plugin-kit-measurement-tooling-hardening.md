@@ -303,3 +303,4 @@ Suite 1,582 pass / 0 fail on the combined tree; main pushed. Remaining from the 
 - pairs_with [[ANALYSIS-002: Inert Parameter and Flag Survey]]
 - leads_to [[ANALYSIS-003: Measurement Fault Classes]]
 - required_by [[ANALYSIS-004: What Makes a Bundled Reference Get Read]]
+- required_by [[ANALYSIS-006: Weak-Model Routing for Progressive Disclosure]]
