@@ -1001,7 +1001,12 @@ export function createClaudeGrader(params: {
       evalItem.expectations.map((text, index) => `${index + 1}. ${text}`).join("\n") +
       `\n\nTranscript:\n${run.transcript}`;
 
-    const outcome = await runIsolatedHelper(["claude", "-p", "--output-format", "text"], {
+    const cmd = ["claude", "-p", "--output-format", "text"];
+    // Guarded so an empty value cannot leave a bare `--model` with nothing after it, which
+    // is how `../operations/disclosure-measure.ts` appends the same flag.
+    if (params.graderModel !== "") cmd.push("--model", params.graderModel);
+
+    const outcome = await runIsolatedHelper(cmd, {
       timeoutMs: 300_000,
       stdin: prompt,
     });
