@@ -1,16 +1,16 @@
 # Optimizing progressive disclosure by measurement
 
-Read this when a disclosure run has finished and you are deciding what to adopt, or before starting one to know what it will cost. For the doctrine underneath it — which directory a file belongs in, the body's size budget, and the pointer-condition standard — that is `progressive-disclosure.md`, and it is the better read when you are doing this by judgement rather than by measurement. What doctrine cannot tell you is *which* content should move, because that depends on what the skill is actually asked to do.
+Read this when a disclosure run has finished and you are deciding what to adopt, or before starting one to know what it will cost. For the doctrine underneath it — which directory a file belongs in, the body's size budget, the compaction boundary, the depth rule, and what is and is not known about pointers — that is `progressive-disclosure.md`, and it is the better read when you are doing this by judgement rather than by measurement. What doctrine cannot tell you is *which* content should move, because that depends on what the skill is actually asked to do.
 
 `../operations/optimize-disclosure.ts` answers that by measuring it. It runs the skill on real evals, watches which bundled files get read and how often, counts what each run costs, and restructures the layout to cut the cost — with the expectation pass rate as the thing a restructure is not allowed to break.
 
-If you only want the numbers — which bundled files get pulled, at what rate, at what token cost — reach for `../operations/measure-disclosure.ts` instead. Same sweep, same grading, same file table; no candidates, no selection, no `--apply`. It is the cheaper half of the run above, and the one to start with, because a table of pull rates usually tells you what to do without a loop proposing it.
+If you only want the numbers — which bundled files get pulled, at what rate, at what token cost — reach for `../operations/measure-disclosure.ts` instead. Same sweep, same grading, same file table; no candidates, no selection, no `--apply`. It is the cheaper half of the run above, and the one to start with.
 
 ```bash
 bun ../operations/measure-disclosure.ts \
   --skill-path ../my-skill \
   --scenarios ../my-skill/evals/evals.json \
-  --model opus \
+  --model sonnet \
   --results-dir ./disclosure-runs/my-skill
 ```
 
@@ -20,7 +20,7 @@ Restructuring as well is the same command with the optimizer's name and its extr
 bun ../operations/optimize-disclosure.ts \
   --skill-path ../my-skill \
   --scenarios ../my-skill/evals/evals.json \
-  --model opus \
+  --model sonnet \
   --results-dir ./disclosure-runs/my-skill
 ```
 
@@ -30,16 +30,28 @@ bun ../operations/optimize-disclosure.ts \
 
 ---
 
+## Run it on the weaker tier
+
+**`--model sonnet`, not `--model opus`, and this is not a cost preference.** The two tiers fail in opposite directions, measured on the same skill and the same scenarios: opus reached 100% of what it should have on five of six references and read a file it did not need on 3 of 8 runs that should have reached nothing; sonnet over-fetched on none and missed between a third and two-thirds.
+
+So a routing defect is invisible on the strong model, because eager reading opens the file whatever the pointer says. **An opus-only sweep of the measured skill showed five of six references at 100% and would have surfaced nothing at all.** A signposting measurement taken on the strongest available model is a check that returns a healthy verdict from the wrong configuration, which is worth less than no check — a passing result is stronger evidence than an absent one, and this one has not earned it.
+
+The inverse holds for over-fetch: only the strong tier produces enough of it to study. If that is the question, run the strong tier deliberately and say so, rather than reading it off a sweep aimed at recall.
+
+---
+
 ## What one run measures
 
 | Quantity | Where it comes from | Why it matters |
 |---|---|---|
 | **Body tokens** | The SKILL.md body, tokenized | The bill every invocation pays, whether or not it needs the content |
 | **Which bundled files were read** | `Read` tool calls whose path lands inside the skill directory | The evidence for whether deferral is working |
+| **Per-file recall** | Reads over the runs of the scenarios whose `expects_references` names that file | Whether the pointer fires for the runs that needed it. The figure the verdict keys on |
+| **Over-fetch** | Reads on the runs of scenarios declaring an *empty* `expects_references` | Reads on runs that should have reached nothing |
 | **Total context tokens** | The `result` event's `usage` block | What the whole run cost, deferral included |
 | **Expectation pass rate** | A grader pass over the transcript and any files produced | The guardrail — a cheaper skill that stopped working is a regression |
 
-The grader runs on `--grader-model`, which defaults to `sonnet` and deliberately does **not** inherit `--model`. Grading is one single-turn call with the transcript and the produced files already in the prompt, judged against an explicit list — there is nothing to plan and no tool to call. It matters for wall clock because the grading call is serial with the scenario inside the same worker slot, so a run on `--model opus` used to wait on the heavy model twice; measured over two attempts each, opus averaged 13.1s against sonnet's 11.0s.
+The grader runs on `--grader-model`, which defaults to `sonnet` and deliberately does **not** inherit `--model`. Grading is one single-turn call with the transcript and the produced files already in the prompt, judged against an explicit list — there is nothing to plan and no tool to call. It matters for wall clock because the grading call is serial with the scenario inside the same worker slot, so a run on `--model opus` waits on the heavy model twice; measured over two attempts each, opus averaged 13.1s against sonnet's 11.0s.
 
 The obvious move — grade on the cheapest model — was measured and rejected. Against a run whose own final response admitted it had left a pointer without a load condition, `haiku` returned `passed: true` twice while `sonnet` and `opus` returned `passed: false` twice, and haiku was not even faster (11.8s). A grader that fails open is worse than a slow one, because this is the guardrail deciding whether a restructure broke the skill.
 
@@ -53,23 +65,77 @@ Invocation is held constant. The prompt names the skill outright rather than rel
 
 ## The decision rule
 
-The rule falls out of the pull rate rather than out of taste. Load mode is checked first, and that is not a formality — a `scripts/` file has a pull rate of zero when everything is working, because its text is never supposed to enter context at all.
+**What the verdicts serve.** The target is every reference loading as close to 100% of the times it is supposed to — recall approaching 1.0 on the should-reach set — with the body's token budget as the standing constraint. That constraint is what stops the target being trivial: recall goes to 1.0 if you inline everything, and a skill that has done that has abandoned progressive disclosure rather than optimized it. So the loop drives recall up and body tokens down together, and the verdicts below are the moves available.
+
+The rule keys on recall, not on the raw pull rate. Load mode is checked first, and that is not a formality — a `scripts/` file has a pull rate of zero when everything is working, because its text is never supposed to enter context at all.
 
 | Verdict | Condition | The fix |
 |---|---|---|
-| **inline** | A `references/` or `examples/` file pulled on ≥ 80% of runs | It is body content paying an extra tool call to arrive late. Splice it into the body. |
-| **prune** | Pulled on no run, and the body points straight at it | The pointer works and nothing needs the file. Deleting it is a hypothesis the loop tests. |
-| **signpost** | Pulled on no run, and nothing in the body names it | It could never have loaded, so its zero says nothing about its value yet. |
-| **misfiled** | An `execute`- or `copy`-mode file that *was* read | Either the body asks for the wrong verb, or the file is in the wrong directory. |
-| **keep** | Anything in between | Genuinely conditional content, which is what deferral is for. |
+| **signpost** | A declared file whose recall is below 0.5 | Needed and missed. Repair reachability: write the pointer, or rewrite the one that is not firing. **Never delete**, whatever the raw rate says. Reachability is the first of three remedies — see the ladder below |
+| **keep** | A declared file reached by at least half the runs that needed it | Genuinely conditional content, which is what deferral is for. A low raw rate here is scenario mix, not a defect |
+| **inline** | Healthy recall, raw pull rate at or above the threshold, **and** body headroom | Body content paying an extra tool call to arrive late. Advisory only — see the compaction caveat below |
+| **prune** | The set carries ground truth, no scenario declares this file, and nobody read it | Ground truth — not a rate — says nothing needs it. Deleting it is a hypothesis the loop tests |
+| **unmeasured** | Zero pulls, the body points at the file, and the set declares no ground truth | Cannot distinguish rarely-needed from needed-and-missed. Derive ground truth before removing anything |
+| **misfiled** | An `execute`- or `copy`-mode file that *was* read | Either the body asks for the wrong verb, or the file is in the wrong directory |
 
-The split between **prune** and **signpost** is the part worth dwelling on. Both look identical in the data — a file nobody read — and they need opposite fixes. So the loop checks whether the body points at the file before it proposes anything, and only proposes deletion for one of them. The other is reported as a finding rather than acted on, because where a pointer belongs in a body is an editorial decision; a sentence bolted onto the end would measure the wrong thing and then get rejected for costing tokens.
+**What changed, and why.** The rule used to key on the raw pull rate alone, and it carried a prune verdict for a file that was "pulled on no run, and the body points straight at it" — read as *the pointer works and nothing needs the file*. That reading does not hold. A raw rate cannot separate *rarely needed* from *needed and missed*: one reference in the measured skill reads as 5.6% of all runs and as 37.5% recall, the entire gap being scenarios that correctly did not need it. Pruning on a raw rate deletes the well-signposted rare file and keeps the frequently-relevant file nobody reaches. That case is now **unmeasured**, and it is a request for evidence rather than a verdict.
+
+**prune ignores signposting deliberately, and inherits the corpus's coverage.** Ground truth answers *is this file needed* directly, so the pointer stops being the proxy it was under the old rule: a file nothing declares and nobody reads is deletable whether or not the body names it. The residual risk is **partial annotation**. A corpus that annotates only some of its scenarios can make a file that an un-annotated use case genuinely needs — and cannot reach — read as deletable, because the rows that would have declared it were never asked. A prune verdict is therefore only as trustworthy as the coverage behind it. It is sound when the un-annotated rows are *deliberately undetermined* — examined and left open, which is the standard ablation-derived ground truth meets by construction — and it is not sound when they are merely unexamined. Compare `ground_truth.annotatedScenarios` against `scenario_count` in `results.json` — the number of rows in the scenario set — before acting on any prune, and read a gap between them as a reason to annotate rather than to delete.
+
+**An unannotated set now produces no deletion verdict at all.** What used to render as a zero-pulls prune renders as **unmeasured**. The way to earn a prune is to derive ground truth; there is no path to one that skips it.
+
+**signpost fires on recall, so it now covers two situations that used to look different.** A file the body never names and a file whose pointer nobody follows are both reachability defects, and both are repaired by editing the body. Check the *signposted* column to know which repair applies: a file the body never names needs a pointer written before anything else can be learned from it, because its zero is about the pointer rather than the file.
+
+**The 0.5 recall threshold is a judgement, not a measured figure**, in the same way `--pass-rate-tolerance` is. Recall denominators here are small enough that the whole verdict can turn on one run: over four expected runs, two-of-four keeps and one-of-four signposts. Treat a file sitting on the line as unresolved rather than as decided, and add runs before acting on it.
+
+**The compaction caveat on inline.** Splicing a reference into the body stops it costing a tool call and starts it costing tokens on every invocation — and if it lands past the first 5,000 body tokens it also enters the truncation zone, where auto-compaction drops it until the skill is invoked again. `progressive-disclosure.md` has the mechanism. This is why inline is advisory: the arithmetic can say inline while the body has no room for it.
+
+### Reading the figures, in the order they should be read
+
+**Recall first, quoted as a fraction.** Write it `3/4`, never `75%`: these denominators are small, and a ratio over four runs prints identically to one over ninety. `results.json` reports `reads` and `expectedRuns` beside the rate for exactly that reason. A recall of `null` is not a recall of zero — null means no scenario claims the file is ever needed, zero means every run that needed it failed to open it, and the two argue for opposite actions.
+
+**Then the raw pull rate, as scenario-mix context rather than as a verdict.** Worked example: a file read on 4 of 8 delivered runs is a 50% pull rate, which looks marginal. Its recall is 3/4. The pointer is working for the scenarios that need it, and the low pull rate is describing how few scenarios in this set need it — the exact confound a pull rate alone cannot resolve. Nothing needs fixing there.
+
+**Then over-fetch, and interpret it before acting on it.** Three things to hold:
+
+- It is computed over the **empty-array negative rows only** — scenarios that declared they should reach nothing. Nothing else is in that denominator.
+- It is **null, not zero, when the set carries no negative row.** A rate over no runs is not a rate of zero, and printing zero would hand back a flattering clean bill for a measurement that never happened.
+- Under **outcome-derived** ground truth it means "reads that did not improve the score", not "reads that made no sense". A negative row established by ablation is one whose score did not drop when the file was removed, and that can happen because the scenario was already at ceiling. A pointer followed correctly into a scenario that could not have scored higher is counted as over-fetch under that derivation. Say which kind of ground truth produced the number before drawing a conclusion from it.
+
+### When recall falls short: three levers, in order
+
+Low recall is a symptom, and pointer repair is only the first of three remedies. Let the observable select the lever rather than reaching for the first one every time. Only the first lever has a verdict behind it — the report classifies files, not file *sets*, and it has no way to see a boundary drawn in the wrong place or a scenario that does not do what it was written to do. Levers 2 and 3 are yours to reach for; nothing in the table will name them.
+
+**1. Reachability — repair or reposition the pointer.** This is the `signpost` verdict's scope. It applies when recall is low **and** the file's content matches what its scenarios actually needed: the right content is in the right file, and the model is not getting to it. Write the pointer if the body never named the file; rewrite it if it is there and not firing. Nothing measured says what a better pointer looks like — `progressive-disclosure.md` is explicit that no pointer form has evidence behind it — so this is judgement applied to a measured symptom, and it is worth re-measuring afterwards rather than assuming the edit worked.
+
+**2. Reference composition — merge, split, or otherwise recompose the files.** This applies when the misses cluster on a **content boundary** rather than on a pointer. Two signatures: a file that scenarios need in fragments, each wanting a different part of it, and two files that no scenario ever needs separately. The first wants a split, the second a merge. No pointer fixes either, because the defect is that the file boundary does not match how need presents in the scenarios — no wording gets a model to open half a file, and none reliably buys a second hop it was never going to take.
+
+**3. Scenario quality — rewrite or re-derive the scenarios.** The scenario set is itself an object of evaluation, not a fixed measuring stick. This applies when the ablation refutes a scenario's designed candidate: the scenario was annotated against a file, removing that file changes nothing, and the drop it does show comes from somewhere else. That is the set telling you the scenario does not create the firing condition it was written for. Two questions follow — whether the scenario genuinely produces the situation the reference exists for, and whether the should-reach set is *complete*, since a reference needed by a use case no scenario represents is invisible to every figure on this page. Rewriting a scenario is as legitimate a remedy as rewriting a pointer. What is not legitimate is hand-asserting the rewritten scenario's ground truth: re-derive it by ablation, below, so the new annotation is measured rather than declared.
+
+Order matters because the cheaper lever changes the evidence for the more expensive one. Repair reachability first and re-measure; only then decide whether what remains is a composition defect or a scenario defect. A file can need more than one, and a recomposition moves every pointer touching it anyway.
+
+### Where ground truth comes from
+
+Two places, and **prune** requires one of them.
+
+**Declared.** `expects_references` on each scenario names the skill-relative paths it should send the model to. The field, and the load-bearing distinction between omitting the key and setting it to an empty array, are in `schemas.md` — an omitted key keeps the row out of every denominator, an empty array puts it into the over-fetch denominator, and collapsing the two turns every unannotated scenario into a negative case and makes recall look perfect. A set with `annotatedScenarios: 0` reports every recall as null and over-fetch as null, and both scripts say so on stderr rather than printing a column of zeros. That state is what produces the **unmeasured** verdict; it is not a clean bill.
+
+**Derived, by ablation.** Two stages, and it retires the hand annotation for any skill you are willing to spend the runs on.
+
+1. Run the whole scenario set against two arms: the skill as shipped, and a copy with every reference file removed *and every pointer to them re-worded out of the prose*. Re-worded rather than line-deleted, deliberately — a pointer naming a file that is not there is a different experimental condition than content that was never offered, and a model that tries to read a missing file and fails is not a model that decided it did not need one. The score drop sorts each scenario into needs-something or needs-nothing.
+2. Remove one file at a time, against candidates derived from the scenario's own prompt rather than the full matrix, which attributes each surviving drop to a named file causally.
+
+On the measured skill that came to 27 scenarios × 2 runs × 2 arms for stage 1 plus 30 targeted runs for stage 2 — 138 runs against 324 for a full per-file grid over the same corpus. It returned: stripping all six references cost 10 points of assertion pass rate, 82.4% down to 72.5%; 15 of 27 scenarios dropped; every one of the six files was causally needed by at least one scenario; and six scenarios validated as negatives by outcome rather than by assertion.
+
+Three conditions the design is only valid under, each learned the hard way in the session that ran it. Run the arms **concurrently**, or a provider-side shift lands on one arm and reads as an effect. Give each stage-2 scenario **two** candidates rather than one, because the contrast is what discriminates — one scenario reproduced its drop under one candidate at 0.10 and showed nothing at all under the other at 0.60. And gate completeness on **per-run grading compared across arms**, never on the headline `assertions_total`, which counts only counted runs and shrinks when runs load the skill via file rather than via the tool; reading that shrinkage as partial grading produced a wrong diagnosis once already.
+
+**The distinction that must not collapse:** an ablation measures which *content* a scenario needs; recall measures whether the *pointer* to that content fires. One scenario in the measured set was annotated against a reference and was unaffected by removing it, because that model never reads it there in the first place — its drop comes from somewhere else entirely. A file can be genuinely needed and never reached, which is a signposting defect, or reached and not needed, which is over-fetch. Only running both instruments separates them.
 
 ### The other direction: pushing a body section out
 
 A body section needed on a minority of runs is taxing every invocation that does not need it. That one cannot be read straight off the stream — the body arrives whole, so nothing distinguishes the section a run used from the one it skipped past. The loop asks a model which sections are minority-use, given the body, the scenarios and the measured pull rates, and treats the answer as a **hypothesis rather than a verdict**.
 
-What makes it a measurement is what happens on the next iteration. A section pushed out becomes a bundled file with a pull rate of its own. If that rate comes back near one, the mechanical rule above says to inline it again — so a bad extraction is caught by the same arithmetic that would have caught a bad reference. The loop corrects its own proposals, which is why the model step is allowed to be a proposal at all.
+What makes it a measurement is what happens on the next iteration. A section pushed out becomes a bundled file with a recall and a pull rate of its own. If it comes back reached on nearly every run that needs it and pulled on nearly all of them, the rule above says to inline it again — so a bad extraction is caught by the same arithmetic that would have caught a bad reference. The loop corrects its own proposals, which is why the model step is allowed to be a proposal at all.
 
 Only sections above `--min-extract-tokens` (250 by default) are proposed. Deferring content costs a round trip, so moving a small section out makes the skill slower and barely cheaper.
 
@@ -97,7 +163,7 @@ The report opens automatically and rewrites itself as the run proceeds. Three se
 
 **The headline tiles** — body tokens, context per run, pass rate, split. Body tokens is the unconditional bill and the number a restructure is trying to move; context per run is what the runs actually cost, which includes whatever deferral pulled back in. Pass rate sits beside them because a body-token figure without it says nothing.
 
-**What actually got read** — one row per bundled file, with its load mode, its cost if read, its pull rate as a bar, whether the body points at it, and its verdict. Read the *signposted* column before reacting to a zero: a file the body never names could not have loaded, and its zero is about the pointer rather than the file.
+**What actually got read** — one row per bundled file, with its load mode, its cost if read, its recall, its pull rate as a bar, whether the body points at it, and its verdict. Read that row right to left of how it is laid out: recall first, then the *signposted* column before reacting to any zero, and the pull rate last. A file the body never names could not have loaded, and its zero is about the pointer rather than the file. A blank recall is a set that declared no ground truth, not a file that failed.
 
 **Body tokens against the guardrail** — one row per layout measured, baseline first. The body-token bar shows the trend; the pass-rate bar beside it is the guardrail at each step. Rejected candidates stay in the table, greyed, with the reason they lost. Selection reads the held-out column only, so a candidate that looks good on train and lost on held-out is showing you an overfit that the split caught.
 
@@ -113,8 +179,9 @@ Worth knowing before you act on a zero.
 
 - **A pull is a `Read` tool call.** A file opened another way — piped through a shell command, globbed and concatenated — is invisible here and reads as never pulled.
 - **Scripts are counted by whether they were read, not whether they ran.** A `scripts/` file's execution is correct behaviour and shows as a zero pull rate, which is why load mode is checked before the pull rate rather than after.
+- **A recall figure carries no evidence that the skill body ever reached the model.** A read that errored and a run whose body never arrived look identical in it. Quote recall with the delivered-run count beside it — the sweeps behind the figures above ran at 54/54 delivered, verified from `runs_without_skill=0` and `runs_loaded_via_file=0`, and an earlier sweep of the same artifact reached only 36 of 54.
 - **Grading reads the transcript and the head of up to three files the run produced.** An expectation about something further inside a large artifact is judged on a truncated view.
-- **Pull rates are only as stable as the run count.** Two runs per scenario is the smallest number that can distinguish "always" from "sometimes"; when verdicts flip between iterations, that is the symptom of too little evidence rather than of an unstable skill.
+- **Pull rates and recall are only as stable as the run count.** Two runs per scenario is the smallest number that can distinguish "always" from "sometimes"; when verdicts flip between iterations, that is the symptom of too little evidence rather than of an unstable skill.
 
 ---
 
@@ -127,5 +194,7 @@ Usually less, because a candidate is measured on the train scenarios first and o
 This is a filter rather than a change to the selection rule: selection still happens on the held-out split, and a candidate the gate retires is simply never eligible. What it gives up is the candidate that regresses on train and would have reversed on the held-out split — a layout that costs more on the scenarios it was proposed from and then wins on a smaller split is describing sampling noise, and it is not worth two fifths of the budget to keep looking for it.
 
 That cost is why `--max-iterations` defaults to 3 where the description loop defaults to 5. An iteration there scores one candidate description; an iteration here materializes and scores up to three whole layouts. Three iterations is already nine full measurement passes, which is about as much wall clock as a restructure is worth before a human looks at the result.
+
+**Deriving ground truth is a separate budget on top of all of this**, and it is the larger one — 138 runs on the measured skill, against 70 for a defaults-sized optimization loop. Spend it once per skill rather than once per run: an annotation, however it was arrived at, is a property of the scenario set and survives every later sweep. A set that already carries `expects_references` costs nothing extra at all.
 
 Scenarios that write files need `--permission-mode acceptEdits`. It is left off by default because applying a permission mode to someone's machine is their call, not a default this script makes quietly.
