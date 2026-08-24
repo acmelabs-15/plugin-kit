@@ -31,6 +31,12 @@ model: opus
 
 `allowed-tools` is deliberately read-only. It lets a skill orient itself — read the artifact, find siblings, check what is installed — without a permission prompt per file, while every mutation still goes through the normal flow. Granting `Write`, `Edit` or `Bash` there pre-approves them for the rest of the turn on the user's behalf, which is a decision to leave with the user. Note the comma form above is Claude Code's superset; a skill headed for a `.skill` bundle should use the space-separated form the standard specifies.
 
+**It also costs the skill every headless run, and that part is deterministic** (measured here, 2026-08-24). A skill declaring `allowed-tools` **never loads** under `claude -p` or an SDK run with no permission-prompt tool, unless the caller passes `--allowedTools Skill`. Not intermittent, and not a race: the binary walks a 43-key allowlist that does not contain `allowedTools`, so the skill never reaches the auto-allow branch, and headless has nobody to answer the permission ask that follows. Interactive sessions are unaffected — a human answers it. Corroborated upstream by claude-code issues 77363 (open, same trigger), 59816 (the original headless regression, closed) and 83076 (the `disallowed-tools` mirror).
+
+The field stays; the decision is about who runs the skill. Where the consumers include headless, CI or SDK callers, either leave `allowed-tools` out or say in the skill's own documentation that those callers must pass `--allowedTools Skill`. A skill only ever invoked interactively may use it freely.
+
+Check the field observation before changing anything: a broken run announces `Execute skill: <name>`, a working one `Launching skill: <name>`.
+
 Four fields worth *not* adding, each for a reason an author will otherwise rediscover the hard way:
 
 - **`paths`** — it **limits** activation to matching globs rather than adding a trigger. An authoring skill is usually invoked with no relevant file open ("write me a skill for X"), so setting it suppresses the majority of legitimate triggers. It earns its place only on a skill that genuinely applies to a file already in play.

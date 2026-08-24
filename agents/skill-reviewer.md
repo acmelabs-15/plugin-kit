@@ -91,6 +91,8 @@ These raise the true-positive rate at a disproportionate cost in false positives
 
 **Length (minor).** Under roughly 500 characters for a plain description; longer is acceptable when the description carries `<example>` blocks, as agent descriptions do.
 
+**Say what a sweep would confirm (applies to every criterion above).** Each verdict here is a hypothesis about routing, and routing is the one property of a skill this repository measures directly — so a description finding worth acting on should name the evidence that would settle it rather than resting on how the wording reads. `shared/operations/measure-triggering.ts` scores a description against should-trigger and should-not-trigger queries; `shared/operations/optimize-description.ts` picks between candidates on a held-out split. Name the queries you would expect to flip. A rewrite offered without that is judgement and should read as judgement, not as a fix.
+
 ## 3. Budget
 
 The SKILL.md body must be **under 500 lines AND under 5,000 tokens**.
@@ -119,11 +121,23 @@ Flag content in the body that is only needed in one branch of the workflow — i
 
 Flag a `references/`, `scripts/`, `assets/` or `examples/` file that **nothing in the body points to**. An unreferenced resource is never loaded, so it is Critical: no condition can fire for a pointer that is not there, and the author paid to write a file the model will never see.
 
+**Table of contents on long references (Minor).** A read-mode markdown file over 100 lines carries a `## Table of Contents` heading followed by flat GitHub-anchor bullets, one per H2 in document order, placed after the H1 and the orientation prose — and that heading is **the first H2 in the file**. This is the house rule `shared/validate/validate-skill.ts` enforces at warn tier, so report it in the validator's terms and no further: **presence and position, never quality**. Do not count bullets against headings, resolve a slug against the heading it claims to point at, or judge the order of the entries — each of those turns a cheap check into a formatter with an opinion. Whole-specimen files are exempt: a file carrying no H1 and no wrapper prose *is* the artifact, and injecting a map into one edits the specimen somebody is meant to copy. The 100-line threshold is Anthropic's published rule; the form is this repository's, locked 2026-08-24. `shared/references/progressive-disclosure.md` carries both.
+
 ## 5. Instructional craft
 
 Defects in how the guidance is written rather than in whether it parses. No validator sees any of these, and they are most of the distance between a skill that loads and a skill that works.
 
-**Signposting (Minor; Critical when there is no pointer at all).** A pointer to a bundled file should carry the condition that makes the reader open it, not merely the file's topic. "Read `references/api-errors.md` if the API returns a non-200 status" beats "see `references/` for details": the second says the file exists, the first says when to reach for it, and only the second gets the file loaded at the right moment and only then. Report a topical pointer as Minor with the condition written out. A bundled file nothing points at stays Critical (Section 4) — no condition can fire for a pointer that is not there.
+**Signposting (Critical when nothing points at the file; otherwise a coverage question, not a wording one).** A bundled file the body never names stays Critical, and that half is unchanged (Section 4) — no condition can fire for a pointer that is not there, and the author paid to write a file the model will never see.
+
+The wording of a pointer that *does* exist is not a finding. The rule this review used to apply — a pointer must name the file, the condition that fires it, and the cost of skipping it — is struck. It has no published basis, no analogue across the eight vendors surveyed, and the one measurement touching it recorded 33% to 75% recall on the weaker tier for the references carrying its fullest form: this repository's own textbook-conformant pointers were routinely missed. Placement was tested directly and refuted — one pointer moved into the numbered step where its condition fires, mention count held at one, 8/40 trailing against 4/40 in-step, p≈0.20. Reachability is unmeasured by form. Do not rewrite a pointer into a house shape and call it a fix, and do not report a topical pointer as a defect on wording alone.
+
+What stays checkable, and what to hand off:
+
+- **Coverage (Minor).** A reference should be named wherever its content is relevant, so the reader meets the pointer where the file would help. A file named only in a trailing manifest while step 4 raises the question it answers is a coverage gap — report the section that should also name it. That is a fact about the body, not a claim about wording.
+- **Vocabulary across the boundary (Minor).** Body says "tool grant", reference says "permissions" — the model has to bridge that itself and sometimes will not. One term per concept, on both sides.
+- **Recall (no severity; name the instrument and stop).** Whether a pointer fires is measurable and you have no shell to measure it. Where reachability is genuinely in doubt, say so: `shared/operations/measure-disclosure.ts`, run on the weaker tier against scenarios carrying `expects_references` ground truth, reports per-file recall as reached-over-should-have-reached, quoted as a fraction. Recall below 0.5 is *needed and missed*, and it is repaired by three levers in order — reachability (repair or reposition the pointer, which is judgement applied to a measured symptom), reference composition (merge or split, when the misses cluster on a content boundary rather than on a pointer), then scenario quality (rewrite the scenario, when ablation refutes its designed candidate). `shared/references/disclosure-optimization.md` carries the verdict table and the levers; `shared/references/progressive-disclosure.md` carries what is and is not known about pointers.
+
+**Never count references (not a finding in either direction).** No cap on bundled files exists in any source — the figure that circulates counts whole skills attached to one task, not files inside one skill. Fan-out is unbounded; depth is what binds. Flag `references/prompts/grading.md` for its nesting, never a skill for having twelve references.
 
 **Gotchas in the body, not behind a pointer (Major).** A gotcha is a concrete, environment-specific fact that defies a reasonable assumption — not "handle errors appropriately" but "`paths:` limits activation rather than adding a trigger". The model cannot recognise the trigger for a gotcha it has not read, so this is the one place where the disclosure rule inverts and deferring is wrong. Report a gotcha that lives in a reference while the body never states it, and name the line of the body it belongs on.
 
@@ -157,6 +171,8 @@ They are conventions of this plugin, not defects:
 - **A literal template, or an `Input:`/`Output:` pair**, where a paragraph would have done. Both are house patterns and both beat the paragraph.
 - **A comment in the YAML frontmatter** explaining why a field is set.
 - **A short skill.** Length is not a quality signal in either direction.
+- **A bare pointer.** "See `references/advanced.md`" naming a file that exists is not a defect. No pointer form has measured evidence behind it, and the bare form is Anthropic's own canonical illustration. Report coverage — whether the file is named where its content is relevant — not wording (Section 5).
+- **The number of bundled files.** Twelve references is not a finding, and neither is one.
 
 ## Severity
 
@@ -190,8 +206,10 @@ They are conventions of this plugin, not defects:
 - [If over: what to move where, by load mode.]
 
 ### Progressive Disclosure
-| Path | Load mode | Placement | Pointed at from body? | Pointer gives a condition? |
-|---|---|---|---|---|
+| Path | Load mode | Placement | Pointed at from body? | Named where its content is relevant? | ToC (read-mode, >100 lines) |
+|---|---|---|---|---|---|
+
+[Leave the last two columns as facts. "Named where its content is relevant?" is coverage; do not grade pointer wording in this table — no pointer form has measured evidence behind it (Section 5).]
 
 ### Findings
 
