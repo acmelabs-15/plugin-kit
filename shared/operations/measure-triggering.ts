@@ -31,6 +31,7 @@ import {
 } from "../envelope.ts";
 import { parseFrontmatterBlock } from "../parse/lib.ts";
 import { FrontmatterError, parseFrontmatter, skillMdPath, type ParsedSkill } from "../parse/frontmatter.ts";
+import { evalSetFindings } from "../schemas/eval-set.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { ProgressReporter, type QueryProgress } from "../util/progress.ts";
 import { runStreamingLines } from "../util/subprocess.ts";
@@ -1069,8 +1070,24 @@ export async function measureTriggering(params: MeasureTriggeringParams): Promis
   }
 }
 
-/** Validate an eval set file at the boundary rather than failing deep in the pool. */
+/**
+ * Validate an eval set file at the boundary rather than failing deep in the pool.
+ *
+ * `../schemas/eval-set.ts` decides what is wrong, and reports every problem in the file
+ * at once rather than the first. It also raises what a bare key lookup could not: an
+ * unrecognized key is a warning naming the legitimate key it is probably a typo for, so
+ * `shouldTrigger` written beside a correct `should_trigger` no longer passes in silence.
+ *
+ * Warnings do not fail the file -- they cannot, or an annotated eval set would stop
+ * working -- so they are printed and the parse continues. The narrowing below is what
+ * the compiler needs to turn `unknown` into `EvalItem[]`, not a second opinion on the
+ * rules the schema just applied.
+ */
 export function parseEvalSet(raw: unknown, source: string): EvalItem[] {
+  const { errors, warnings } = evalSetFindings(raw, source);
+  for (const warning of warnings) console.error(`Warning: ${warning}`);
+  if (errors.length > 0) throw new TypeError(errors.join("\n"));
+
   if (!Array.isArray(raw)) throw new TypeError(`${source}: expected a JSON array of eval items`);
   return raw.map((entry, index) => {
     const item = asRecord(entry);

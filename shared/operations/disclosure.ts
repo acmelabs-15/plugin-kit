@@ -18,6 +18,7 @@
 
 import { relative, resolve } from "node:path";
 
+import { scenarioSetFindings } from "../schemas/scenario-set.ts";
 import { PythonRandom } from "../util/mt19937.ts";
 
 // ---------------------------------------------------------------------------
@@ -1139,8 +1140,23 @@ function asRecord(value: unknown): Record<string, unknown> {
  * Validated at the boundary rather than deep in the pool, for the reason
  * `parseEvalSet` is: a malformed row discovered thirty `claude` calls in has already
  * cost the run.
+ *
+ * `../schemas/scenario-set.ts` owns what counts as wrong, and reports every problem at
+ * once. It exists for one finding above all: a row whose `expectations` key is
+ * MISSPELLED used to default to `[]` in silence, so a set with every expectation
+ * misspelled measured the skill against nothing while `optimize-disclosure.ts` was
+ * warning about exactly that state. An empty `expectations` is still legal; a typo that
+ * produced one is now named.
+ *
+ * Unknown keys are warnings, never errors -- `expected_output` and `files` are
+ * documented fields this reader ignores, and every scenario set in the repository
+ * carries them. The narrowing below is what the compiler needs, not a second check.
  */
 export function parseScenarioSet(raw: unknown, source: string): readonly DisclosureScenario[] {
+  const { errors, warnings } = scenarioSetFindings(raw, source);
+  for (const warning of warnings) console.error(`Warning: ${warning}`);
+  if (errors.length > 0) throw new TypeError(errors.join("\n"));
+
   const rows: unknown[] = Array.isArray(raw)
     ? raw
     : Array.isArray(asRecord(raw)["evals"])
