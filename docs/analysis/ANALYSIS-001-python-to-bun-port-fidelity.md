@@ -110,7 +110,9 @@ The packager's usage strings referenced a directory the script no longer occupie
 - [solution] The packager's usage strings referenced a directory the script no longer occupies; fixed rather than ported #defect-fix #packaging
 
 ## Relations
-
+- pairs_with [[SESSION-2026-08-23_01: Plugin Kit Measurement Tooling Hardening]]
 - caused_by [[ADR-001: Skill Creator Merge Conflict Resolutions]]
 - pairs_with [[ADR-001: Skill Creator Merge Conflict Resolutions]]
 - pairs_with [[SESSION-2026-08-09_01: Plugin Kit Shared Layer Restructure]]
+- pairs_with [[ANALYSIS-002: Inert Parameter and Flag Survey]]
+- pairs_with [[ANALYSIS-003: Measurement Fault Classes]]

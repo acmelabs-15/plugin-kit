@@ -309,6 +309,6 @@ Data flow, load-bearing numbers, and record integrity. Findings below are the on
 - [requirement] `README.md` still advertises `hook-creator` as shipped when it lives in parked `future/`, and `future/hook-testing/hook-creator/SKILL.md:214` invokes an agent that no longer resolves #docs #parked
 
 ## Relations
-
+- leads_to [[SESSION-2026-08-23_01: Plugin Kit Measurement Tooling Hardening]]
 - relates_to [[ADR-001: Skill Creator Merge Conflict Resolutions]]
 - pairs_with [[ANALYSIS-001: Python to Bun Port Fidelity]]

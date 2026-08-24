@@ -1,3 +1,9 @@
+---
+title: continuation
+type: note
+permalink: plugin-kit/continuation
+---
+
 # plugin-kit — continuation prompt
 
 You are picking up a project mid-restructure. This document is the whole handover: what the
