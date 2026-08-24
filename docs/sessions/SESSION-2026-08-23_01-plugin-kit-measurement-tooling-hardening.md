@@ -209,6 +209,16 @@ Execution: the verdict implementation resumes with the engineer agent that built
 
 Owner statement of the disclosure objective, refining the earlier reachability ruling: progressively-loaded reference content should load as close to 100% of the time it is supposed to. Recall toward 1.0 on the should-reach set is the target the tooling optimizes toward, under the standing body-budget constraint. When recall falls short, the remedy set is three levers, and the operator guidance must name all three: repair or reposition the pointer; recompose the references themselves — merge, split, adjust — when the content boundary does not match how need presents; and evaluate the scenarios — a scenario that never triggers loading raises the question of whether it is the right scenario, so the corpus is itself an object of evaluation and scenario rewrite is a legitimate remedy, with ablation re-establishing a rewritten scenario's ground truth. Relayed to the in-flight reference rewrite; the verdict implementation is unaffected.
 
+## Event — 2026-08-24: two improvement candidates and one considered-rejection recovered from the predecessor conversation
+
+The predecessor conversation is now read in full, and it carried three items that reached no note and no queue.
+
+**Improvement candidate — fail-fast on a broken grant.** Offered during the load-failure investigation and never decided: the `Skill` tool's result arrives within the first few seconds of a run, so a sweep whose grant is broken could abort in ~10 seconds instead of discovering after a full sweep that it measured nothing. Zero routine speed gain — post-grant, no run would trigger it — but it converts an expensive silent failure into a cheap loud one, the same argument as the counted-runs collapse. Insurance, not speed.
+
+**Considered and rejected, with reason — the `dontAsk` pairing.** The SDK documentation's stricter recommended form for headless agents is `--allowedTools <list> --permission-mode dontAsk`, where anything unlisted is denied outright instead of relying silently on the absence of a permission callback. Deliberately NOT adopted for the disclosure harness: its scenarios write files, so `dontAsk` would deny every tool not explicitly enumerated, and building that enumeration is its own change. Recorded so the rejection is legible and the option is findable if the harness's tool surface is ever pinned down.
+
+**Also recovered**: the settings-file-versus-flag difference for the Skill grant is documented workspace-trust behaviour (project `permissions.allow` is trust-gated and `-p` never shows the trust dialog) — not a bug, not to be filed upstream.
+
 ## Observations
 
 ### Landed today
