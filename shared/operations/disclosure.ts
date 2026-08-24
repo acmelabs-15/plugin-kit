@@ -448,7 +448,16 @@ export function computeFileStats(
   runs: readonly ScenarioRun[],
   inlineThreshold: number = DEFAULT_INLINE_THRESHOLD,
 ): readonly FileStat[] {
-  const counted = runs.filter((run) => run.error === undefined && run.skillLoaded);
+  // INJECTED runs only. A run that got the body by reading SKILL.md itself had it in
+  // context all the same, but it was already inside the skill directory when it chose what
+  // to open next -- so a reference it read is not evidence that a pointer in the body sent
+  // it there, which is the only thing a pull rate claims. Counting those would measure a
+  // rummaging model and report it as layout quality.
+  //
+  // It also makes the failure loud. If the Skill grant ever breaks again, `countedRuns`
+  // collapses toward zero and the verdicts visibly rest on nothing, rather than quietly
+  // describing the wrong regime the way they did before it was found.
+  const counted = runs.filter((run) => run.error === undefined && run.loadedVia === "skill");
   const pullsByPath = new Map<string, number>();
   for (const run of counted) {
     for (const path of new Set(run.filesRead)) {
@@ -543,7 +552,10 @@ export interface SplitScore {
  */
 export function scoreRuns(runs: readonly ScenarioRun[]): SplitScore {
   const errorFree = runs.filter((run) => run.error === undefined);
-  const measured = errorFree.filter((run) => run.skillLoaded);
+  // Same rule as `computeFileStats`, for the same reason: a body the model fetched itself
+  // is a different experiment from a body the skill system delivered, and the two must not
+  // share a denominator.
+  const measured = errorFree.filter((run) => run.loadedVia === "skill");
   const assertionsPassed = measured.reduce((total, run) => total + run.assertionsPassed, 0);
   const assertionsTotal = measured.reduce((total, run) => total + run.assertionsTotal, 0);
   const contextTokens = measured.reduce((total, run) => total + run.contextTokens, 0);
@@ -554,8 +566,11 @@ export function scoreRuns(runs: readonly ScenarioRun[]): SplitScore {
     assertionsTotal,
     passRate: assertionsTotal === 0 ? 1 : assertionsPassed / assertionsTotal,
     meanContextTokens: measured.length === 0 ? 0 : contextTokens / measured.length,
-    runsWithoutSkill: errorFree.length - measured.length,
-    runsLoadedViaFile: measured.filter((run) => run.loadedVia === "file").length,
+    // Kept apart deliberately. "Never loaded" and "loaded the wrong way" have different
+    // causes and different fixes, and collapsing them into one number is what let a total
+    // failure of the skill system read as a 30% flake for a whole session.
+    runsWithoutSkill: errorFree.filter((run) => run.loadedVia === null).length,
+    runsLoadedViaFile: errorFree.filter((run) => run.loadedVia === "file").length,
     loadRate: errorFree.length === 0 ? 1 : measured.length / errorFree.length,
   };
 }

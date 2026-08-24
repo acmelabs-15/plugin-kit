@@ -86,17 +86,24 @@ import { flagString } from "../measure-triggering.ts";
 // ---------------------------------------------------------------------------
 
 function run(overrides: Partial<ScenarioRun> = {}): ScenarioRun {
-  return {
+  const merged = {
     scenarioId: "s1",
     attempt: 1,
     filesRead: [],
     skillLoaded: true,
-    loadedVia: "skill",
+    loadedVia: "skill" as ScenarioRun["loadedVia"],
     durationMs: 1000,
     contextTokens: 1000,
     assertionsPassed: 2,
     assertionsTotal: 2,
     ...overrides,
+  };
+  // Derived rather than defaulted, so the fixture cannot produce an impossible run. A
+  // caller writing `run({ skillLoaded: false })` means "this one never loaded", and a
+  // leftover `loadedVia: "skill"` would say the opposite in the same object.
+  return {
+    ...merged,
+    loadedVia: overrides.loadedVia ?? (merged.skillLoaded ? "skill" : null),
   };
 }
 
@@ -267,6 +274,19 @@ describe("loadModeOf", () => {
 
 describe("computeFileStats", () => {
   const inventory = [bundled("references/always.md"), bundled("references/rare.md")];
+
+  test("a file-loaded run is out of the pull-rate denominator", () => {
+    const stats = computeFileStats(
+      [bundled("references/deep.md")],
+      [
+        run({ filesRead: ["references/deep.md"] }),
+        run({ attempt: 2, loadedVia: "file", filesRead: ["references/deep.md"] }),
+      ],
+    );
+    // Two runs read it; only the injected one counts, so the rate is 1/1 rather than 2/2.
+    expect(stats[0]?.countedRuns).toBe(1);
+    expect(stats[0]?.pulls).toBe(1);
+  });
 
   test("the denominator is runs that loaded the skill, not runs attempted", () => {
     const stats = computeFileStats(inventory, [
@@ -746,6 +766,31 @@ describe("scoreRuns", () => {
     expect(result.loadRate).toBe(0.5);
     // `runs` still counts every error-free run, so the two denominators stay legible.
     expect(result.runs).toBe(2);
+  });
+
+  // A body the model fetched itself is a different experiment from one the skill system
+  // delivered: that model is already inside the skill directory when it picks what to open
+  // next, so its reads are not evidence a pointer sent it there.
+  test("a run that read SKILL.md itself is out of the pass rate, like one that never loaded", () => {
+    const result = scoreRuns([
+      run({ assertionsPassed: 2, assertionsTotal: 2 }),
+      run({ attempt: 2, loadedVia: "file", assertionsPassed: 0, assertionsTotal: 2 }),
+    ]);
+    expect(result.passRate).toBe(1);
+    expect(result.assertionsTotal).toBe(2);
+  });
+
+  test("never-loaded and loaded-the-wrong-way are counted apart, not merged", () => {
+    const result = scoreRuns([
+      run(),
+      run({ attempt: 2, skillLoaded: false }),
+      run({ attempt: 3, loadedVia: "file" }),
+    ]);
+    // Different causes and different fixes. Collapsing them is what let a total failure of
+    // the skill system read as a 30% flake.
+    expect(result.runsWithoutSkill).toBe(1);
+    expect(result.runsLoadedViaFile).toBe(1);
+    expect(result.loadRate).toBeCloseTo(1 / 3);
   });
 
   test("an errored run is outside loadRate entirely, having never had the chance", () => {
