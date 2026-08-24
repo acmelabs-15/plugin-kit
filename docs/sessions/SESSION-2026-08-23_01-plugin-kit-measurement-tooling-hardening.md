@@ -219,6 +219,16 @@ The predecessor conversation is now read in full, and it carried three items tha
 
 **Also recovered**: the settings-file-versus-flag difference for the Skill grant is documented workspace-trust behaviour (project `permissions.allow` is trust-gated and `-p` never shows the trust dialog) — not a bug, not to be filed upstream.
 
+## Event — 2026-08-24: the three-layer rewrite lands, `3e67d05` and `3f4d85e`
+
+The deliverable the disclosure research was for is complete, landed as two commits on a combined tree verified at 1567 pass / 0 fail, tsc clean.
+
+**Code (`3e67d05`)**: `decideFileVerdict` keys on recall where ground truth exists — signpost below 0.5 recall overriding any raw rate, prune narrowed to the evidenced case, the new `unmeasured` verdict replacing the unsafe zero-pulls prune on unannotated sets, and the proposer fed recall with repair candidates for signpost and deletion candidates only for prune. Regression tests proven per rule in an isolated worktree; the unsafe deletion cannot return without breaking tests at every layer that would act on it.
+
+**References (`3f4d85e`)**: progressive-disclosure.md and disclosure-optimization.md rewritten on evidence. Struck as rules: delete-at-zero, and the invented pointer form. Written: the recall-first reading order with the worked example, the new verdict table with the partial-annotation caveat and the annotatedScenarios-against-scenario_count check, the three remedy levers each tied to its selecting observable, the sourced compaction boundary, depth-not-count, the placement refutation stated as a result, author-for-the-weaker-tier, and a five-way evidence legend — published, published-unquantified, house rule, measured here, unmeasured — applied to every surviving rule. One label-precision catch during landing: the 5,000-token body gate now carries the house-rule label with its derivation, keeping the published label only on the 500-line half that earned it.
+
+The doctrine, the operator guidance, and the code now agree about what a verdict means and what evidence it requires. Remaining from the queue: outcomes measurement (runs on sonnet per the recovered coverage ruling), the upstream comment, the mainline merge and push.
+
 ## Observations
 
 ### Landed today
