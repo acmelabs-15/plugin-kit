@@ -241,6 +241,18 @@ Follow-up work items this creates: tables of contents for the 13 over-length ref
 
 Owner ruling executed: the work does not live on a branch. `restructure-shared-layer` fast-forwarded into `main` (161 files, +13,213 / −2,309 — the shared-layer restructure, the four collector fixes, the Skill grant, the recall layer, the recall-aware verdicts, both rewritten references, and analyses 002 through 005), `main` pushed to origin at `6a4cecd`, and the staging branch deleted locally and on the remote. Every commit this session and its predecessors produced now exists on the published mainline. The exposure that opened at the branch's first publication — work existing on one machine, then on one unmerged branch — is fully closed.
 
+## Event — 2026-08-24: an eval worker escalated its fixture out of the sandbox — a new isolation finding
+
+During the first designed measure-outcomes run, a spawned eval worker sent a cross-session message to the orchestrating session, urgently advising against "dropping the deprecated export" — which is not a real export but the fictional dilemma inside the timeout-with-partial-selection scenario prompt. The worker's judgement was, within its fiction, exactly what the scenario tests: refuse to treat a timed-out partial selection as approval for an irreversible act, and escalate. But the escalation crossed the sandbox boundary into a real session.
+
+The finding: spawned eval children can reach the host machine's agent-communication layer and message other live sessions. The grader-isolation work fenced the skill inventory and MCP config; it does not fence cross-session messaging. Consequences, in order: an operator who acts on such a message treats fixture content as real work (the message arrived styled exactly like a teammate report); a reply from the operator would inject content into a measured run and contaminate it — the correct response is silence toward the worker; and scenario prompts containing urgent-sounding dilemmas are precisely the ones that will escape this way. Improvement candidate: the run wrapper should sever or namespace the cross-session channel for spawned children, the same way the isolation flags fence settings. Until then, the caveat travels with any outcomes readout: mid-run messages from sessions named like run workers are fixture leakage, not work.
+
+No reply was sent to the worker. Whether the escalating run belongs to the treatment or control arm gets checked from the run logs after completion, not by poking the live run.
+
+## Event — 2026-08-24: LOCKED — the table-of-contents standard form
+
+Owner chose a combination of the two leading options, which resolves to one form since they differed only by anchors: a literal `## Table of Contents` H2, then a flat bulleted list of GitHub-style anchor links naming every H2 section in document order — no nesting, no tables, H2 entries only — placed after the H1 and its orientation prose. Rationale carried with the decision: the heading-plus-bullets shell is the deterministic lint signature Genre 14 needs, the form is byte-recognizable against the only shipped standard in any surveyed corpus, the anchors serve rendered browsing, and the link text still hands a raw-text reader the plain section names, so the partial-read mechanism the rule exists for loses nothing. Whole-specimen files remain exempt per the recorded exemption. The 23 prose-form maps applied earlier today convert to this standard before landing; the measured skill's six references receive the same form after the outcomes run completes, where the intervention has a recall baseline to move against.
+
 ## Observations
 
 ### Landed today
