@@ -173,6 +173,12 @@ Recorded from the downstream ask-user-question session on resume, because both i
 
 **Candidate fault-class instance, mechanism not yet established.** A stage-1 ablation sweep pair (two concurrent `measure-disclosure` arms, 27 scenarios twice each) was interrupted, and both arms still left complete-looking `results.json` files — `install_state` populated, per-file tables, plausible pass rates. The only tell was cross-arm: `assertions_total` 262 against 259 over the identical scenario set, meaning at least three assertions were never graded. Nothing in either file marks itself partial. This is the note's thesis shape again — a confident answer instead of an error — and suggests `measure-disclosure` should either refuse to write final results while runs are ungraded or stamp the file with expected-versus-graded run counts so a consumer can tell. Not yet investigated in source; recorded so the instance is not lost. The interrupted pair is quarantined under `~/auq-results/ablation-*-interrupted` for forensics.
 
+## Event — 2026-08-24, correction: the interrupted-sweep fault candidate is withdrawn
+
+The candidate fault class recorded earlier today does not survive its own per-run logs, and the correction is dated here beside the record. Both arms of the supposedly interrupted pair carry full grading on all 54 runs, summing to the complete 262 assertions each; the detached processes outlived the driving session and finished cleanly. The differing headline denominators (262 against 259) are the intended behaviour of `792e17c` — `assertions_total` counts only runs the skill system delivered, and the excluded run's cause was already named in the same file's `runs_loaded_via_file` field. No fault instance occurred; the reader failed to read the field.
+
+What survives as a genuine, smaller point: `assertions_total` does not say it is a counted-runs figure. A results file carrying both the counted and the all-runs totals — or naming the excluded assertion count — would have made this misreading impossible. Improvement candidate, not a defect.
+
 ## Observations
 
 ### Landed today
