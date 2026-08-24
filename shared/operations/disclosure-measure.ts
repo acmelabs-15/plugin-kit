@@ -21,8 +21,14 @@
 import { rm } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 
+import {
+  checkIsolation,
+  createSurfaceReader,
+  type IsolationVerdict,
+} from "../isolation.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import {
+  CHILD_ISOLATION_FLAGS,
   runIsolatedHelper,
   runStreamingLines,
   SKILL_EXECUTION_GRANT,
@@ -197,6 +203,18 @@ interface ScenarioRunParams {
   readonly permissionMode?: string | undefined;
   readonly grade: boolean;
   readonly logDir?: string | undefined;
+  /**
+   * Handed this attempt's isolation proof, read from the child's own `init` event.
+   *
+   * Per ATTEMPT rather than once per sweep, because that is the granularity at which it can
+   * be wrong: every attempt here installs its OWN throwaway root and spawns its own child,
+   * so a probe of the first says nothing about the four hundredth.
+   *
+   * Optional so the two entry points and the tests can drive a sweep without one. The
+   * envelope is the only place a folded state belongs, and neither this function nor
+   * {@link measureLayout} owns an envelope.
+   */
+  readonly onIsolation?: ((verdict: IsolationVerdict) => void) | undefined;
 }
 
 /**
@@ -237,12 +255,13 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
       "--output-format",
       "stream-json",
       "--verbose",
-      // Same isolation as the trigger harness, and load-bearing for the same two reasons:
-      // the operator's own plugins would otherwise compete for the work, and every
-      // configured MCP server would be a connection attempt on every run.
-      "--setting-sources",
-      "project",
-      "--strict-mcp-config",
+      // Same isolation as the trigger harness, from the same constant so the two cannot
+      // drift apart. Load-bearing here for three reasons: the operator's own plugins would
+      // otherwise compete for the work, every configured MCP server would be a connection
+      // attempt on every run, and a scenario child doing real work is precisely the one
+      // that must not be able to message another session about it. See the constant for
+      // what each flag was measured to do, and for the one thing none of them closes.
+      ...CHILD_ISOLATION_FLAGS,
       // Without this the skill never loads and every pull rate is a measurement of a
       // model rummaging for the file rather than being handed it. See the constant.
       ...SKILL_EXECUTION_GRANT,
@@ -259,10 +278,28 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
     // decide before a tool executes; this one reads to the end of the stream regardless,
     // and the complete `assistant` event carries a whole `input` object rather than a
     // string of JSON fragments to reassemble.
+    //
+    // The reader is WRAPPED rather than replaced: the collector owns everything this run
+    // reports and stays in the read path untouched. The wrapper only keeps the `init` line
+    // on its way past, and that line is one the stream was already delivering.
+    const reader = createSurfaceReader(collector.onLine);
     const outcome = await runStreamingLines(
       cmd,
       { cwd: root, timeoutMs: params.timeoutSeconds * 1000 },
-      collector.onLine,
+      reader.onLine,
+    );
+    // Reported before the outcome is classified, so a timed-out or errored attempt still
+    // contributes what its child managed to say about itself. An attempt that died early is
+    // exactly the one whose isolation nobody would otherwise have checked.
+    //
+    // `alias` rather than `params.skillName`: the child is told to use the skill by that
+    // name, so a child that cannot see it under that name reached for nothing, and every
+    // pull rate the attempt would have produced is floored rather than measured.
+    params.onIsolation?.(
+      checkIsolation({
+        surface: reader.surface(),
+        expected: { name: alias, kind: "skill", expect: "present", root },
+      }),
     );
 
     const observation = collector.observation();
@@ -519,6 +556,13 @@ export interface MeasureParams {
   /** Called as each run STARTS, so a caller can show a busy pool before anything settles. */
   readonly onStarted?: (inFlight: number, started: number, total: number) => void;
   /**
+   * Handed every attempt's isolation proof. Point it at an `IsolationLedger`.
+   *
+   * Threaded rather than folded here for the reason the sweep does not build its own
+   * envelope: the caller owns that document, and `run.isolation` is a field on it.
+   */
+  readonly onIsolation?: ((verdict: IsolationVerdict) => void) | undefined;
+  /**
    * Prior wall clock per scenario id, used to schedule the longest work first.
    *
    * Absent on a first sweep, which is why this is optional rather than required: with no
@@ -594,6 +638,7 @@ export async function measureLayout(params: MeasureParams): Promise<readonly Sce
         permissionMode: params.permissionMode,
         grade: params.grade,
         logDir: params.logDir,
+        onIsolation: params.onIsolation,
       }),
     params.onProgress,
     params.onStarted,

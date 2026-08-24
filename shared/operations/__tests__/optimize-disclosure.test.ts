@@ -2341,6 +2341,7 @@ describe("the results envelope", () => {
       scenarioSetHash: "sha256:scenarios",
       targetSha: "sha256:target",
       installState: "absent",
+      isolation: "verified",
       ...overrides,
     };
   }

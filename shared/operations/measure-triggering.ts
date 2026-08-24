@@ -29,12 +29,19 @@ import {
   type HeadlineMetric,
   type InstallState,
 } from "../envelope.ts";
+import {
+  checkIsolation,
+  createIsolationLedger,
+  createSurfaceReader,
+  type IsolationState,
+  type IsolationVerdict,
+} from "../isolation.ts";
 import { parseFrontmatterBlock } from "../parse/lib.ts";
 import { FrontmatterError, parseFrontmatter, skillMdPath, type ParsedSkill } from "../parse/frontmatter.ts";
 import { evalSetFindings } from "../schemas/eval-set.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { ProgressReporter, type QueryProgress } from "../util/progress.ts";
-import { runStreamingLines } from "../util/subprocess.ts";
+import { CHILD_ISOLATION_FLAGS, runStreamingLines } from "../util/subprocess.ts";
 import {
   parseGroupSidecar,
   parseSelectors,
@@ -273,6 +280,13 @@ export interface MeasureTriggeringParams {
    * as a non-trigger. Without it that count is unrecoverable after the run.
    */
   readonly onAttemptOutcome?: (outcome: AttemptOutcome) => void;
+  /**
+   * Handed each attempt's isolation proof, for the sweep-level ledger to fold.
+   *
+   * Threaded rather than folded here so the sweep keeps exactly one job. The caller already
+   * owns the envelope, and the envelope is where `run.isolation` has to land.
+   */
+  readonly onIsolation?: (verdict: IsolationVerdict) => void;
 }
 
 /** One `claude -p` attempt that has just settled, reported as it happens. */
@@ -311,6 +325,15 @@ interface SingleQueryParams {
    * been the tidier change and would have broken every caller for no gain.
    */
   readonly onOutcome?: (outcome: AttemptOutcome) => void;
+  /**
+   * Handed this attempt's isolation proof, read from the child's own `init` event.
+   *
+   * Additive and optional for the same reason `onOutcome` is, and reported per ATTEMPT
+   * rather than once per sweep because that is the granularity at which it can be wrong. A
+   * sweep-level probe establishes that the first child was clean and says nothing about the
+   * four hundredth; the flags are per-spawn, so the proof is too.
+   */
+  readonly onIsolation?: (verdict: IsolationVerdict) => void;
 }
 
 /**
@@ -795,24 +818,39 @@ export async function runSingleQuery(params: SingleQueryParams): Promise<boolean
       "stream-json",
       "--verbose",
       "--include-partial-messages",
-      // Load settings from the temporary project root only. This is a correctness fix
-      // as much as a speed one: without it the measurement inherits the operator's
-      // user-level config -- every enabled plugin, and on a developer machine that can
-      // be 149 slash commands and 13 MCP servers -- so the candidate description
-      // competes against a skill inventory that has nothing to do with the skill under
-      // test, and the result is not reproducible on another machine.
-      "--setting-sources",
-      "project",
-      // Same reasoning for MCP: none are needed to answer a routing question, and each
-      // is a connection attempt on every call.
-      "--strict-mcp-config",
+      // Settings from the temporary project root only, no MCP, and no instrument for
+      // reaching another session. A correctness fix as much as a speed one: without the
+      // first of those the measurement inherits the operator's user-level config -- every
+      // enabled plugin, and on a developer machine that can be 149 slash commands and 13
+      // MCP servers -- so the candidate description competes against a skill inventory
+      // that has nothing to do with the skill under test, and the result is not
+      // reproducible on another machine. See the constant for what each flag was measured
+      // to do, and for the one thing none of them closes.
+      ...CHILD_ISOLATION_FLAGS,
     ];
     if (params.model !== undefined && params.model !== "") cmd.push("--model", params.model);
 
+    // Wrapped rather than replaced: the trigger reader owns the verdict and must stay in
+    // the decision path untouched. The wrapper only keeps the `init` line on its way past.
+    const reader = createSurfaceReader(createTriggerReader(target));
     const outcome = await runStreamingLines(
       cmd,
       { cwd: params.projectRoot, timeoutMs: params.timeoutSeconds * 1000 },
-      createTriggerReader(target),
+      reader.onLine,
+    );
+    // Reported before the outcome is classified, so a timed-out or errored attempt still
+    // contributes what its child managed to say about itself. An attempt that died early is
+    // exactly the one whose isolation nobody would otherwise have checked.
+    params.onIsolation?.(
+      checkIsolation({
+        surface: reader.surface(),
+        expected: {
+          name: params.skillName,
+          kind: params.targetType ?? "skill",
+          expect: "present",
+          root: params.projectRoot,
+        },
+      }),
     );
 
     switch (outcome.kind) {
@@ -1105,6 +1143,7 @@ export async function measureTriggering(params: MeasureTriggeringParams): Promis
           ...(params.onAttemptOutcome === undefined
             ? {}
             : { onOutcome: params.onAttemptOutcome }),
+          ...(params.onIsolation === undefined ? {} : { onIsolation: params.onIsolation }),
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1273,8 +1312,10 @@ export interface TriggeringEnvelopeInput {
   readonly evalSetHash: string;
   readonly targetSha: string;
   readonly installState: InstallState;
+  /** Folded from the per-attempt proofs. `unverified` when no attempt reported one. */
+  readonly isolation: IsolationState;
   readonly triggerThreshold: number;
-  /** Extra coverage caveats from the caller — install sightings, mostly. */
+  /** Extra coverage caveats from the caller — install sightings and isolation, mostly. */
   readonly caps?: readonly string[];
   readonly startedAt?: Date;
 }
@@ -1379,6 +1420,7 @@ export function buildTriggeringEnvelope(
       evalSetHash: input.evalSetHash,
       targetSha: input.targetSha,
       installState: input.installState,
+      isolation: input.isolation,
     },
     provenance: {
       // This operation counts no tokens at all, so claiming either tokenizer would be a
@@ -1696,6 +1738,11 @@ async function main(): Promise<void> {
   const timeoutSeconds = flagNumber(flags, "timeout");
   const triggerThreshold = flagNumber(flags, "trigger-threshold");
   const tally = createAttemptTally();
+  // Created here, beside the tally it parallels, and read below when the envelope is built.
+  // Both exist because a rate is not interpretable without them: the tally says how many
+  // attempts the number is really over, and this says whether those attempts measured the
+  // artifact or the operator's machine.
+  const isolation = createIsolationLedger();
 
   let output: EvalOutput;
   try {
@@ -1713,6 +1760,7 @@ async function main(): Promise<void> {
       model: flagString(flags, "model"),
       verbose,
       onAttemptOutcome: tally.record,
+      onIsolation: isolation.record,
       onProgress: (settled, total, attempt) => {
         if (attempt !== undefined) {
           const row = tallies.get(attempt.query);
@@ -1808,12 +1856,16 @@ async function main(): Promise<void> {
         evalSetHash: hashJsonValue(evalSet),
         targetSha: await hashArtifact(targetPath),
         installState: sighting.state,
+        isolation: isolation.state(),
         triggerThreshold,
         caps: [
           sighting.cap,
           conflict,
           unpinned,
           subset === null ? null : subsetCap(subset),
+          // Deduplicated and counted by the ledger, so a machine that contaminated every
+          // attempt contributes one sentence rather than four hundred.
+          ...isolation.caps(),
         ].filter((cap): cap is string => cap !== null),
       }),
     );

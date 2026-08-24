@@ -97,7 +97,7 @@ describe("mapWithConcurrency", () => {
 });
 
 describe("claudeEnv", () => {
-  test("keeps every parent variable and drops only CLAUDECODE", () => {
+  test("keeps every parent variable, drops CLAUDECODE, and adds the auto-memory fence", () => {
     const merged = claudeEnv({
       PATH: "/usr/bin",
       HOME: "/home/me",
@@ -105,12 +105,31 @@ describe("claudeEnv", () => {
       CLAUDECODE: "1",
     });
 
-    expect(merged).toEqual({ PATH: "/usr/bin", HOME: "/home/me", ANTHROPIC_API_KEY: "sk-test" });
+    expect(merged).toEqual({
+      PATH: "/usr/bin",
+      HOME: "/home/me",
+      ANTHROPIC_API_KEY: "sk-test",
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
+    });
     expect(Object.hasOwn(merged, "CLAUDECODE")).toBe(false);
   });
 
   test("drops keys whose value is undefined", () => {
-    expect(claudeEnv({ SET: "yes", UNSET: undefined })).toEqual({ SET: "yes" });
+    expect(claudeEnv({ SET: "yes", UNSET: undefined })).toEqual({
+      SET: "yes",
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
+    });
+  });
+
+  test("the auto-memory fence is applied after the merge, so an inherited value cannot lift it", () => {
+    // Ordering is the whole property. Measured at CLI 2.1.241: with the operator's own
+    // `~/.claude/memory/` in play, a child spawned with `--setting-sources project` still
+    // loaded that MEMORY.md into its system prompt and quoted it back -- the setting-source
+    // allow-list does not govern the auto-memory directory. If the parent's environment
+    // could win the merge, one exported `=0` on a developer machine would silently reopen
+    // that channel for every measurement taken on it, and nothing in any output would say so.
+    expect(claudeEnv({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: "0" })["CLAUDE_CODE_DISABLE_AUTO_MEMORY"]).toBe("1");
+    expect(claudeEnv({})["CLAUDE_CODE_DISABLE_AUTO_MEMORY"]).toBe("1");
   });
 
   test("is a merge, not a replacement: an unrelated var survives", () => {

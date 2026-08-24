@@ -74,6 +74,7 @@ const envelopeInput = (output: OutcomesOutput, inProgress: boolean) => ({
   evalSetHash: "sha256:eval",
   targetSha: "sha256:target",
   installState: "absent" as const,
+  isolation: "verified" as const,
 });
 
 // ---------------------------------------------------------------------------

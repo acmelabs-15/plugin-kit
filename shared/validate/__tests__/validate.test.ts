@@ -481,6 +481,7 @@ describe("the results envelope", () => {
     expect(buildValidationEnvelope(input()).provenance.timeoutPolicy).toBe("not-applicable");
     expect(
       buildDisclosureEnvelope({
+        isolation: "verified",
         output: {
           skill_name: "demo",
           skill_path: "/skills/demo",

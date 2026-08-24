@@ -508,6 +508,7 @@ describe("the measurement envelope", () => {
     scenarios: readonly DisclosureScenario[] = THREE,
   ): Envelope<DisclosureRow> {
     return buildMeasurementEnvelope({
+      isolation: "verified",
       output: output({ scenario_count: scenarios.length, runs_per_scenario: 1, ...over }),
       tally,
       workers: 4,
@@ -647,6 +648,7 @@ describe("comparing two disclosure runs", () => {
   }): Envelope<DisclosureRow> {
     const scenarios = options.scenarios ?? THREE;
     return buildMeasurementEnvelope({
+      isolation: "verified",
       output: output({
         scenario_count: scenarios.length,
         runs_per_scenario: 1,

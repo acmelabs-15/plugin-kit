@@ -29,6 +29,11 @@ import {
   type HeadlineMetric,
   type InstallState,
 } from "../envelope.ts";
+import {
+  createIsolationLedger,
+  type IsolationState,
+  type IsolationVerdict,
+} from "../isolation.ts";
 import { PythonRandom } from "../util/mt19937.ts";
 import { formatFixed, formatPercent } from "../util/pyfloat.ts";
 import { ProgressReporter, projectRemainingMs } from "../util/progress.ts";
@@ -173,6 +178,14 @@ export interface OptimizeDescriptionParams {
    * reader see that.
    */
   readonly onAttemptOutcome?: ((outcome: AttemptOutcome) => void) | undefined;
+  /**
+   * Handed each attempt's isolation proof, for the caller's ledger to fold.
+   *
+   * Threaded for the same reason `onAttemptOutcome` is. This loop spawns real children
+   * through the trigger harness, so its isolation IS checkable -- and an operation that can
+   * check and does not would be writing `unverified` as a fabrication rather than an answer.
+   */
+  readonly onIsolation?: ((verdict: IsolationVerdict) => void) | undefined;
 }
 
 /** Split eval set into train and test sets, stratified by should_trigger. */
@@ -508,6 +521,7 @@ export async function optimizeDescription(params: OptimizeDescriptionParams): Pr
       ...(params.onAttemptOutcome === undefined
         ? {}
         : { onAttemptOutcome: params.onAttemptOutcome }),
+      ...(params.onIsolation === undefined ? {} : { onIsolation: params.onIsolation }),
       model: params.model,
       verbose: params.verbose,
       onProgress: (settled, total) => {
@@ -807,6 +821,8 @@ export interface DescriptionEnvelopeInput {
   readonly evalSetHash: string;
   readonly targetSha: string;
   readonly installState: InstallState;
+  /** Folded from the per-attempt proofs across every iteration of the loop. */
+  readonly isolation: IsolationState;
   readonly caps?: readonly string[];
   readonly startedAt?: Date;
 }
@@ -937,6 +953,7 @@ export function buildDescriptionEnvelope(
       evalSetHash: input.evalSetHash,
       targetSha: input.targetSha,
       installState: input.installState,
+      isolation: input.isolation,
     },
     provenance: {
       tokenizer: "none",
@@ -1060,6 +1077,10 @@ async function main(): Promise<void> {
   // hand-rolled counters that disagree about whether an errored spawn is a failure would
   // make two envelopes incomparable for a reason that has nothing to do with the measurement.
   const tally = createAttemptTally();
+  // Folded across EVERY iteration, not just the last. The loop re-measures after each
+  // candidate, so a machine that contaminated iteration three contaminated the comparison
+  // the whole loop is built on, even if the final iteration happened to come back clean.
+  const isolation = createIsolationLedger();
   const envelopeStartedAt = new Date();
 
   const output = await optimizeDescription({
@@ -1067,6 +1088,7 @@ async function main(): Promise<void> {
     skillPath,
     targetType,
     onAttemptOutcome: tally.record,
+    onIsolation: isolation.record,
     descriptionOverride: flagString(flags, "description"),
     numWorkers: flagNumber(flags, "num-workers"),
     timeoutSeconds: flagNumber(flags, "timeout"),
@@ -1131,8 +1153,11 @@ async function main(): Promise<void> {
         evalSetHash: hashJsonValue(evalSet),
         targetSha: await hashArtifact(skillPath),
         installState: sighting.state,
+        isolation: isolation.state(),
         startedAt: envelopeStartedAt,
-        caps: [sighting.cap, conflict].filter((cap): cap is string => cap !== null),
+        caps: [sighting.cap, conflict, ...isolation.caps()].filter(
+          (cap): cap is string => cap !== null,
+        ),
       }),
     );
     if (conflict !== null) console.error(`WARNING: ${conflict}`);

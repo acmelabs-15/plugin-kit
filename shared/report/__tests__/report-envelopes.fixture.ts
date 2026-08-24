@@ -43,6 +43,7 @@ export function triggeringEnvelope(
       evalSetHash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       targetSha: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       installState: overrides.installState ?? "shadowed",
+      isolation: "verified",
     },
     provenance: {
       tokenizer: "none",
@@ -117,6 +118,7 @@ export function validationEnvelope(): Envelope<ValidationRow> {
       evalSetHash: null,
       targetSha: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
       installState: "unknown",
+      isolation: "not-applicable",
     },
     provenance: {
       tokenizer: "none",
@@ -180,6 +182,7 @@ export function disclosureEnvelope(): Envelope<DisclosureRow> {
       evalSetHash: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
       targetSha: "sha256:5555555555555555555555555555555555555555555555555555555555555555",
       installState: "installed",
+      isolation: "verified",
     },
     provenance: {
       tokenizer: "estimated",
@@ -251,6 +254,7 @@ export function descriptionEnvelope(): Envelope<DescriptionRow> {
       evalSetHash: "sha256:6666666666666666666666666666666666666666666666666666666666666666",
       targetSha: "sha256:7777777777777777777777777777777777777777777777777777777777777777",
       installState: "absent",
+      isolation: "verified",
     },
     provenance: {
       tokenizer: "none",

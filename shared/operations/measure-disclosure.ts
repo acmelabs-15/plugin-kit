@@ -51,6 +51,11 @@ import {
 import { availableParallelism } from "node:os";
 
 import {
+  createIsolationLedger,
+  type IsolationState,
+  type IsolationVerdict,
+} from "../isolation.ts";
+import {
   generateDisclosureReport,
   type DisclosureWarning,
 } from "../report/disclosure-report.ts";
@@ -154,6 +159,15 @@ export interface MeasureDisclosureParams {
    * many timed out or failed outright, which is half of what `provenance` has to account for.
    */
   readonly onRunOutcome?: ((run: ScenarioRun) => void) | undefined;
+  /**
+   * Handed every scenario run's isolation proof. Point it at an `IsolationLedger`.
+   *
+   * Passed straight to the sweep rather than folded here, for the reason `onRunOutcome` is a
+   * callback at all: `MeasureOutput` is a wire contract, and the folded state belongs in the
+   * envelope beside `installState` -- the other field that says whether this run measured
+   * the skill or the machine it ran on.
+   */
+  readonly onIsolation?: ((verdict: IsolationVerdict) => void) | undefined;
   readonly onProgress?: ((settled: number, total: number) => void) | undefined;
   readonly onStarted?:
     | ((inFlight: number, started: number, total: number) => void)
@@ -344,6 +358,7 @@ export async function measureDisclosure(
     permissionMode: MEASUREMENT_PERMISSION_MODE,
     grade: true,
     logDir: params.logDir,
+    onIsolation: params.onIsolation,
     onProgress: params.onProgress,
     onStarted: params.onStarted,
   });
@@ -492,6 +507,15 @@ export interface MeasurementEnvelopeInput {
   /** From `hashJsonValue` over the scenarios that RAN. See the CLI for why that matters. */
   readonly scenarioSetHash: string;
   readonly targetSha: string;
+  /**
+   * Folded from the per-run proofs, from the caller's ledger.
+   *
+   * Not derived here, unlike the tier-study and subset caps below, because it is not a
+   * property of `MeasureOutput`: the proofs are read off each child's `init` event during
+   * the sweep and are gone by the time this builder runs. Required for the reason the field
+   * is required on `DisclosureEnvelopeInput` -- see there.
+   */
+  readonly isolation: IsolationState;
   /** Extra caveats. The tier-study and subset caps are derived here, not passed. */
   readonly caps?: readonly string[];
   readonly startedAt?: Date;
@@ -619,6 +643,7 @@ export function buildMeasurementEnvelope(
     // with the warning the operator was shown and with the banner on the report.
     installState: output.install_state,
     installConflict: output.install_conflict,
+    isolation: input.isolation,
     caps: [...derivedCaps, ...(input.caps ?? [])],
     ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt }),
   });
@@ -902,6 +927,11 @@ async function main(): Promise<void> {
   });
 
   const tally = createRunTally();
+  // Beside the tally it parallels, and read below when the envelope is built. The tally says
+  // how many runs each rate is really over; this says whether those runs measured the skill
+  // under test or the operator's machine -- the same question `installState` asks of the
+  // machine, asked of each child instead, and asked per run rather than once.
+  const isolation = createIsolationLedger();
 
   let output: MeasureOutput;
   try {
@@ -910,6 +940,7 @@ async function main(): Promise<void> {
       scenarios,
       runsPerScenario,
       onRunOutcome: tally.record,
+      onIsolation: isolation.record,
       numWorkers: flagNumber(flags, "num-workers"),
       timeoutSeconds: flagNumber(flags, "timeout"),
       inlineThreshold: flagNumber(flags, "inline-threshold"),
@@ -1037,6 +1068,10 @@ async function main(): Promise<void> {
         // -- so this is the enforcement rather than a second place to remember the rule.
         scenarioSetHash: hashJsonValue(scenarios),
         targetSha: await hashArtifact(skillPath),
+        isolation: isolation.state(),
+        // Deduplicated and counted by the ledger, so a machine that contaminated every run
+        // contributes one sentence rather than one per run.
+        caps: isolation.caps(),
       }),
     );
     console.error(`Envelope written to: ${envelopePath}`);

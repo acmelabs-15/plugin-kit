@@ -30,6 +30,11 @@ import { cp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
+import {
+  createIsolationLedger,
+  type IsolationState,
+  type IsolationVerdict,
+} from "../isolation.ts";
 import { ensureDashboard, openInBrowser } from "../util/browser.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { ProgressReporter, projectRemainingMs } from "../util/progress.ts";
@@ -351,6 +356,20 @@ export interface OptimizeParams {
    * and a new key in it is a change to a file other things read.
    */
   readonly onRunOutcome?: ((run: ScenarioRun) => void) | undefined;
+  /**
+   * Handed every scenario run's isolation proof, whichever layout it was measuring.
+   *
+   * Threaded straight through to {@link measureLayout} rather than folded per sweep, which
+   * is where this differs from {@link OptimizeParams.onRunOutcome}. That callback
+   * reports a `ScenarioRun`, which the sweep already has in hand; a proof is read from the
+   * child's own `init` event and is gone the moment that run returns, so there is nothing
+   * left to fold from afterwards.
+   *
+   * Every run of every layout goes through it -- baseline, gated candidate and winner alike
+   * -- because a sweep is only as isolated as its worst run, and a contaminated candidate
+   * run is one the loop may have SELECTED on.
+   */
+  readonly onIsolation?: ((verdict: IsolationVerdict) => void) | undefined;
 }
 
 export interface OptimizeOutput {
@@ -541,6 +560,7 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
         grade: true,
         logDir: params.logDir,
         durationHints,
+        onIsolation: params.onIsolation,
         onProgress: (settled) => {
           const inLayout = settledInLayout + settled;
           reporter.report(priorAttempts + inLayout);
@@ -1055,6 +1075,16 @@ export interface DisclosureEnvelopeInput {
   readonly targetSha: string;
   readonly installState: InstallState;
   /**
+   * Folded from the per-run proofs. `unverified` when no run reported one.
+   *
+   * Required rather than optional, and required of BOTH entry points, because the value a
+   * forgetful caller would have defaulted to is the one that reads as "we checked and found
+   * nothing wrong" to anyone who skims. The enum's whole purpose is that not checking and
+   * checking clean are different claims, and a field that can be omitted quietly merges
+   * them at exactly the call site where the omission is invisible.
+   */
+  readonly isolation: IsolationState;
+  /**
    * The conflict sentence from `installConflict`, or null.
    *
    * Passed in rather than recomputed so the builder stays pure, and kept SEPARATE from
@@ -1489,6 +1519,7 @@ export function buildDisclosureEnvelope(
       evalSetHash: input.scenarioSetHash,
       targetSha: input.targetSha,
       installState: input.installState,
+      isolation: input.isolation,
     },
     provenance: {
       // Not recomputed. `lib/disclosure.ts` already decides this once per run by trying to
@@ -1778,6 +1809,13 @@ async function main(): Promise<void> {
   // the default rather than passing `--model ""` down to a `claude` invocation.
   const graderModel = flagString(flags, "grader-model") ?? DEFAULT_GRADER_MODEL;
   const tally = createRunTally();
+  // Beside the tally it parallels, and read below when the envelope is built. Both exist
+  // because a pull rate is not interpretable without them: the tally says how many runs the
+  // number is really over, and this says whether those runs measured the layout under test
+  // or the operator's machine. That second question is sharper here than anywhere, because
+  // this operation SELECTS on the answer -- a contaminated run does not merely report a
+  // wrong rate, it can retire a file the loop then deletes.
+  const isolation = createIsolationLedger();
 
   const output = await optimizeDisclosure({
     skillPath,
@@ -1801,6 +1839,7 @@ async function main(): Promise<void> {
     resultsDir,
     logDir: resultsDir === undefined ? undefined : `${resultsDir}/logs`,
     onRunOutcome: tally.record,
+    onIsolation: isolation.record,
   });
 
   // The selected layout is COPIED to wherever the operator asked for it, and `--apply` was
@@ -1917,8 +1956,15 @@ async function main(): Promise<void> {
         scenarioSetHash: hashJsonValue(scenarios),
         targetSha: await hashArtifact(skillPath),
         installState: sighting.state,
+        isolation: isolation.state(),
         installConflict: conflict,
-        caps: [sighting.cap, unpinned].filter((cap): cap is string => cap !== null),
+        caps: [
+          sighting.cap,
+          unpinned,
+          // Deduplicated and counted by the ledger, so a machine that contaminated every
+          // run of every candidate contributes one sentence rather than several hundred.
+          ...isolation.caps(),
+        ].filter((cap): cap is string => cap !== null),
       }),
     );
     console.error(`Envelope written to: ${envelopePath}`);

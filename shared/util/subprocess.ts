@@ -38,10 +38,39 @@ export type EnvSource = Readonly<Record<string, string | undefined>>;
 const NESTED_SESSION_GUARD = "CLAUDECODE";
 
 /**
- * The full parent environment minus the nested-session guard.
+ * Keeps the operator's own auto-memory out of the child's system prompt.
+ *
+ * NOT redundant with `--setting-sources project`, which is what everyone assumes and what
+ * cost this repository months of contaminated runs. Measured 2026-08-24 at CLI 2.1.241, in
+ * an empty temporary root with the isolation flags already applied, the child reported
+ * `"memory_paths": {"auto": "/Users/<operator>/.claude/memory/"}` and quoted that file's
+ * first heading back when asked. The auto-memory directory is not resolved through the
+ * setting-source allow-list, so no value of that flag closes it.
+ *
+ * What lands in the child is not a path but content: `MEMORY.md` is read and inlined into
+ * the system prompt verbatim. On the machine this was found on, that was a couple of hundred
+ * lines of behavioural instruction accumulated over months -- none of it about the artifact
+ * under test, all of it in the context every measurement was taken in.
+ *
+ * `--bare` also closes it, and is the wrong instrument: it authenticates strictly from an
+ * API key or helper and never from OAuth or the keychain, so on a login-authenticated
+ * machine it fails the run outright. Measured -- a probe with `--bare`'s auth conditions
+ * returned `Not logged in`. This variable is checked BEFORE bare mode's own gate, so it
+ * closes auto-memory without touching anything else. Verified: the same probe with this set
+ * emits no `memory_paths` key at all and the child answers that it has no memory in context.
+ */
+const DISABLE_AUTO_MEMORY = "CLAUDE_CODE_DISABLE_AUTO_MEMORY";
+
+/**
+ * The full parent environment minus the nested-session guard, plus the auto-memory fence.
  *
  * Mirrors `{k: v for k, v in os.environ.items() if k != "CLAUDECODE"}`. Keys whose
  * value is `undefined` are dropped, since `Bun.spawn` wants a string-valued record.
+ *
+ * The fence is applied AFTER the merge so an inherited value cannot re-enable it. Every
+ * `claude` this repository spawns is a measurement child or a grader, and not one of them
+ * has a legitimate use for the operator's memory -- so the fence belongs here, where no call
+ * site can forget it, rather than in each command builder.
  */
 export function claudeEnv(source: EnvSource = Bun.env): Record<string, string> {
   const merged: Record<string, string> = {};
@@ -50,6 +79,7 @@ export function claudeEnv(source: EnvSource = Bun.env): Record<string, string> {
     if (value === undefined) continue;
     merged[key] = value;
   }
+  merged[DISABLE_AUTO_MEMORY] = "1";
   return merged;
 }
 
@@ -85,6 +115,101 @@ export function claudeEnv(source: EnvSource = Bun.env): Record<string, string> {
  * was under test, which is why it read as an intermittent 30% rather than as total.
  */
 export const SKILL_EXECUTION_GRANT: readonly string[] = ["--allowedTools", "Skill"];
+
+/**
+ * Denies the child every instrument for reaching a DIFFERENT Claude Code session.
+ *
+ * The channel this closes was observed live on 2026-08-24: a spawned eval worker messaged
+ * the session orchestrating its own sweep and escalated its scenario's fictional dilemma as
+ * though it were real work. The receiving session had no idea a scenario existed. That is
+ * contamination in the expensive direction -- not the child seeing too much, but the child
+ * acting on the operator's real workspace while role-playing.
+ *
+ * Environment scrubbing does not touch it. Measured against the shipped binary: a child
+ * unsets the parent's messaging socket and token on its first line of setup, binds an inbox
+ * of its OWN, registers itself in a peer directory under `HOME`, and finds its neighbours by
+ * scanning that directory. Nothing inherited enrols it, so nothing removed disenrols it.
+ *
+ * Denying the tools is what works, and the form matters. MEASURED at CLI 2.1.241: with these
+ * bare names denied, the child's own `init` event lists neither tool among its `tools` -- it
+ * is never told they exist, rather than being told and refused. READ from the shipped binary
+ * and not measured here: a SCOPED rule such as `SendMessage(...)` is skipped by that filter
+ * and only denies at call time. Hence bare names. The distinction matters because the
+ * measured effect is the one `../isolation.ts` asserts per run, off the same `init` line.
+ *
+ * `ListAgents` rides along with `SendMessage` because it is the discovery half: a child that
+ * cannot enumerate the operator's live sessions has no name to address even if it found an
+ * instrument. Neither tool has any bearing on whether a skill triggers or which of its files
+ * get read, so denying them costs the measurement nothing.
+ *
+ * What this does NOT close, and cannot from here: the child still binds its own inbox and
+ * still appears in the peer directory, so another session could address IT. Severing that
+ * needs `--bare` (which breaks OAuth auth) or a redirected `HOME` (which also breaks it) --
+ * see the report accompanying this change for the upstream ask.
+ */
+export const MESSAGING_TOOLS: readonly string[] = ["SendMessage", "ListAgents"];
+
+/**
+ * {@link MESSAGING_TOOLS} as the argv pair that denies them.
+ *
+ * DERIVED rather than written out, because the deny and the check that the deny worked --
+ * `../isolation.ts` reads the child's advertised tool list and asserts these are absent --
+ * are two encodings of one list, and a third tool added to one and not the other fails in
+ * the direction that is invisible: a check that passes because it is looking for the wrong
+ * name. `isolation.ts` imports this constant rather than restating it.
+ *
+ * Comma-separated in ONE argv token rather than space-separated across two. Both forms are
+ * accepted and both were verified live, but the variadic option consumes following tokens
+ * until the next `--flag`, so the space form's correctness depends on nothing ever being
+ * appended after it. The comma form has no such dependency, and callers do append.
+ */
+export const CROSS_SESSION_DENY: readonly string[] = [
+  "--disallowedTools",
+  MESSAGING_TOOLS.join(","),
+];
+
+/**
+ * Everything a spawned child needs to see the artifact under test and nothing else.
+ *
+ * ONE constant for every spawn -- the three measurement harnesses and the four helper call
+ * sites -- because they had each grown their own copy of the same two flags, with their own
+ * comments, and the cross-session deny would have been a fourth thing to remember in seven
+ * places. A flag that is correct in six of seven spawns is not isolation.
+ *
+ * `--setting-sources project` is the flag that closes the skill inventory. Measured against
+ * a temporary root holding one skill: with the flag the run saw that skill plus Claude
+ * Code's own built-ins and NOTHING else -- no plugin skills, and no user-level skills
+ * either, which is more than its name promises. Without it the same root saw 118, the
+ * operator's whole inventory. Measured on a helper spawned without it from a bare working
+ * directory, the router selected the plugin skill `skill-creator:skill-creator` and issued a
+ * `Read` nobody asked for; a grader that goes on side quests is not a guardrail, and its
+ * verdicts stop being comparable across machines the moment they depend on which plugins the
+ * operator happens to have enabled.
+ *
+ * Its reach has a documented LIMIT, which is why `../isolation.ts` exists and why
+ * {@link claudeEnv} carries a fence of its own: the flag does not govern the auto-memory
+ * directory, so the operator's `MEMORY.md` reached every child despite it.
+ *
+ * `--strict-mcp-config` rides along because no MCP server is needed to answer a routing
+ * question or judge a transcript, and each is a connection attempt on every call, on paths
+ * that make hundreds. It is also simply the combination that was measured; shipping one of
+ * the two would ship an arrangement no evidence covers.
+ *
+ * The cross-session deny rides along for the reason given on {@link CROSS_SESSION_DENY}. A
+ * grader asked to judge a transcript has even less business reaching another session than a
+ * scenario child does, and it is the same one-line flag either way.
+ *
+ * Note what is NOT here. `--allowedTools Skill` is a per-harness decision -- a triggering
+ * sweep measures whether the router REACHES for a skill and must not grant execution, while
+ * a disclosure sweep measures what an executing skill reads and must. See
+ * {@link SKILL_EXECUTION_GRANT}.
+ */
+export const CHILD_ISOLATION_FLAGS: readonly string[] = [
+  "--setting-sources",
+  "project",
+  "--strict-mcp-config",
+  ...CROSS_SESSION_DENY,
+];
 
 export interface CommandOptions {
   /** Hard deadline in milliseconds. Enforced by SIGKILL, not by Bun's soft `timeout`. */
@@ -261,32 +386,6 @@ export async function runCommand(
 }
 
 /**
- * Flags that keep a helper call out of the operator's own configuration.
- *
- * Verbatim from the measurement path in `../operations/measure-triggering.ts`, and both
- * are load-bearing. Measured on a helper call spawned WITHOUT them from a bare working
- * directory: the router selected the plugin skill `skill-creator:skill-creator` and issued
- * a `Read` nobody asked for. A grader that goes on side quests is not a guardrail, and its
- * verdicts stop being comparable across machines the moment they depend on which plugins
- * the operator happens to have enabled.
- *
- * `--setting-sources project` is the flag that does it. Measured against a temporary root
- * holding one skill: with the flag the run saw that skill plus Claude Code's own built-ins
- * and NOTHING else -- no plugin skills, and no user-level skills either, which is more than
- * its name promises. Without it the same root saw 118, the operator's whole inventory.
- *
- * `--strict-mcp-config` rides along for the reason the measurement path gives -- no MCP
- * server is needed to judge a transcript, and each one is a connection attempt on every
- * call, on a path that makes hundreds. It is also simply the combination that was
- * measured; shipping one of the two would ship an arrangement no evidence covers.
- */
-const HELPER_ISOLATION_FLAGS: readonly string[] = [
-  "--setting-sources",
-  "project",
-  "--strict-mcp-config",
-];
-
-/**
  * Run a single-turn helper call -- a grader, a description improver, a scenario
  * synthesizer -- isolated from whatever is installed on the operator's machine.
  *
@@ -319,7 +418,7 @@ export async function runIsolatedHelper(
 ): Promise<CommandOutcome> {
   const root = await mkdtemp(`${tmpdir()}/claude-helper-`);
   try {
-    return await runCommand([...cmd, ...HELPER_ISOLATION_FLAGS], { ...options, cwd: root });
+    return await runCommand([...cmd, ...CHILD_ISOLATION_FLAGS], { ...options, cwd: root });
   } finally {
     // Best-effort: a helper's verdict must not be lost to a failed directory removal.
     await rm(root, { recursive: true, force: true }).catch(() => undefined);

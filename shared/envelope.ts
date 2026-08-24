@@ -63,6 +63,7 @@
 
 import { z } from "zod@4.1.0";
 
+import { IsolationStateSchema } from "./isolation.ts";
 import { discoverSkillsWithStatus, type Discovery } from "./tools/check-overlap.ts";
 
 // ---------------------------------------------------------------------------
@@ -237,6 +238,24 @@ export const RunBlockSchema = z.object({
   /** Content hash of the artifact under test, from {@link hashArtifact}. */
   targetSha: z.string(),
   installState: InstallStateSchema,
+  /**
+   * Whether the spawned children were PROVEN to have seen only the artifact under test.
+   *
+   * The strictly stronger companion to `installState`, and the two answer adjacent halves of
+   * one question. `installState` sweeps the MACHINE and reports what a run might have been
+   * competing with; `isolation` reads what the child actually enumerated and reports what it
+   * WAS competing with. A sweep can be `absent` and `violated` at the same time -- nothing
+   * shadowed the target's name, and the operator's auto-memory was in its context regardless.
+   *
+   * Required rather than optional, in line with every other member: an absent key and a
+   * `"unverified"` value would read identically to a consumer while meaning "this producer
+   * has not been updated" versus "this run was not checked". A producer that spawns no child
+   * writes `"not-applicable"`, which is a real answer and not a default.
+   *
+   * See `./isolation.ts` for what is checked and for the contamination it was written after
+   * finding.
+   */
+  isolation: IsolationStateSchema,
 });
 export type RunBlock = Immutable<z.infer<typeof RunBlockSchema>>;
 
@@ -503,6 +522,14 @@ export async function readEnvelope(path: string): Promise<Envelope> {
  *   runsPer         a rate over 2 attempts and a rate over 10 are not the same estimate
  *   evalSetHash     different questions
  *   installState    a shadowed target answers with somebody else's description
+ *   isolation       a contaminated child answered a different question from a clean one
+ *
+ * `isolation` earns its place on the same argument as `installState`, one layer in. A run
+ * whose child carried the operator's auto-memory in its system prompt was answering with
+ * several hundred lines of unrelated instruction in context; a run whose child did not, was
+ * not. Subtracting one from the other reports a change in the operator's machine as a change
+ * in the artifact. That a `verified` run and an `unverified` one also fail this check is
+ * intended and not incidental: an unverified run has not been shown to be either.
  */
 export const COMPARABILITY_KEYS = [
   "model",
@@ -511,6 +538,7 @@ export const COMPARABILITY_KEYS = [
   "runsPer",
   "evalSetHash",
   "installState",
+  "isolation",
 ] as const;
 
 export type ComparabilityKey = (typeof COMPARABILITY_KEYS)[number];
@@ -722,6 +750,35 @@ export interface InstallSighting {
  * `unknown` with a cap that says why, which is the honest outcome: `discoverSkillsWithStatus`
  * globs `**\/SKILL.md`, and inventing a second discovery for agents is a bigger change than
  * this contract needs and would be untested against a real installed set.
+ *
+ * WHY THE PLUGIN CACHE IS NOT SWEPT, DELIBERATELY
+ * -----------------------------------------------
+ * The sweep covers `~/.claude/skills`, `~/.claude/plugins/marketplaces`,
+ * `~/.claude/plugins/repos` and the project root. It does NOT cover
+ * `~/.claude/plugins/cache`, and that looks at first like the blind spot this whole state
+ * exists to prevent -- measured on one developer machine, the cache held 700 `SKILL.md`
+ * files, six of them named `skill-creator`, which is a name this repository measures.
+ *
+ * Adding it would make the answer WORSE, for two measured reasons.
+ *
+ * The cache is a VERSION-KEYED content store rather than an install set. Those six copies
+ * are `anthropic-agent-skills/claude-api/{f379e5ad66e2,b29e7cf65e5c,3b3fad96af16}/`,
+ * `claude-plugins-official/skill-creator/unknown/`, `ACMElabs/plugin-kit/0.4.0/` and
+ * `ACMElabs/skill-creator/0.2.0/` -- three of them the same plugin at three revisions. A
+ * single installed plugin with an upgrade history would therefore report `shadowed`, and
+ * `shadowed` is a COMPARABILITY key: the run would start refusing legitimate deltas because
+ * somebody had updated a plugin. Half the same tree (364 of the 700) sits under `temp_git_*`
+ * clone staging that a later plugin operation deletes.
+ *
+ * And a cached copy provably cannot win a probe in an isolated run. Measured at CLI 2.1.241
+ * against that same machine: a child spawned with `--setting-sources project` reports
+ * `"plugins": []` and a skill list of the artifact under test plus sixteen binary built-ins.
+ * Nothing in the cache reaches it.
+ *
+ * The validity claim those runs need is now carried by `run.isolation`, which reads what the
+ * child ACTUALLY enumerated rather than inferring it from what the machine holds. That is
+ * the stronger instrument, and it is why widening a weaker one into false positives is not
+ * worth doing. See `./isolation.ts`.
  */
 export async function detectInstallState(params: {
   readonly artifact: ArtifactKind;

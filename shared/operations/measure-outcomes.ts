@@ -94,9 +94,22 @@ import {
   writeEnvelope,
 } from "../envelope.ts";
 import type { Spec } from "../cli.ts";
+import {
+  checkIsolation,
+  createIsolationLedger,
+  createSurfaceReader,
+  type IsolationExpectation,
+  type IsolationState,
+  type IsolationVerdict,
+} from "../isolation.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { calculateStats, type Stats } from "../util/stats.ts";
-import { runIsolatedHelper, runStreamingLines, SKILL_EXECUTION_GRANT } from "../util/subprocess.ts";
+import {
+  CHILD_ISOLATION_FLAGS,
+  runIsolatedHelper,
+  runStreamingLines,
+  SKILL_EXECUTION_GRANT,
+} from "../util/subprocess.ts";
 import {
   flagNumber,
   flagString,
@@ -626,6 +639,19 @@ export interface OutcomesEnvelopeInput {
   readonly evalSetHash: string;
   readonly targetSha: string;
   readonly installState: InstallState;
+  /**
+   * Folded from the per-cell proofs. `unverified` when no cell reported one.
+   *
+   * Required rather than optional, because the value a forgetful caller would have defaulted
+   * to is the one that reads as "we checked and found nothing wrong" to anyone who skims.
+   * The enum exists precisely so that not checking and checking clean are different claims,
+   * and an omittable field merges them at the call site where the omission is invisible.
+   *
+   * Read at WRITE time by the caller, not captured once: this operation writes a snapshot
+   * after every settled cell, and a state folded before the first cell ran would stamp
+   * `unverified` on the final envelope of a fully verified sweep.
+   */
+  readonly isolation: IsolationState;
   /** True while the sweep is still running. Snapshots pass true; the final write false. */
   readonly inProgress: boolean;
   readonly caps?: readonly string[];
@@ -766,6 +792,7 @@ export function buildOutcomesEnvelope(input: OutcomesEnvelopeInput): Envelope<Ou
       evalSetHash: input.evalSetHash,
       targetSha: input.targetSha,
       installState: input.installState,
+      isolation: input.isolation,
     },
     provenance: {
       // Token figures in the rows come from the runtime's own usage accounting; nothing
@@ -895,21 +922,58 @@ export function createClaudeExecutor(params: {
   readonly targetName: string;
   readonly description: string;
   readonly permissionMode?: string | undefined;
+  /**
+   * Handed each cell's isolation proof, read from that child's own `init` event.
+   *
+   * On the executor rather than on {@link MeasureOutcomesParams}, because the executor is
+   * the seam: `measureOutcomes` is handed one wholesale and never spawns anything itself, so
+   * a callback on the sweep would have no way to reach the child under a substituted one.
+   *
+   * Per CELL rather than once per sweep, and this operation is the reason that matters most.
+   * The two arms run in DIFFERENT roots -- one with the artifact installed, one empty -- so
+   * they are not two samples of the same arrangement, and a proof of either says nothing
+   * about the other.
+   */
+  readonly onIsolation?: ((verdict: IsolationVerdict) => void) | undefined;
 }): RunExecutor {
   /* istanbul ignore next -- @preserve */
   return async (request: RunRequest): Promise<RunOutcome> => {
     let root: string;
+    /**
+     * What this arm's child must be able to see -- and, on the control, must NOT.
+     *
+     * Decided beside the root because the two arms differ in exactly that, and the two
+     * expectations are not mirror images of one another.
+     *
+     * The TREATMENT looks for the per-run ALIAS, which is the only name its copy answers to
+     * and therefore the only evidence that the run reached the artifact rather than measuring
+     * its absence.
+     *
+     * The CONTROL looks for the AUTHORED name, and asking after the alias there would be a
+     * check that cannot fail: no alias was ever minted for this root, so nothing could
+     * possibly answer to it and every control would report clean. The name a leak would
+     * actually arrive under is the one the operator's own installed copy carries. A control
+     * that can see it measured the treatment, and the delta this operation exists to report
+     * is then a difference between two treatments.
+     */
+    let expectation: IsolationExpectation;
+    // The same cast the installer below is already given, and sound for the same reason:
+    // `main` refuses any artifact outside `INSTALLABLE_KINDS`, which is exactly the three
+    // kinds a child announces in a surface list.
+    const kind = params.artifact as TargetType;
     let cleanup = true;
     if (request.artifactAvailable) {
       const installed = await installTargetForTrigger({
         targetPath: params.targetPath,
-        targetType: params.artifact as TargetType,
+        targetType: kind,
         name: params.targetName,
         description: params.description,
       });
       root = installed.root;
+      expectation = { name: installed.alias, kind, expect: "present", root: installed.root };
     } else {
       root = await mkdtemp(`${tmpdir()}/measure-outcomes-`);
+      expectation = { name: params.targetName, kind, expect: "absent", root };
     }
 
     const started = Bun.nanoseconds();
@@ -921,9 +985,13 @@ export function createClaudeExecutor(params: {
         "--output-format",
         "stream-json",
         "--verbose",
-        "--setting-sources",
-        "project",
-        "--strict-mcp-config",
+        // Settings from the throwaway root only, no MCP, and no instrument for reaching
+        // another session. On both arms from the same constant, which is what makes the
+        // arms comparable at all: a flag that differed between them would be a second
+        // difference beside the artifact's presence, and the delta could not be attributed.
+        // See the constant for what each flag was measured to do, and for the one thing
+        // none of them closes.
+        ...CHILD_ISOLATION_FLAGS,
         // On BOTH arms deliberately. The control installs no artifact, so the grant is
         // inert there, and giving both arms identical flags keeps the artifact's presence
         // the only difference between them. Without it the treatment arm never loads the
@@ -937,15 +1005,24 @@ export function createClaudeExecutor(params: {
       }
 
       const lines: string[] = [];
+      // Wrapped rather than replaced: the collecting handler owns everything this cell is
+      // graded on and stays in the path untouched. The wrapper only keeps the `init` line on
+      // its way past, and the line is one this run was already buffering.
+      const reader = createSurfaceReader((line: string) => {
+        lines.push(line);
+        return undefined;
+      });
       const outcome = await runStreamingLines(
         cmd,
         { cwd: root, timeoutMs: request.timeoutSeconds * 1000 },
-        (line) => {
-          lines.push(line);
-          return undefined;
-        },
+        reader.onLine,
       );
       const seconds = (Bun.nanoseconds() - started) / 1e9;
+      // Reported before the outcome is classified, so a timed-out, throttled or errored cell
+      // still contributes what its child managed to say about itself. A cell that died early
+      // is exactly the one whose isolation nobody would otherwise have checked -- and here it
+      // is also excluded from every figure, so this proof is the only trace it leaves.
+      params.onIsolation?.(checkIsolation({ surface: reader.surface(), expected: expectation }));
       if (outcome.kind === "timeout") return { kind: "timeout", seconds: request.timeoutSeconds };
       if (outcome.kind === "error") {
         return classifyFailureText(outcome.message) === "throttled"
@@ -1192,9 +1269,27 @@ async function main(): Promise<void> {
     startedAt: new Date(),
   };
   const baseline = selectBaseline(artifact);
+  // Not in `shared`, and that is the whole point of it being separate. Every field in
+  // `shared` is fixed before the first cell runs; this one only becomes true as cells land,
+  // and the envelope is rewritten after each of them.
+  const isolation = createIsolationLedger();
   const write = async (output: OutcomesOutput, inProgress: boolean): Promise<void> => {
     await Bun.write(`${out}/outcomes.json`, `${JSON.stringify(output, null, 2)}\n`);
-    await writeEnvelope(`${out}/envelope.json`, buildOutcomesEnvelope({ output, inProgress, ...shared }));
+    await writeEnvelope(
+      `${out}/envelope.json`,
+      buildOutcomesEnvelope({
+        output,
+        inProgress,
+        ...shared,
+        // Read at each WRITE rather than captured with `shared`, so every snapshot reports
+        // the proofs collected by the time it was written. The one taken before any cell
+        // settled says `unverified`, which is the truth about it.
+        isolation: isolation.state(),
+        // Deduplicated and counted by the ledger, so a machine that contaminated every cell
+        // contributes one sentence rather than one per cell.
+        caps: [...shared.caps, ...isolation.caps()],
+      }),
+    );
   };
 
   // Written before the first cell settles, so the run is legible as unfinished from the
@@ -1225,6 +1320,7 @@ async function main(): Promise<void> {
       targetName: definition.name,
       description: definition.description,
       permissionMode: flagString(flags, "permission-mode"),
+      onIsolation: isolation.record,
     }),
     grader: createClaudeGrader({
       graderModel,

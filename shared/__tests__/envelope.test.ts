@@ -72,6 +72,7 @@ function runBlock(overrides: Partial<RunBlock> = {}): RunBlock {
     evalSetHash: "sha256:aaaa",
     targetSha: "sha256:bbbb",
     installState: "absent",
+    isolation: "verified",
     ...overrides,
   };
 }
@@ -270,11 +271,15 @@ describe("EnvelopeSchema", () => {
     }
     expect(thrown).toBeInstanceOf(EnvelopeError);
     const problems = (thrown as EnvelopeError).problems;
-    expect(problems.length).toBe(13 + 7 + 3);
+    expect(problems.length).toBe(14 + 7 + 3);
     // Each problem still names its field, which is the whole reason the error carries a
-    // list rather than a sentence.
+    // list rather than a sentence. `isolation` is asserted alongside `installState` because
+    // the two are the pair a reader trusts a number on, and a validator that caught one
+    // while passing over the other would hand a producer a green light on half the claim.
     expect(problems.map((p) => p.path)).toContain("run.installState");
+    expect(problems.map((p) => p.path)).toContain("run.isolation");
     expect((thrown as EnvelopeError).message).toContain("run.installState");
+    expect((thrown as EnvelopeError).message).toContain("run.isolation");
   });
 });
 
@@ -297,6 +302,7 @@ describe("buildEnvelope", () => {
         evalSetHash: null,
         targetSha: "sha256:cafe",
         installState: "unknown",
+        isolation: "not-applicable",
       },
       provenance: {
         tokenizer: "none",

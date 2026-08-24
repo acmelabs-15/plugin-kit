@@ -571,6 +571,12 @@ export function buildValidationEnvelope(
       evalSetHash: null,
       targetSha: input.targetSha,
       installState: input.installState,
+      // This operation reads files and spawns nothing, so there is no child whose surface
+      // could be read and no isolation to establish. `not-applicable` is the honest answer
+      // and `unverified` would not be: the latter says a check that should have happened
+      // did not, and would put a caveat on this envelope that nobody can ever act on. The
+      // same distinction `timeoutPolicy: "not-applicable"` draws two fields below.
+      isolation: "not-applicable",
     },
     provenance: {
       // No token figure is reported anywhere in this envelope. A skill's body-token check
