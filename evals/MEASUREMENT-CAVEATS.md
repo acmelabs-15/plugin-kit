@@ -78,3 +78,63 @@ agree. `measure-disclosure.ts` writes a flat `MeasureOutput` — `body_tokens`,
 invited a reader to compare them and conclude a restructure had been evaluated.
 The stored results under `evals/results/disclosure/` are in the optimizer's shape
 and stay that way.
+
+## The `/morning` false fire was not neighbour collision — found 2026-08-23
+
+`MEASUREMENTS.md:94-96` writes off one of `command-creator`'s false fires:
+
+> command-creator fires on *"set up /morning so it runs every weekday"* — a
+> `/morning` skill is installed here, so this is neighbour collision rather than a
+> description defect. `check-overlap.ts` reports the same pair.
+
+The harness isolates each run from the machine, so a `/morning` installed at user
+scope was not reachable by the model that answered that query. Every sweep copies
+the target into a throwaway project root under a unique alias —
+`measure-triggering.ts:277-279` and `:351-352` — and runs `claude` there with
+`--setting-sources project` and `--strict-mcp-config` (`:709-710`, `:713`), cwd set
+to that root (`:719`).
+
+Measured 2026-08-23 rather than inferred. A probe composed the same argv against a
+temp root holding one uniquely-named skill:
+
+| condition | skills enumerated |
+|---|---|
+| with `--setting-sources project --strict-mcp-config` | 11 — the probe skill and ten built-ins |
+| same cwd, flags removed | 118 — loose user skills and the whole plugin layer |
+
+Nothing at user scope survived the isolated enumeration, `ask-user-question`
+included — installed loose in `~/.claude/skills`, and the direct analogue of
+`/morning`. Behaviour agreed with the enumeration: one routing query produced no
+tool calls isolated, and reached for a plugin skill and issued a `Read` with the
+flags removed.
+
+The evidence the record cites is machine-scoped, and both halves of it are the same
+observation. `check-overlap.ts:166` scans `${HOME}/.claude/skills` and tags what it
+finds `origin: "user"`; that is where `command-creator-inventory.md:57` gets
+`` `morning` (user) ``, and it is also what "`check-overlap.ts` reports the same
+pair" means. Neither speaks to what loaded during the run. The harness states the
+distinction itself at `measure-triggering.ts:1563-1565`: what `detectInstallState`
+reports "is the MACHINE's state, not the run's."
+
+There was no run-scoped alternative to consult. No run in this corpus wrote an
+envelope, so no `installState` was recorded for any of them, and a machine-scoped
+sighting was the only install evidence available to whoever wrote the line.
+
+**Consequence.** That false fire is a `command-creator` description defect, and it
+is open. `MEASUREMENTS.md:86` counts six surviving false fires and calls three
+"genuinely arguable rather than defects"; two are arguable, and this one belongs
+with the real ones.
+
+**No number moves.** The query is a hard negative that fired, and it scored as a
+miss either way — reclassifying its cause changes no trigger rate, no row, no
+total. This corrects an interpretation, not a measurement.
+
+**What this does not establish.** The probe ran against the current harness. The
+flags are present in the earliest committed form of it —
+`525f5f5:shared/scripts/measure-triggering.ts:679,683`, the same commit that
+published this record — so every version of the harness existing in this repository
+isolates. The working tree that actually produced the 2026-08-08 run was never
+committed, and that run happened on another machine
+(`command-creator-inventory.md:3` records `/home/claude/work/skill-creator/`), so
+its exact harness state is unrecoverable. If that tree lacked the flags, the line
+was correct when written and is wrong now.
