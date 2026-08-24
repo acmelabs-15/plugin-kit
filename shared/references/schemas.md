@@ -518,12 +518,12 @@ All three are required arrays. Empty is fine; absent is refused.
 |---|---|---|
 | `measure-triggering` | one query: `query`, `shouldTrigger`, `triggers`, `runs`, `triggerRate`, `pass`, `earlyStopped` | `pass`, `fail` |
 | `optimize-description` | one iteration: `iteration`, `description`, `trainPassed`, `trainTotal`, `testPassed`, `testTotal`, `selected` | `selected`, `scored` |
-| `optimize-disclosure`, `measure-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
-
-`measure-disclosure` shares the disclosure builder rather than owning one. It measures the layout as authored where `optimize-disclosure` measures the layout it selected, so the rows, the verdict vocabulary and the timeout policy are the same and only `run.operation` distinguishes them — which is exactly what a closed operation set is for.
+| `optimize-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
 | `validate` | one finding: `file`, `line`, `severity`, `rule`, `message`, `section` | `valid`/`invalid` for the artifact, `invalid`/`warned`/`no-findings` per section, `not-checked` for a check that did not run |
 
 **`no-findings` is not `pass`, and the distinction is load-bearing.** A section that ran and was satisfied and a section that declined to look both come back as zero errors and zero warnings. `pass` would be a judgement the validator has not earned on the second, so a clean section says only what came back, and a check that did not run gets its own `not-checked` verdict beside it.
+
+**`measure-disclosure` has no row above because it writes no envelope.** It has no `--envelope` flag either. What a measurement pass emits is a flat `MeasureOutput` on stdout, the same JSON to `results.json` when `--results-dir` is passed, and `report.html` when that or `--report` is — and nothing else. Its output shape is an open decision. `buildDisclosureEnvelope` takes an `operation` parameter so the `optimize-disclosure` row is reachable from a measurement pass without forking the builder, but nothing calls it that way yet; where this operation appears elsewhere on this page, that is its scoring behaviour or its membership of the closed operation set, not a file it writes. So its install state is not in `provenance.installState`. It is in `install_state` and `install_conflict` on `MeasureOutput`, which carry the sighting and, when a copy of the skill turns out to be installed, the sentence saying every pull rate in that run is floored at zero.
 
 ### Comparability — why a delta is sometimes refused
 
@@ -553,6 +553,8 @@ Change `workers`, `model` or `timeoutSeconds` and a run is incomparable with eve
 | `../validate/validate.ts` | `--envelope <path>` | none — no flag, no envelope |
 
 `../operations/optimize-description.ts` accepts `--envelope` and exports `buildDescriptionEnvelope`, but does not yet write the file; the row and verdict shapes above are what it will emit. Until it does, a description-optimization run leaves only `results.json` and `report.html`.
+
+`../operations/measure-disclosure.ts` is missing from the table on purpose: it takes no `--envelope` flag and writes no envelope under any flag combination. It reports its install state in `results.json` instead — see the note under the row shapes above.
 
 ### It is validated on the way out
 
