@@ -171,9 +171,14 @@ export function checkScenarioSet(raw: unknown, source: string, ctx: IssueSink): 
 
   const rows = rowsOf(raw);
   if (rows.length === 0) {
+    // An empty array is not told about `"evals"`. Both inputs used to get the one message,
+    // so someone who passed `[]` was pointed at a key their file never had and had no way
+    // to tell whether the shape or the contents was the problem.
     addError(
       ctx,
-      `${source}: expected a JSON array of scenarios, or an object with a non-empty "evals" array`,
+      Array.isArray(raw)
+        ? `${source}: expected a non-empty JSON array of scenarios, and this array is empty`
+        : `${source}: expected a JSON array of scenarios, or an object with a non-empty "evals" array`,
     );
     return;
   }

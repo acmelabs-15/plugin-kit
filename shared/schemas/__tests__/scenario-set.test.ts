@@ -121,10 +121,17 @@ describe("structural problems keep the messages the reader already threw", () =>
 
   test("an object with no rows errors, naming both accepted shapes", () => {
     expect(findings({}).errors[0]).toContain("expected a JSON array of scenarios");
+    expect(findings({}).errors[0]).toContain('"evals"');
   });
 
-  test("an empty array errors too, which is the reader's own behaviour", () => {
-    expect(findings([]).errors[0]).toContain("expected a JSON array of scenarios");
+  test("an empty array errors WITHOUT being told about a key it never had", () => {
+    // `[]` and `{}` used to share one message, so an author who passed an empty array was
+    // pointed at `"evals"` and could not tell whether the shape or the contents was wrong.
+    // Asserted on the quoted key rather than the bare word, because the source path in
+    // the message is `evals.json` and contains it.
+    const message = scenarioSetFindings([], "scenarios.json").errors[0] ?? "";
+    expect(message).toContain("this array is empty");
+    expect(message).not.toContain("evals");
   });
 
   test("a misspelled prompt names the culprit rather than only the index", () => {
