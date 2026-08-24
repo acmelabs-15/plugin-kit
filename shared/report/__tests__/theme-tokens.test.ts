@@ -62,13 +62,26 @@ function fallbacksIn(css: string): number {
 }
 
 /**
- * Known debt, and the only tokens allowed to dangle.
+ * Retained deliberately. Not debt awaiting payment.
  *
  * All four are model-identity colours from the reference's own token block: `--opus` at
- * `.note.warn` (twice, now overridden) and at `.chip.i` and `.chip.opus`, and one apiece for
- * `--fable`, `--sonnet` and `--haiku` on the model chips. Seven occurrences, four names.
+ * `.note.warn` (twice, now overridden by `DESIGN_OVERRIDES`) and at `.chip.i` and `.chip.opus`,
+ * and one apiece for `--fable`, `--sonnet` and `--haiku` on the model chips. Seven occurrences,
+ * four names.
  *
- * A fifth name here is a new bug. A missing name is a fix, and this list should lose it.
+ * No class in this repository emits `chip i`, `chip opus`, `chip fable`, `chip sonnet` or
+ * `chip haiku` today — checked exhaustively, including dynamic construction, which only ever
+ * appends a run state. Deleting them was proposed and REJECTED: plugin-kit is still under
+ * development, the reference's pages did have model-identity chips, and a rule for a chip
+ * nothing renders yet is as consistent with scaffolding as with dead weight. The asymmetry
+ * decides it — a rule that cannot match cannot mis-render, so keeping it costs nothing at
+ * runtime, while deleting a planned rule costs someone rediscovering both the rule and the
+ * reason. "Nothing references this" is the evidence that looks sufficient and is not.
+ *
+ * So this guard exists to catch a FIFTH name, not to pressure anyone into removing these four.
+ * A fifth is a new bug. If one of the four does legitimately go — because the tokens get
+ * ported, or because their author retires the chips — this list should lose it, and failing
+ * then is the point rather than a nuisance.
  */
 const KNOWN_DANGLING_IN_PORT = ["--fable", "--haiku", "--opus", "--sonnet"] as const;
 
@@ -100,23 +113,25 @@ describe("every shipped var() resolves to a defined token, or is known debt", ()
 });
 
 /**
- * `template.html` gets a second ratchet rather than a row in the first.
+ * `template.html` gets a second ratchet rather than a row in the first, and this one is closed.
  *
- * Its stylesheet is authored here, not ported, and it resolves against the tokens the app bar
- * injects — so it is checked against the same `THEME_TOKENS`, but its `--opus` references are
- * its own choice rather than debt inherited from the reference. The two lists will be settled
- * by different decisions and should therefore fail independently.
+ * Its stylesheet is authored here rather than ported, and it resolves against the tokens the app
+ * bar injects — so it is checked against the same `THEME_TOKENS`, but its dangling references
+ * were its own choice rather than anything inherited from the reference. That is the distinction
+ * that decided the two files differently: a rule authored here, live, and rendering wrongly is a
+ * defect to fix, where a ported rule nothing renders is a judgement about someone's roadmap.
+ *
+ * All four occurrences were live and all four were wrong. `.vt.warn` rendered rgb(0,0,0),
+ * identical to a verdict the page has no opinion about; `.caps li` rendered a grey border on a
+ * grey card; `.unwritten` rendered as an ordinary paragraph directly beneath a comment insisting
+ * it must read as unfinished. All three now carry `--warn`, and nothing here dangles.
  */
-const KNOWN_DANGLING_IN_TEMPLATE = ["--opus"] as const;
-
 describe("the report template's own stylesheet", () => {
-  test("dangles on exactly the one known token", async () => {
+  test("dangles on nothing", async () => {
     const html = await Bun.file(`${import.meta.dir}/../template.html`).text();
     const styles = captures(html, /<style>([\s\S]*?)<\/style>/g).join("\n");
-    // Four occurrences across `.caps li`, `.unwritten` and `.vt.warn`. The last is the same
-    // confusion the theme had: a verdict tone named `warn`, coloured by model identity.
     expect(styles.length).toBeGreaterThan(0);
-    expect(danglingIn(styles)).toEqual([...KNOWN_DANGLING_IN_TEMPLATE]);
+    expect(danglingIn(styles)).toEqual([]);
     expect(fallbacksIn(styles)).toBe(0);
   });
 });
