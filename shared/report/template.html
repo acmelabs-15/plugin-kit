@@ -24,7 +24,12 @@
     .tblwrap{ overflow-x:auto; }
     .delta.up{ color:var(--good); } .delta.down{ color:var(--bad); }
     .vt{ font-family:var(--mono); font-size:11px; }
-    .vt.good{ color:var(--good); } .vt.bad{ color:var(--bad); } .vt.warn{ color:var(--opus); }
+    /* .vt.warn took var(--opus), a model-identity token this repository never defines, so it
+       resolved to unset and inherited plain body text -- a `prune` verdict rendered identically
+       to a verdict this page has no opinion about, making the three-way tint a two-way one. Its
+       siblings were already semantic. Measured in Chrome before the change: rgb(0,0,0) against
+       --bad's rgb(224,0,0). */
+    .vt.good{ color:var(--good); } .vt.bad{ color:var(--bad); } .vt.warn{ color:var(--warn); }
     .kv{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
     .kv .k{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;
       font-family:var(--mono); }
