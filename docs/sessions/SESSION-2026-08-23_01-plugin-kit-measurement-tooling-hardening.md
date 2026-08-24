@@ -295,6 +295,14 @@ Suite 1,582 pass / 0 fail on the combined tree; main pushed. Remaining from the 
 - Measurement implication stated plainly: every historical A/B had the auto-memory confound in BOTH arms equally, so deltas stand; absolute levels carried a constant contaminant now removed, and the first sweep on the cleaned harness re-baselines them. The plugin cache stays out of the install sweep with the version-keyed-content-store reasoning recorded in the docblock
 - The proof module was adversarially mutation-tested (19 single-point mutations, 19 caught) and that review found five real defects fixed before landing. Suite 1,719 to 1,800, zero failures, three clean consecutive runs. This closes the eval-child cross-session isolation improvement candidate and retires the last in-flight thread of the day
 
+## Event — 2026-08-24: the three readable editions land beside their notes of record
+
+- Timestamp: 2026-08-24 16:08 PDT, measured. Orchestrated from the companion ask-user-question session; recorded here because the notes land in this project
+- Owner directive: new versions of ANALYSIS-004, 005 and 006, more readable and without confusing jargon, losing none of the content — created as SIBLINGS by owner choice, originals byte-identical (SHA-proven for 006, diff-proven for 004 and 005), existing links unmoved, each original the note of record
+- Landed at de57467, b22bbf5, 5c27f27: ANALYSIS-007, 008 and 009, the Readable Editions. Each opens with a Language section in the glossary pattern (22-28 defined terms with Avoid lists), applies one-word-one-concept with the STE sentence rules, gives repeating content one uniform shape (the six-part genre entries; the Claim-Evidence-Limits finding frame), and passed a mechanical PARITY GATE against its original — findings, quotes, numeric tokens, entities, labels, dated corrections all counted equal (009: 24/94/141/78; 007: 18 findings, 66 quote fragments, 16 correction markers; 008: 77 content checks plus 52 key strings)
+- The parity walks earned their cost twice beyond style: 008's found a FOURTH dated correction the commissioning brief did not know about, plus two unswept contradiction sites still inside ANALYSIS-005 (the all-5 manifest count in its executive summary; the externally-positive ordered-workflow claim in its could-not-determine bullet) — both routed to the researcher for dated correction in its established style; and 007's writer caught and restored a sentence its own first draft had dropped
+- House conventions enforced across the batch: the five-tag cap (all three siblings drop the redundant analysis tag), the no-inverse-on-originals exception commented in each sibling's Relations, symmetric relates_to edges closed on this note. The 003/002 edges and the extended_by pair from the originals' Relations deliberately have no sibling mirror — the siblings' Relations were specified minimal, with cross-references carried in body prose as the originals write them
+
 ## Observations
 
 ### Landed today
@@ -336,3 +344,6 @@ Suite 1,582 pass / 0 fail on the combined tree; main pushed. Remaining from the 
 - leads_to [[ANALYSIS-003: Measurement Fault Classes]]
 - required_by [[ANALYSIS-004: What Makes a Bundled Reference Get Read]]
 - required_by [[ANALYSIS-006: Weak-Model Routing for Progressive Disclosure]]
+- relates_to [[ANALYSIS-007: What Makes a Bundled Reference Get Read, Readable Edition]]
+- relates_to [[ANALYSIS-008: Structural Genres of Skill Content, Readable Edition]]
+- relates_to [[ANALYSIS-009: Weak-Model Routing for Progressive Disclosure, Readable Edition]]
