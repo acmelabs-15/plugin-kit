@@ -21,7 +21,7 @@
  *
  * Usage:
  *   bun shared/operations/measure-disclosure.ts --skill-path skills/<name> \
- *     --scenarios evals/disclosure/<name>.json --model opus
+ *     --scenarios evals/disclosure/<name>.json
  */
 
 import {
@@ -34,6 +34,7 @@ import {
   type DisclosureScenario,
   type FileStat,
   type GroundTruth,
+  type ScenarioRun,
   type TokenMethod,
 } from "./disclosure.ts";
 import {
@@ -44,6 +45,7 @@ import {
   measureLayout,
   setGraderBare,
   summarizeLayout,
+  type MeasureParams,
 } from "./disclosure-measure.ts";
 import { availableParallelism } from "node:os";
 
@@ -54,6 +56,32 @@ import { readTargetDefinition } from "./measure-triggering.ts";
 import { flagBoolean, flagNumber, flagString, parseCli, requireFlag } from "./measure-triggering.ts";
 import { ProgressReporter } from "../util/progress.ts";
 
+/**
+ * The model every measurement runs on. Not a flag, and that is the point.
+ *
+ * The weaker tier IS THE DETECTION INSTRUMENT. A measurement asks whether the body's
+ * pointers are good enough to send a model to the right file at the right moment, and a
+ * stronger tier answers correctly in spite of a bad pointer -- it infers what was meant,
+ * reaches the file anyway, and reports a healthy pull rate for a signposting defect that
+ * will still be there when a weaker tier meets it. Measuring on the stronger tier does not
+ * make the skill better; it makes the instrument blind. See `disclosure-optimization.md`.
+ *
+ * Hardcoded rather than defaulted because a default is still a knob, and unset this used to
+ * inherit whatever model the environment happened to be configured with -- the worst of all
+ * worlds, since the measurement then varied by operator without saying so.
+ */
+export const MEASUREMENT_MODEL = "sonnet";
+
+/**
+ * The permission mode every spawned scenario run uses. Also not a flag.
+ *
+ * Scenarios do the skill's real work and the real work writes files. The removed flag's own
+ * help text said to pass `acceptEdits` for those, which made the correct value a thing you
+ * had to remember rather than a thing the tool did -- and forgetting it does not fail
+ * loudly, it just produces runs that stopped short of the work being measured.
+ */
+export const MEASUREMENT_PERMISSION_MODE = "acceptEdits";
+
 export interface MeasureDisclosureParams {
   readonly skillPath: string;
   readonly scenarios: readonly DisclosureScenario[];
@@ -61,15 +89,31 @@ export interface MeasureDisclosureParams {
   readonly numWorkers: number;
   readonly timeoutSeconds: number;
   readonly inlineThreshold: number;
-  readonly model?: string | undefined;
-  /** Grades the assertions. Deliberately not `model`; see `DEFAULT_GRADER_MODEL`. */
+  /**
+   * A model to sweep on INSTEAD of {@link MEASUREMENT_MODEL}, for a tier study.
+   *
+   * Purpose-named at this boundary and not only at the CLI, so the substitution cannot be
+   * made without saying what it is for. A caller that simply wants "a different model" has
+   * no field to put it in, which is the whole design.
+   */
+  readonly tierStudy?: string | undefined;
+  /** Grades the assertions. Deliberately not the measurement model; see `DEFAULT_GRADER_MODEL`. */
   readonly graderModel?: string | undefined;
-  readonly permissionMode?: string | undefined;
   readonly logDir?: string | undefined;
   readonly onProgress?: ((settled: number, total: number) => void) | undefined;
   readonly onStarted?:
     | ((inFlight: number, started: number, total: number) => void)
     | undefined;
+  /**
+   * The sweep, injected. Defaults to {@link measureLayout}, which spawns `claude`.
+   *
+   * The same reasoning `measureWithGate` gives for injecting its three sweeps: the thing
+   * worth testing here is WHAT THIS FUNCTION HANDS THE SWEEP -- the fixed measurement model
+   * and permission mode, or a tier study's substitution -- and a rule reachable only by
+   * spending an hour of API time is a rule with no coverage. That is doubly true of these
+   * two values, which are hardcoded precisely because they were being got wrong.
+   */
+  readonly sweep?: ((params: MeasureParams) => Promise<readonly ScenarioRun[]>) | undefined;
 }
 
 /**
@@ -121,6 +165,16 @@ export interface MeasureOutput {
    * the distinction a bare rate of zero destroys.
    */
   readonly ground_truth: GroundTruth;
+  /**
+   * The model a TIER STUDY swept on, when this run was one. Absent otherwise.
+   *
+   * Absent rather than null for an ordinary run, so a measurement of record is byte-for-byte
+   * the shape it always was and no consumer has to learn a new key to keep working. Present,
+   * it means exactly one thing: these figures came from a deliberate off-tier sweep and are
+   * NOT a signposting measurement of record — the pull rates were produced by a model that
+   * is not the detection instrument.
+   */
+  readonly tier_study?: string;
 }
 
 /**
@@ -183,16 +237,19 @@ export async function measureDisclosure(
     );
   }
 
-  const runs = await measureLayout({
+  const sweep = params.sweep ?? measureLayout;
+  const runs = await sweep({
     skillDir: params.skillPath,
     skillName,
     scenarios: params.scenarios,
     runsPerScenario: params.runsPerScenario,
     numWorkers: params.numWorkers,
     timeoutSeconds: params.timeoutSeconds,
-    model: params.model,
+    // Always explicit. Passing nothing here is what used to hand the run to whatever model
+    // the environment was configured with, so the sweep silently varied by operator.
+    model: params.tierStudy ?? MEASUREMENT_MODEL,
     graderModel: params.graderModel,
-    permissionMode: params.permissionMode,
+    permissionMode: MEASUREMENT_PERMISSION_MODE,
     grade: true,
     logDir: params.logDir,
     onProgress: params.onProgress,
@@ -273,6 +330,7 @@ export async function measureDisclosure(
     assertions_total: layout.train.assertionsTotal,
     files: layout.files,
     ground_truth: layout.groundTruth,
+    ...(params.tierStudy === undefined ? {} : { tier_study: params.tierStudy }),
   };
 }
 
@@ -283,6 +341,11 @@ const USAGE =
   "the assertion pass rate. Nothing is restructured and the skill is never written to.\n\n" +
   "Budget: --scenarios x --runs-per-scenario runs, each doing the skill's real work, plus\n" +
   "one grading call per run on --grader-model.\n\n" +
+  `Runs sweep on ${MEASUREMENT_MODEL} with --permission-mode ${MEASUREMENT_PERMISSION_MODE}, and\n` +
+  "neither is configurable. The weaker tier is the detection instrument: a stronger one\n" +
+  "reaches the right file in spite of a bad pointer and hides the signposting defect. To\n" +
+  "sweep another tier deliberately, use --tier-study, which marks the run as a study rather\n" +
+  "than a measurement of record.\n\n" +
   "To restructure the layout as well, use optimize-disclosure.ts.";
 
 /** The flag spec, exported so the defaults are reachable from the suite. */
@@ -292,11 +355,16 @@ export const MEASURE_FLAGS: Spec = {
     kind: "string",
     help: "Path to scenarios JSON: evals.json, or an array of {id, prompt, expectations}",
   },
-  model: { kind: "string", help: "Model for the scenario runs (NOT the grader)" },
+  "tier-study": {
+    kind: "string",
+    help:
+      `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, for an over-fetch study or a ` +
+      "tier comparison. Marks the run as a tier study, not a measurement of record",
+  },
   "grader-model": {
     kind: "string",
     default: DEFAULT_GRADER_MODEL,
-    help: "Model that grades assertions — measured against --model, not assumed cheaper",
+    help: `Model that grades assertions — measured against ${MEASUREMENT_MODEL}, not assumed cheaper`,
   },
   "grader-bare": {
     kind: "boolean",
@@ -319,10 +387,6 @@ export const MEASURE_FLAGS: Spec = {
     default: DEFAULT_INLINE_THRESHOLD,
     help: "Pull rate at or above which a reference is reported as worth inlining",
   },
-  "permission-mode": {
-    kind: "string",
-    help: "Passed to claude -p; use acceptEdits for scenarios that write files",
-  },
   "results-dir": {
     kind: "string",
     help: "Save results.json, report.html and per-run logs here",
@@ -331,6 +395,53 @@ export const MEASURE_FLAGS: Spec = {
   verbose: { kind: "boolean", default: false, help: "Print per-file verdicts to stderr" },
   help: { kind: "boolean", short: "h", help: "Show this message" },
 };
+
+/**
+ * Said once at the top of every run, whether or not anyone asked.
+ *
+ * The removed flag's fence was a quiet default: correct behaviour available to whoever
+ * remembered to ask for it. Honouring that fence means being LOUD instead of optional --
+ * the run states what it does to the sandbox and why, so the operator learns the rule from
+ * the tool rather than from its help text.
+ */
+export const ACCEPT_EDITS_NOTICE =
+  `Scenario runs spawn with --permission-mode ${MEASUREMENT_PERMISSION_MODE}. Scenarios do the ` +
+  "skill's real work and the real work writes files, so a run that cannot write stops short " +
+  "of what is being measured. Not configurable.";
+
+/**
+ * The flags that used to live here, and what to reach for instead.
+ *
+ * Checked BEFORE `parseCli`, because the parser's answer to a retired flag is `unknown
+ * flag: --model` -- true, unhelpful, and identical to the answer for a typo. A habit that
+ * outlives its flag should meet an education, not a mystery.
+ *
+ * Exported and pure so the suite can drive it, which matters more here than usual: the
+ * whole reason these flags are gone is that they were passed repeatedly against a standing
+ * ruling, so the message that intercepts them is the load-bearing part of the change.
+ */
+export function removedFlagError(argv: readonly string[]): string | null {
+  for (const [index, token] of argv.entries()) {
+    if (!token.startsWith("--")) continue;
+    const equals = token.indexOf("=");
+    // Split on `=` so `--model=opus` is recognized, and compare the NAME exactly so
+    // `--grader-model`, which is still a flag, is not swept up by a substring match.
+    const name = equals === -1 ? token.slice(2) : token.slice(2, equals);
+    const inline = equals === -1 ? undefined : token.slice(equals + 1);
+    if (name === "model") {
+      const next = inline ?? argv[index + 1];
+      const suggestion = next === undefined || next.startsWith("-") ? "<model>" : next;
+      return (
+        `--model is removed; the measurement model is ${MEASUREMENT_MODEL} — for over-fetch ` +
+        `or tier comparison use --tier-study ${suggestion}`
+      );
+    }
+    if (name === "permission-mode") {
+      return `--permission-mode is removed; runs always use ${MEASUREMENT_PERMISSION_MODE}`;
+    }
+  }
+  return null;
+}
 
 /* istanbul ignore next -- @preserve */
 /**
@@ -358,7 +469,18 @@ export function liveReportPath(
 }
 
 async function main(): Promise<void> {
+  // Before the parser, so a retired flag gets its replacement rather than `unknown flag`.
+  const removed = removedFlagError(Bun.argv.slice(2));
+  if (removed !== null) {
+    console.error(`Error: ${removed}`);
+    process.exit(2);
+  }
   const { flags } = parseCli(MEASURE_FLAGS, USAGE);
+
+  // First thing every run says, before any input validation can send it home. The removed
+  // flag's fence was a quiet default; honouring it means the rule is stated whether or not
+  // the run goes on to succeed.
+  console.error(`Note: ${ACCEPT_EDITS_NOTICE}`);
 
   const skillPath = requireFlag(flags, "skill-path");
   const scenariosPath = requireFlag(flags, "scenarios");
@@ -382,6 +504,18 @@ async function main(): Promise<void> {
   const reportPath = flagString(flags, "report") ?? "none";
   const runsPerScenario = flagNumber(flags, "runs-per-scenario");
   const verbose = flagBoolean(flags, "verbose");
+  const tierStudy = flagString(flags, "tier-study");
+
+  // Said BEFORE `ProgressReporter.start`, which repaints stderr for the length of the
+  // sweep. A line printed after it is a line nobody reads.
+  if (tierStudy !== undefined) {
+    console.error(
+      `TIER STUDY: sweeping on ${tierStudy} instead of ${MEASUREMENT_MODEL}. This run is NOT a ` +
+        `signposting measurement of record — a stronger tier reaches the right file in spite ` +
+        `of a bad pointer, so its pull rates describe the model rather than the layout. Use it ` +
+        `for over-fetch study or tier comparison only.`,
+    );
+  }
 
   // The default is derived from the machine; an explicit value still overrides it,
   // deliberately, because an account being rate limited is a reason to turn this DOWN
@@ -403,7 +537,10 @@ async function main(): Promise<void> {
 
   const reporter = ProgressReporter.start({
     kind: "disclosure-loop",
-    label: `${baseName(skillPath)} — disclosure measurement`,
+    label:
+      tierStudy === undefined
+        ? `${baseName(skillPath)} — disclosure measurement`
+        : `${baseName(skillPath)} — tier study on ${tierStudy}`,
     total: scenarios.length * runsPerScenario,
     subject: baseName(skillPath),
     detail: {
@@ -422,9 +559,8 @@ async function main(): Promise<void> {
       numWorkers: flagNumber(flags, "num-workers"),
       timeoutSeconds: flagNumber(flags, "timeout"),
       inlineThreshold: flagNumber(flags, "inline-threshold"),
-      model: flagString(flags, "model"),
+      tierStudy,
       graderModel: flagString(flags, "grader-model") ?? DEFAULT_GRADER_MODEL,
-      permissionMode: flagString(flags, "permission-mode"),
       logDir: resultsDir === undefined ? undefined : `${resultsDir}/logs`,
       onProgress: (settled) => reporter.report(settled),
       // Reported so the dashboard can distinguish a busy pool from a hung one. Nothing
@@ -471,7 +607,10 @@ async function main(): Promise<void> {
         iterations: [
           {
             iteration: 1,
-            label: "measured (as authored)",
+            label:
+              output.tier_study === undefined
+                ? "measured (as authored)"
+                : `tier study on ${output.tier_study} (as authored)`,
             candidateId: null,
             rationale: `${output.files.length} bundled file(s), ${output.body_tokens} body tokens`,
             bodyTokens: output.body_tokens,
@@ -508,10 +647,28 @@ async function main(): Promise<void> {
         // derives the rest from the split score it is handed. Passed as `invalidating`
         // because it is — a sweep answered by an installed copy floors every pull rate at
         // zero, so the file table below it is a table of nothing.
-        warnings:
-          output.install_conflict === null
+        // A tier study joins the install conflict as the second thing this caller alone
+        // knows. `qualifying` rather than `invalidating`: the figures are real and the run
+        // did what it set out to do — they simply do not answer the question a measurement
+        // of record answers, and the reader has to meet that before the file table.
+        warnings: [
+          ...(output.install_conflict === null
             ? []
-            : [{ severity: "invalidating" as const, text: output.install_conflict }],
+            : [{ severity: "invalidating" as const, text: output.install_conflict }]),
+          ...(output.tier_study === undefined
+            ? []
+            : [
+                {
+                  severity: "qualifying" as const,
+                  text:
+                    `TIER STUDY: this sweep ran on ${output.tier_study}, not the ` +
+                    `${MEASUREMENT_MODEL} detection instrument, so it is not a signposting ` +
+                    `measurement of record. A stronger tier reaches the right file in spite ` +
+                    `of a bad pointer, so the pull rates below describe the model as much as ` +
+                    `the layout.`,
+                },
+              ]),
+        ],
       },
       { autoRefresh: false },
     );

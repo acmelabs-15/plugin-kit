@@ -20,7 +20,6 @@ If you only want the numbers — which bundled files get pulled, at what rate, a
 bun ../operations/measure-disclosure.ts \
   --skill-path ../my-skill \
   --scenarios ../my-skill/evals/evals.json \
-  --model sonnet \
   --results-dir ./disclosure-runs/my-skill
 ```
 
@@ -42,7 +41,7 @@ bun ../operations/optimize-disclosure.ts \
 
 ## Run it on the weaker tier
 
-**`--model sonnet`, not `--model opus`, and this is not a cost preference.** The two tiers fail in opposite directions, measured on the same skill and the same scenarios: opus reached 100% of what it should have on five of six references and read a file it did not need on 3 of 8 runs that should have reached nothing; sonnet over-fetched on none and missed between a third and two-thirds.
+**Sonnet, not opus, and this is not a cost preference.** `measure-disclosure.ts` no longer takes `--model` at all — sonnet is hardcoded there, and a deliberate off-tier sweep goes through `--tier-study`, which marks its own output as not a measurement of record. `optimize-disclosure.ts` still takes `--model`, so the choice below is still yours to get wrong there. The two tiers fail in opposite directions, measured on the same skill and the same scenarios: opus reached 100% of what it should have on five of six references and read a file it did not need on 3 of 8 runs that should have reached nothing; sonnet over-fetched on none and missed between a third and two-thirds.
 
 So a routing defect is invisible on the strong model, because eager reading opens the file whatever the pointer says. **An opus-only sweep of the measured skill showed five of six references at 100% and would have surfaced nothing at all.** A signposting measurement taken on the strongest available model is a check that returns a healthy verdict from the wrong configuration, which is worth less than no check — a passing result is stronger evidence than an absent one, and this one has not earned it.
 
@@ -61,11 +60,11 @@ The inverse holds for over-fetch: only the strong tier produces enough of it to 
 | **Total context tokens** | The `result` event's `usage` block | What the whole run cost, deferral included |
 | **Expectation pass rate** | A grader pass over the transcript and any files produced | The guardrail — a cheaper skill that stopped working is a regression |
 
-The grader runs on `--grader-model`, which defaults to `sonnet` and deliberately does **not** inherit `--model`. Grading is one single-turn call with the transcript and the produced files already in the prompt, judged against an explicit list — there is nothing to plan and no tool to call. It matters for wall clock because the grading call is serial with the scenario inside the same worker slot, so a run on `--model opus` waits on the heavy model twice; measured over two attempts each, opus averaged 13.1s against sonnet's 11.0s.
+The grader runs on `--grader-model`, which defaults to `sonnet` and deliberately does **not** inherit the measurement model. Grading is one single-turn call with the transcript and the produced files already in the prompt, judged against an explicit list — there is nothing to plan and no tool to call. It matters for wall clock because the grading call is serial with the scenario inside the same worker slot, so a run measuring on opus waits on the heavy model twice; measured over two attempts each, opus averaged 13.1s against sonnet's 11.0s.
 
 The obvious move — grade on the cheapest model — was measured and rejected. Against a run whose own final response admitted it had left a pointer without a load condition, `haiku` returned `passed: true` twice while `sonnet` and `opus` returned `passed: false` twice, and haiku was not even faster (11.8s). A grader that fails open is worse than a slow one, because this is the guardrail deciding whether a restructure broke the skill.
 
-The guardrail also depends on the grader being *held constant*: a candidate's pass rate is judged against a baseline graded by the same model, so a stricter or slacker grader moves both numbers and not the gap between them. Change it with `--grader-model`, not with `--model`, and change it between runs rather than within one.
+The guardrail also depends on the grader being *held constant*: a candidate's pass rate is judged against a baseline graded by the same model, so a stricter or slacker grader moves both numbers and not the gap between them. Change it with `--grader-model`, not with the measurement model, and change it between runs rather than within one.
 
 Token figures come from `tiktoken` where it is installed. It is a devDependency of this repository rather than a runtime one, because a skill's scripts run with nothing but Bun; when it is absent the loop falls back to the published characters-over-four estimator and says so on every surface — in the terminal, in `results.json`, and at the top of the report. A body measured at 4,800 estimated tokens against a 5,000-token budget has not been shown to be inside it.
 
@@ -207,4 +206,4 @@ That cost is why `--max-iterations` defaults to 3 where the description loop def
 
 **Deriving ground truth is a separate budget on top of all of this**, and it is the larger one — 138 runs on the measured skill, against 70 for a defaults-sized optimization loop. Spend it once per skill rather than once per run: an annotation, however it was arrived at, is a property of the scenario set and survives every later sweep. A set that already carries `expects_references` costs nothing extra at all.
 
-Scenarios that write files need `--permission-mode acceptEdits`. It is left off by default because applying a permission mode to someone's machine is their call, not a default this script makes quietly.
+Scenarios that write files need `acceptEdits`. `measure-disclosure.ts` always uses it and has no flag — scenarios do the skill's real work, the real work writes files, and a run that cannot write stops short of what is being measured. `optimize-disclosure.ts` still takes `--permission-mode` and leaves it off by default, because applying a permission mode to someone's machine is their call, not a default that script makes quietly.

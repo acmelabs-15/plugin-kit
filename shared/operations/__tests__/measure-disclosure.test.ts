@@ -13,10 +13,22 @@
  * whatever the developer happens to have installed decide the outcome.
  */
 
-import { afterAll, expect, spyOn, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { rm } from "node:fs/promises";
 
-import { liveReportPath, warnOnInstallConflict } from "../measure-disclosure.ts";
+import {
+  ACCEPT_EDITS_NOTICE,
+  liveReportPath,
+  MEASURE_FLAGS,
+  MEASUREMENT_MODEL,
+  MEASUREMENT_PERMISSION_MODE,
+  measureDisclosure,
+  removedFlagError,
+  warnOnInstallConflict,
+  type MeasureOutput,
+} from "../measure-disclosure.ts";
+import type { MeasureParams } from "../disclosure-measure.ts";
+import type { ScenarioRun } from "../disclosure.ts";
 
 const TMP = `${Bun.env["TMPDIR"] ?? "/tmp"}/measure-disclosure-${Bun.nanoseconds()}`;
 
@@ -106,4 +118,156 @@ test("an explicit --report stands on its own with no results directory", () => {
 
 test("a run writing no report advertises none, rather than a path that never appears", () => {
   expect(liveReportPath("none", undefined)).toBeUndefined();
+});
+
+// The knobs are gone. These pin the three things that replaced them: a fixed measurement
+// model that actually reaches the spawn, a purpose-named escape hatch that marks its own
+// output, and an interception that tells a habitual caller what to reach for instead.
+
+/**
+ * Run `measureDisclosure` against a throwaway skill with the sweep injected.
+ *
+ * The sweep is where `claude` would be spawned, so injecting it is what makes the two
+ * hardcoded values assertable at all — and asserting them on the real call site rather
+ * than on a helper is the whole point, since the defect being closed was a value that
+ * silently failed to reach the spawn.
+ */
+async function runMeasurement(options: { readonly tierStudy?: string }): Promise<{
+  readonly output: MeasureOutput;
+  readonly seen: MeasureParams | undefined;
+}> {
+  const dir = `${scratch()}/${uniqueName()}`;
+  await Bun.write(
+    `${dir}/SKILL.md`,
+    "---\nname: probe\ndescription: A throwaway skill used to drive the measurement.\n---\n\nSee references/guide.md.\n",
+  );
+  await Bun.write(`${dir}/references/guide.md`, "Guide.\n");
+
+  let seen: MeasureParams | undefined;
+  const stderr = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const output = await measureDisclosure({
+      skillPath: dir,
+      scenarios: [{ id: "s1", prompt: "Do the thing.", expectations: ["It happened"] }],
+      runsPerScenario: 1,
+      numWorkers: 1,
+      timeoutSeconds: 60,
+      inlineThreshold: 0.8,
+      ...(options.tierStudy === undefined ? {} : { tierStudy: options.tierStudy }),
+      sweep: async (params) => {
+        seen = params;
+        const run: ScenarioRun = {
+          scenarioId: "s1",
+          attempt: 1,
+          filesRead: ["references/guide.md"],
+          skillLoaded: true,
+          loadedVia: "skill",
+          contextTokens: 1000,
+          assertionsPassed: 1,
+          assertionsTotal: 1,
+          durationMs: 1000,
+        };
+        return [run];
+      },
+    });
+    return { output, seen };
+  } finally {
+    stderr.mockRestore();
+  }
+}
+
+async function capturedMeasureParams(options: {
+  readonly tierStudy?: string;
+}): Promise<MeasureParams | undefined> {
+  return (await runMeasurement(options)).seen;
+}
+
+async function measuredOutput(options: {
+  readonly tierStudy?: string;
+}): Promise<MeasureOutput> {
+  return (await runMeasurement(options)).output;
+}
+
+describe("the measurement model is fixed, not inherited", () => {
+  test("sonnet is the instrument, and the constant says so rather than a default", () => {
+    // Hardcoded on purpose: unset, this used to inherit the environment's model, so the
+    // sweep varied by operator without saying so.
+    expect(MEASUREMENT_MODEL).toBe("sonnet");
+    expect(MEASUREMENT_PERMISSION_MODE).toBe("acceptEdits");
+  });
+
+  test("the fixed model and permission mode reach the spawn on an ordinary run", async () => {
+    const seen = await capturedMeasureParams({});
+    expect(seen?.model).toBe(MEASUREMENT_MODEL);
+    expect(seen?.permissionMode).toBe(MEASUREMENT_PERMISSION_MODE);
+  });
+
+  test("a tier study substitutes the model and nothing else", async () => {
+    const seen = await capturedMeasureParams({ tierStudy: "opus" });
+    expect(seen?.model).toBe("opus");
+    // The sandbox rule is not part of what a tier study varies.
+    expect(seen?.permissionMode).toBe(MEASUREMENT_PERMISSION_MODE);
+  });
+});
+
+describe("the tier-study marker", () => {
+  test("an ordinary run carries no marker at all, so results.json keeps its shape", async () => {
+    const output = await measuredOutput({});
+    expect(output).not.toHaveProperty("tier_study");
+  });
+
+  test("a tier study stamps the model it swept on", async () => {
+    const output = await measuredOutput({ tierStudy: "opus" });
+    expect(output.tier_study).toBe("opus");
+  });
+});
+
+describe("removed flags meet an education, not a mystery", () => {
+  test("--model names its replacement and carries the value across", () => {
+    const message = removedFlagError(["--skill-path", "s", "--model", "opus"]);
+    expect(message).toContain("--model is removed");
+    expect(message).toContain(MEASUREMENT_MODEL);
+    expect(message).toContain("--tier-study opus");
+  });
+
+  test("the equals form is recognized too", () => {
+    expect(removedFlagError(["--model=haiku"])).toContain("--tier-study haiku");
+  });
+
+  test("a bare --model still gets a usable suggestion rather than an empty one", () => {
+    expect(removedFlagError(["--model"])).toContain("--tier-study <model>");
+    // A following flag is not a model name.
+    expect(removedFlagError(["--model", "--verbose"])).toContain("--tier-study <model>");
+  });
+
+  test("--permission-mode names the rule that replaced it", () => {
+    const message = removedFlagError(["--permission-mode", "plan"]);
+    expect(message).toContain("--permission-mode is removed");
+    expect(message).toContain(MEASUREMENT_PERMISSION_MODE);
+  });
+
+  test("--grader-model is a real flag and is not swept up by the name match", () => {
+    // A substring match on "model" would retire the one model flag that still exists.
+    expect(removedFlagError(["--grader-model", "sonnet"])).toBeNull();
+    expect(removedFlagError(["--grader-model=sonnet"])).toBeNull();
+  });
+
+  test("an ordinary argument list passes through untouched", () => {
+    expect(removedFlagError(["--skill-path", "s", "--tier-study", "opus"])).toBeNull();
+  });
+
+  test("neither removed flag survives in the spec, so help cannot advertise them", () => {
+    expect(MEASURE_FLAGS).not.toHaveProperty("model");
+    expect(MEASURE_FLAGS).not.toHaveProperty("permission-mode");
+    expect(MEASURE_FLAGS).toHaveProperty("tier-study");
+    // The grader model is a different decision and stays configurable.
+    expect(MEASURE_FLAGS).toHaveProperty("grader-model");
+  });
+});
+
+test("the acceptEdits rule is stated in words, not left to the help text", () => {
+  // The removed flag's fence was a quiet default. Honouring it means being loud.
+  expect(ACCEPT_EDITS_NOTICE).toContain(MEASUREMENT_PERMISSION_MODE);
+  expect(ACCEPT_EDITS_NOTICE).toContain("writes files");
+  expect(ACCEPT_EDITS_NOTICE).toContain("Not configurable");
 });
