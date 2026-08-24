@@ -908,7 +908,10 @@ export function classifyRun(run: ScenarioRun): DisclosureRunOutcome {
 export interface RunTally {
   /** Error-free and the body reached context. In every number this operation reports. */
   readonly measured: number;
-  /** Error-free but the body never loaded. In the pass rate, out of every pull rate. */
+  /**
+   * Error-free but the body never loaded. Out of EVERY rate — pull, pass and context —
+   * and reported as `loadRate`, which carries its own guard.
+   */
   readonly unloaded: number;
   readonly timeout: number;
   readonly error: number;
@@ -1082,7 +1085,11 @@ export function buildDisclosureEnvelope(
 
   const runsSpent =
     input.tally.measured + input.tally.unloaded + input.tally.timeout + input.tally.error;
-  const excluded = input.tally.timeout + input.tally.error;
+  // Unloaded runs joined this the day the rates stopped counting them. `scoreRuns` takes
+  // its pass rate and context cost over runs the body reached, matching `computeFileStats`,
+  // so a run the layout never reached is now out of every figure -- which is what this
+  // number means. They remain inside `runsSpent`, because they cost what they cost.
+  const excluded = input.tally.timeout + input.tally.error + input.tally.unloaded;
 
   // Deltas ARE legitimate here, for the reason `optimize-description.ts` sets out: both
   // numbers come from inside one run under one `run` block -- same model, same workers,
@@ -1181,9 +1188,10 @@ export function buildDisclosureEnvelope(
   if (excluded > 0) {
     caps.push(
       `${excluded} run(s) were EXCLUDED from every rate above — ${input.tally.timeout} hit ` +
-        `the ${input.timeoutSeconds}s budget and ${input.tally.error} failed outright. That ` +
-        `is this operation's timeout policy and not a bug: a run that never finished says ` +
-        `nothing about whether its scenario needed a reference. Note that ` +
+        `the ${input.timeoutSeconds}s budget, ${input.tally.error} failed outright, and ` +
+        `${input.tally.unloaded} never had the body reach context. That is this operation's ` +
+        `policy and not a bug: a run that never finished, or never received the layout, ` +
+        `says nothing about whether its scenario needed a reference. Note that ` +
         `\`measure-triggering\` does the opposite and SCORES a timeout, so its \`failed\` ` +
         `count is inside its rates and this one is not.`,
     );
@@ -1192,8 +1200,12 @@ export function buildDisclosureEnvelope(
     caps.push(
       `${input.tally.unloaded} run(s) completed without the skill body ever reaching ` +
         `context. They are counted in \`provenance.scored\` because they cost what they ` +
-        `cost and their assertions were graded, but they are dropped from every pull rate ` +
-        `in \`rows\` — a run that never opened SKILL.md could not have followed a pointer.`,
+        `cost, and dropped from every rate — the pull rates in \`rows\`, the pass rate and ` +
+        `the context cost alike. A run that never opened SKILL.md could not have followed ` +
+        `a pointer, and grading its answer measures the model rather than the layout. ` +
+        `Their share is reported as \`loadRate\`, which is guarded separately: a layout ` +
+        `that stops the skill loading is refused on that rather than through a pass rate ` +
+        `it would otherwise drag down.`,
     );
   }
   const unspent = input.plannedRuns - runsSpent;
@@ -1274,16 +1286,19 @@ export function buildDisclosureEnvelope(
       // estimate warning; asking a second time could get a second answer.
       tokenizer,
       unit: "scenario run",
-      // Everything that produced a measurement, including the runs where the body never
-      // loaded -- they are in the pass rate and the context-token mean. The narrower
-      // denominator the pull rates use is each row's own `countedRuns`, and the cap above
-      // says so.
-      scored: input.tally.measured + input.tally.unloaded,
-      // Dropped from the denominators entirely. `excluded` and `failed` are the same set
-      // for this operation, and reporting both anyway is the point: under
-      // `timeoutPolicy: "excluded"` they coincide, and under `"scored"` they do not.
+      // Runs that reached the numbers, which per the schema is what `scored` counts. Runs
+      // where the body never loaded are NOT among them: they are outside the pull rates,
+      // and since `scoreRuns` began taking its rates over runs the body reached, outside
+      // the pass rate and the context mean as well.
+      scored: input.tally.measured,
+      // Everything deliberately left out of the denominators: timeouts, hard failures, and
+      // runs the layout never reached.
       excluded,
-      failed: excluded,
+      // Only what the HARNESS could not complete. Deliberately not `excluded` any more --
+      // an unloaded run completed perfectly well and answered without the skill, which is
+      // a finding rather than a failure. The schema allows the two to diverge, and this is
+      // the operation where they now do.
+      failed: input.tally.timeout + input.tally.error,
       timeoutPolicy: "excluded",
       caps,
     },

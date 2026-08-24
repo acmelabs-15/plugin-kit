@@ -479,11 +479,23 @@ export interface SplitScore {
   readonly runs: number;
   readonly assertionsPassed: number;
   readonly assertionsTotal: number;
-  /** Assertions passed over assertions checked. 1 when a scenario set carries none. */
+  /**
+   * Assertions passed over assertions checked, across runs the body actually reached.
+   * 1 when a scenario set carries none.
+   */
   readonly passRate: number;
+  /** Mean context cost across runs the body actually reached. */
   readonly meanContextTokens: number;
   /** How many runs never loaded the skill, which is a health signal rather than a score. */
   readonly runsWithoutSkill: number;
+  /**
+   * Error-free runs that loaded the body, over error-free runs. 1 when there were none.
+   *
+   * Its own figure because it is its own failure. A layout that stops the skill loading
+   * has broken the work just as surely as one that makes the answers worse, and the two
+   * need separate guards -- see {@link DEFAULT_LOAD_RATE_TOLERANCE}.
+   */
+  readonly loadRate: number;
 }
 
 /**
@@ -493,20 +505,40 @@ export interface SplitScore {
  * naming out loud rather than hiding in a default: with nothing asserted the guardrail
  * cannot fire, so the loop is free to strip the skill to nothing and call it an
  * improvement. The caller warns when `assertionsTotal` is zero.
+ *
+ * The rates are taken over runs the body actually REACHED, matching `computeFileStats`,
+ * which has always counted pulls that way. Scoring a run the layout never reached breaks
+ * both numbers, and in opposite directions:
+ *
+ *   - the objective. An unloaded run is cheap -- measured at 226k tokens against 350k for
+ *     a loaded one -- so a candidate that makes loading fail more often reports a LOWER
+ *     context cost and clears the `meanContextTokens` check more easily. The loop was
+ *     rewarded for breaking the skill.
+ *   - the guardrail. Pass rate becomes a mix of two populations, measured at 0.949 loaded
+ *     against 0.667 unloaded, so it tracks the load-failure rate rather than the layout.
+ *     Across three sweeps of IDENTICAL bytes that moved the pass rate 6.9 points, against
+ *     a `DEFAULT_PASS_RATE_TOLERANCE` of 5 calibrated to about one assertion of sampling
+ *     noise. The environmental noise was larger than the whole tolerance.
+ *
+ * What counting them in the pass rate was protecting -- a layout that stops the skill
+ * loading -- is real, and is now `loadRate` with a guard of its own rather than a
+ * distortion folded into two figures that mean something else.
  */
 export function scoreRuns(runs: readonly ScenarioRun[]): SplitScore {
-  const measured = runs.filter((run) => run.error === undefined);
+  const errorFree = runs.filter((run) => run.error === undefined);
+  const measured = errorFree.filter((run) => run.skillLoaded);
   const assertionsPassed = measured.reduce((total, run) => total + run.assertionsPassed, 0);
   const assertionsTotal = measured.reduce((total, run) => total + run.assertionsTotal, 0);
   const contextTokens = measured.reduce((total, run) => total + run.contextTokens, 0);
   return {
     scenarios: new Set(runs.map((run) => run.scenarioId)).size,
-    runs: measured.length,
+    runs: errorFree.length,
     assertionsPassed,
     assertionsTotal,
     passRate: assertionsTotal === 0 ? 1 : assertionsPassed / assertionsTotal,
     meanContextTokens: measured.length === 0 ? 0 : contextTokens / measured.length,
-    runsWithoutSkill: measured.filter((run) => !run.skillLoaded).length,
+    runsWithoutSkill: errorFree.length - measured.length,
+    loadRate: errorFree.length === 0 ? 1 : measured.length / errorFree.length,
   };
 }
 
@@ -947,6 +979,24 @@ export interface SelectionResult {
  */
 export const DEFAULT_PASS_RATE_TOLERANCE = 0.05;
 
+/**
+ * How far a candidate's load rate may fall below the incumbent's before it is refused.
+ *
+ * Deliberately far wider than {@link DEFAULT_PASS_RATE_TOLERANCE}, and the width is the
+ * honest part. Whether the body reaches context is mostly decided by the environment
+ * rather than by the layout: on one skill, three sweeps of IDENTICAL bytes implied load
+ * rates of roughly 83%, 59% and 67%. Only the last of those was measured directly -- the
+ * other two are inferred from a two-population mix of the pass rate -- so read the spread
+ * as indicative rather than as a noise band, and tighten this once a second sweep has
+ * measured one outright.
+ *
+ * Set from that spread, this catches a layout that breaks loading OUTRIGHT -- a malformed
+ * SKILL.md, a body the loader rejects -- and will not catch a few points of drift. That is
+ * the honest reach of the check, and a tighter number would fire on the environment
+ * instead of on the candidate, which is the failure the pass rate already had.
+ */
+export const DEFAULT_LOAD_RATE_TOLERANCE = 0.25;
+
 /** Whether a candidate has earned the cost of being measured on the held-out split. */
 export interface TrainGateVerdict {
   readonly inContention: boolean;
@@ -988,10 +1038,28 @@ export function trainGate(params: {
   readonly candidate: SplitScore;
   readonly incumbent: SplitScore;
   readonly passRateTolerance?: number;
+  readonly loadRateTolerance?: number;
 }): TrainGateVerdict {
   const tolerance = params.passRateTolerance ?? DEFAULT_PASS_RATE_TOLERANCE;
   const floor = params.incumbent.passRate - tolerance;
   const percent = (value: number): string => `${(value * 100).toFixed(0)}%`;
+
+  // Checked FIRST, and before the cost check in particular. The rates below it are taken
+  // over runs that loaded, so a candidate that loads less often is being judged on a
+  // smaller and differently-composed sample -- and an unloaded run is cheap, which would
+  // let it clear the cost check by failing rather than by improving.
+  const loadTolerance = params.loadRateTolerance ?? DEFAULT_LOAD_RATE_TOLERANCE;
+  const loadFloor = params.incumbent.loadRate - loadTolerance;
+  if (params.candidate.loadRate < loadFloor) {
+    return {
+      inContention: false,
+      reason:
+        `train load rate ${percent(params.candidate.loadRate)} is below the ` +
+        `${percent(loadFloor)} floor (incumbent ${percent(params.incumbent.loadRate)}, ` +
+        `tolerance ${(loadTolerance * 100).toFixed(0)} points), so the body reached fewer ` +
+        `runs and the held-out runs were not spent`,
+    };
+  }
 
   if (params.candidate.passRate < floor) {
     return {
@@ -1044,8 +1112,10 @@ export function selectCandidate(params: {
   readonly baselineBodyTokens: number;
   readonly candidates: readonly ScoredCandidate[];
   readonly passRateTolerance?: number;
+  readonly loadRateTolerance?: number;
 }): SelectionResult {
   const tolerance = params.passRateTolerance ?? DEFAULT_PASS_RATE_TOLERANCE;
+  const loadTolerance = params.loadRateTolerance ?? DEFAULT_LOAD_RATE_TOLERANCE;
   const rejected: { id: string; reason: string }[] = [];
   const survivors: ScoredCandidate[] = [];
 
@@ -1053,6 +1123,21 @@ export function selectCandidate(params: {
     // With no holdout configured the train score is the only score there is. Saying so
     // here keeps the caller from having to fabricate a second split to satisfy the type.
     const score = scored.holdout ?? scored.train;
+    // Same order as `trainGate`, for the same reason: the two rates below are taken over
+    // runs that loaded, so a candidate that loaded less often is judged on a different
+    // sample -- and it would clear the cost check by being cheap rather than by being good.
+    const loadFloor = params.baseline.loadRate - loadTolerance;
+    if (score.loadRate < loadFloor) {
+      rejected.push({
+        id: scored.candidate.id,
+        reason:
+          `load rate ${(score.loadRate * 100).toFixed(0)}% is below the ` +
+          `${(loadFloor * 100).toFixed(0)}% floor (baseline ` +
+          `${(params.baseline.loadRate * 100).toFixed(0)}%, tolerance ` +
+          `${(loadTolerance * 100).toFixed(0)} points), so the body reached fewer runs`,
+      });
+      continue;
+    }
     const floor = params.baseline.passRate - tolerance;
     if (score.passRate < floor) {
       rejected.push({

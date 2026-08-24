@@ -55,6 +55,7 @@ function score(overrides: Partial<SplitScore> = {}): SplitScore {
     passRate: 1,
     meanContextTokens: 10_000,
     runsWithoutSkill: 0,
+  loadRate: 1,
     ...overrides,
   };
 }

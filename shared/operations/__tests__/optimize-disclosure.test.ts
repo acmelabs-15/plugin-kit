@@ -118,6 +118,7 @@ function score(overrides: Partial<SplitScore> = {}): SplitScore {
     passRate: 1,
     meanContextTokens: 10_000,
     runsWithoutSkill: 0,
+    loadRate: 1,
     ...overrides,
   };
 }
@@ -710,6 +711,83 @@ describe("scoreRuns", () => {
   test("runs that never loaded the skill are counted as a health signal", () => {
     const result = scoreRuns([run(), run({ attempt: 2, skillLoaded: false })]);
     expect(result.runsWithoutSkill).toBe(1);
+  });
+
+  // The defect these four guard. A run the layout never reached was scored as though it
+  // had, which broke the guardrail and the objective in opposite directions.
+  test("a run the body never reached is out of the pass rate", () => {
+    const result = scoreRuns([
+      run({ assertionsPassed: 2, assertionsTotal: 2 }),
+      run({ attempt: 2, skillLoaded: false, assertionsPassed: 0, assertionsTotal: 2 }),
+    ]);
+    // Not 0.5. Grading an answer composed without the skill measures the model, not the
+    // layout, and mixing the two populations makes the pass rate track the load-failure
+    // rate instead of the change under test.
+    expect(result.passRate).toBe(1);
+    expect(result.assertionsTotal).toBe(2);
+  });
+
+  test("context cost is taken over runs the body reached, so failing to load is not a saving", () => {
+    const result = scoreRuns([
+      run({ contextTokens: 1000 }),
+      run({ attempt: 2, skillLoaded: false, contextTokens: 200 }),
+    ]);
+    // The perverse incentive, in one number. An unloaded run is cheap, so counting it
+    // would report 600 and let a candidate clear the cost check by breaking loading
+    // rather than by improving the layout.
+    expect(result.meanContextTokens).toBe(1000);
+  });
+
+  test("loadRate reports the share of error-free runs the body reached", () => {
+    const result = scoreRuns([run(), run({ attempt: 2, skillLoaded: false })]);
+    expect(result.loadRate).toBe(0.5);
+    // `runs` still counts every error-free run, so the two denominators stay legible.
+    expect(result.runs).toBe(2);
+  });
+
+  test("an errored run is outside loadRate entirely, having never had the chance", () => {
+    const result = scoreRuns([run(), run({ attempt: 2, error: "timed out" })]);
+    expect(result.loadRate).toBe(1);
+    expect(result.runsWithoutSkill).toBe(0);
+  });
+});
+
+describe("the load-rate guard", () => {
+  test("trainGate refuses a candidate that loaded far less often", () => {
+    const verdict = trainGate({
+      candidate: score({ loadRate: 0.3 }),
+      incumbent: score({ loadRate: 1 }),
+    });
+    expect(verdict.inContention).toBe(false);
+    expect(verdict.reason).toContain("load rate");
+  });
+
+  test("trainGate tolerates the drift the environment produces on its own", () => {
+    const verdict = trainGate({
+      candidate: score({ loadRate: 0.8 }),
+      incumbent: score({ loadRate: 1 }),
+    });
+    expect(verdict.inContention).toBe(true);
+  });
+
+  // The whole point of keeping a load guard at all. Counting unloaded runs in the pass
+  // rate used to be what punished a layout that stopped the skill loading; removing them
+  // from the rates would have left nothing watching for it.
+  test("a candidate that is cheaper only because the body stopped loading cannot win", () => {
+    const result = selectCandidate({
+      baseline: score({ loadRate: 1, passRate: 1, meanContextTokens: 10_000 }),
+      baselineBodyTokens: 5000,
+      candidates: [
+        {
+          candidate: { id: "breaks-loading" } as DisclosureCandidate,
+          train: score({ loadRate: 0.2, passRate: 1, meanContextTokens: 4000 }),
+          holdout: score({ loadRate: 0.2, passRate: 1, meanContextTokens: 4000 }),
+        } as ScoredCandidate,
+      ],
+    });
+    // It is perfect on both surviving figures and far cheaper. It still loses.
+    expect(result.chosen).toBeNull();
+    expect(result.rejected[0]?.reason).toContain("load rate");
   });
 });
 
@@ -1750,15 +1828,17 @@ describe("the results envelope", () => {
     expect(envelope.provenance.unit).toBe("scenario run");
   });
 
-  test("excluded and failed are counted apart from scored, and coincide under this policy", () => {
+  test("failed counts what the harness could not complete, which is no longer everything excluded", () => {
     const envelope = buildDisclosureEnvelope(
       envelopeInput({ tally: { measured: 14, unloaded: 2, timeout: 3, error: 1 } }),
     );
-    // Runs that produced a measurement, unloaded ones included: they were graded and they
-    // cost what they cost, so they are in the pass rate and the context-token mean.
-    expect(envelope.provenance.scored).toBe(16);
-    // Timeouts and hard failures, dropped from every denominator.
-    expect(envelope.provenance.excluded).toBe(4);
+    // Only runs that reached the numbers, which is what the schema says `scored` counts.
+    expect(envelope.provenance.scored).toBe(14);
+    // Timeouts, hard failures AND runs the layout never reached: all out of every rate.
+    expect(envelope.provenance.excluded).toBe(6);
+    // Just the harness failures. An unloaded run completed fine and answered without the
+    // skill, which is a finding rather than a failure -- so the two sets no longer
+    // coincide, which the schema explicitly allows.
     expect(envelope.provenance.failed).toBe(4);
     // The invariant the contract states: scored + excluded = attempted.
     expect(envelope.provenance.scored + envelope.provenance.excluded).toBe(20);
@@ -1782,17 +1862,19 @@ describe("the results envelope", () => {
     expect(cap).toContain("measure-triggering");
   });
 
-  test("an unloaded run is scored but called out, because it is out of the pull rates", () => {
-    // The second, narrower exclusion. `computeFileStats` counts only runs that loaded the
-    // skill, so a run where the body never reached context is inside `scored` and outside
-    // every number in `rows` -- two denominators, and a reader who divides one by the
-    // other gets nonsense.
+  test("an unloaded run is excluded rather than scored, and is still called out by name", () => {
+    // A run the layout never reached is evidence about the environment, not the layout.
+    // It is out of the pull rates, and since `scoreRuns` began taking its figures over
+    // runs the body reached, out of the pass rate and context mean too -- so it belongs
+    // in `excluded` on the schema's own definition, not in `scored`.
     const envelope = buildDisclosureEnvelope(
       envelopeInput({ tally: { measured: 18, unloaded: 2, timeout: 0, error: 0 } }),
     );
-    expect(envelope.provenance.scored).toBe(20);
-    expect(envelope.provenance.excluded).toBe(0);
-    expect(envelope.provenance.caps.some((cap) => cap.includes("never reaching"))).toBe(false);
+    expect(envelope.provenance.scored).toBe(18);
+    expect(envelope.provenance.excluded).toBe(2);
+    // Nothing here failed: the runs completed, they just answered without the skill.
+    expect(envelope.provenance.failed).toBe(0);
+    expect(envelope.provenance.scored + envelope.provenance.excluded).toBe(20);
     expect(
       envelope.provenance.caps.some((cap) => cap.includes("without the skill body ever reaching")),
     ).toBe(true);

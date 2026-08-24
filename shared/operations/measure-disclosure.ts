@@ -408,6 +408,17 @@ async function main(): Promise<void> {
               scenarios: output.scenario_count,
               runs: output.scenario_count * output.runs_per_scenario,
               runsWithoutSkill: output.runs_without_skill,
+              // Recomputed rather than carried: `output` is the JSON shape and has no
+              // load-rate field, and inventing one there would be a second place for the
+              // same fact to drift. Error-free runs are the planned count less the runs
+              // the harness could not complete, which `runs_without_skill` is already net
+              // of, so the ratio is over what the sweep actually produced.
+              loadRate:
+                output.scenario_count * output.runs_per_scenario === 0
+                  ? 1
+                  : (output.scenario_count * output.runs_per_scenario -
+                      output.runs_without_skill) /
+                    (output.scenario_count * output.runs_per_scenario),
               passRate: output.pass_rate,
               assertionsPassed: output.assertions_passed,
               assertionsTotal: output.assertions_total,
