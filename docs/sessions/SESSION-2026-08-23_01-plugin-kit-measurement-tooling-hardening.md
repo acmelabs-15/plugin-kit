@@ -253,6 +253,14 @@ No reply was sent to the worker. Whether the escalating run belongs to the treat
 
 Owner chose a combination of the two leading options, which resolves to one form since they differed only by anchors: a literal `## Table of Contents` H2, then a flat bulleted list of GitHub-style anchor links naming every H2 section in document order — no nesting, no tables, H2 entries only — placed after the H1 and its orientation prose. Rationale carried with the decision: the heading-plus-bullets shell is the deterministic lint signature Genre 14 needs, the form is byte-recognizable against the only shipped standard in any surveyed corpus, the anchors serve rendered browsing, and the link text still hands a raw-text reader the plain section names, so the partial-read mechanism the rule exists for loses nothing. Whole-specimen files remain exempt per the recorded exemption. The 23 prose-form maps applied earlier today convert to this standard before landing; the measured skill's six references receive the same form after the outcomes run completes, where the intervention has a recall baseline to move against.
 
+## Event — 2026-08-24: the table-of-contents standard lands end to end, `e585fc8` and `2e9e61f`
+
+The owner's standard is now specified, rolled out, and enforced. `e585fc8` adds the Genre 14 validator rule — presence and position at warn tier, whole-specimen exemption, fence-aware, the refuted count-cap parked as a comment. `2e9e61f` writes the locked form into the doctrine as a house rule and applies it across 25 over-threshold files including the parked hook-creator pair, with the authoring checklist gaining the matching pre-flight item. The skill-creator body deliberately carries no fourth copy: it sits at 4,999 of 5,000 tokens and already routes authors to the doctrine at placement time, so the spec lives in one place with mechanical checks at the gate.
+
+The validation story is the part worth keeping: the rule's ten flags matched the human rollout's edit list, its single silence matched the single human exemption, and its position check agreed with all ten human placements — neither side tuned against the other, twice over. Zero findings now across all five creator skills and the measured external skill. The engineer also walked back its own fence-guard claim after measuring it ("defensive, not currently load-bearing") and verified its warning text by rendering rather than by grepping source, where concatenated literals had made the grep a false negative — both incidents belong to the day's citing-rule lineage.
+
+Suite 1,582 pass / 0 fail on the combined tree; main pushed. Remaining from the day's queue: the skill-creator guidance encoding of the genre taxonomy, the remaining three cheap lint rules, the #77363 upstream comment, and the eventual plugin-kit uninstall.
+
 ## Observations
 
 ### Landed today
