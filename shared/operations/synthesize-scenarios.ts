@@ -676,7 +676,7 @@ interface LeakGuard {
 let lastGuard: { readonly key: string; readonly guard: LeakGuard } | undefined;
 
 function leakGuard(description: string, size: number): LeakGuard {
-  const key = `${size} ${description}`;
+  const key = `${size}\x00${description}`;
   if (lastGuard?.key === key) return lastGuard.guard;
 
   const wanted = new Set(descriptionShingles(description, size));

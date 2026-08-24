@@ -263,7 +263,7 @@ describe("pyStrip / pyStripChars", () => {
   });
 
   test("strips U+001C-U+001F and U+0085, which JS .trim() does not", () => {
-    for (const ch of ["", "", "", "", ""]) {
+    for (const ch of ["\x1c", "\x1d", "\x1e", "\x1f", ""]) {
       expect(pyStrip(`${ch}x${ch}`)).toBe("x");
       expect(`${ch}x${ch}`.trim()).not.toBe("x");
     }

@@ -600,7 +600,7 @@ describe("formatResult", () => {
 
   test("emits no ANSI escape codes", () => {
     const output = formatResult({ valid: false, errors: ["x"], warnings: [] }, "/a/b", "standard");
-    expect(output).not.toContain("[");
+    expect(output).not.toContain("\x1b[");
   });
 });
 
