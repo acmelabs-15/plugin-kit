@@ -472,6 +472,20 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
     const priorAttempts = settledSoFar;
     let settledInLayout = 0;
 
+    /**
+     * Longest observed wall clock per scenario, accumulated across every sweep.
+     *
+     * The baseline measures every scenario before any candidate is built, so from the
+     * first iteration onward this loop knows which scenarios are slow and can schedule
+     * them first. That matters here more than anywhere: a candidate sweep runs the same
+     * corpus again, so the ordering that cost the baseline its tail would cost every
+     * candidate the same tail.
+     *
+     * The MAXIMUM rather than the latest, because scheduling wants the worst case: a
+     * scenario that took 254s once will set a makespan again whatever its median.
+     */
+    const durationHints = new Map<string, number>();
+
     /** One sweep, reporting against the whole layout so consecutive sweeps read as one bar. */
     const sweep = async (
       scenarios: readonly DisclosureScenario[],
@@ -489,6 +503,7 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
         permissionMode: params.permissionMode,
         grade: true,
         logDir: params.logDir,
+        durationHints,
         onProgress: (settled) => {
           const inLayout = settledInLayout + settled;
           reporter.report(priorAttempts + inLayout);
@@ -507,6 +522,10 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
           });
         },
       });
+      for (const run of runs) {
+        const seen = durationHints.get(run.scenarioId) ?? 0;
+        if (run.durationMs > seen) durationHints.set(run.scenarioId, run.durationMs);
+      }
       settledInLayout += runs.length;
       settledSoFar += runs.length;
       // Reported per SWEEP rather than per attempt, which is where this differs from the

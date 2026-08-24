@@ -214,6 +214,7 @@ interface ScenarioRunParams {
  * routing, and a run that fails to invoke measures nothing at all.
  */
 async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
+  const startedAt = Date.now();
   const { root, alias } = await installSkillForTrigger(
     params.skillDir,
     params.skillName,
@@ -298,6 +299,7 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
     return {
       scenarioId: params.scenario.id,
       attempt: params.attempt,
+      durationMs: Date.now() - startedAt,
       filesRead: observation.filesRead,
       skillLoaded: observation.skillLoaded,
       loadedVia: observation.loadedVia,
@@ -318,11 +320,12 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
  * unnecessary, while a run that never happened is evidence of nothing. `computeFileStats`
  * and `scoreRuns` both drop these.
  */
-function failedRun(params: ScenarioRunParams, error: string): ScenarioRun {
+function failedRun(params: ScenarioRunParams, error: string, durationMs = 0): ScenarioRun {
   console.error(`Warning: ${params.scenario.id} attempt ${params.attempt}: ${error}`);
   return {
     scenarioId: params.scenario.id,
     attempt: params.attempt,
+    durationMs,
     filesRead: [],
     skillLoaded: false,
     loadedVia: null,
@@ -513,6 +516,13 @@ export interface MeasureParams {
   readonly onProgress?: (settled: number, total: number) => void;
   /** Called as each run STARTS, so a caller can show a busy pool before anything settles. */
   readonly onStarted?: (inFlight: number, started: number, total: number) => void;
+  /**
+   * Prior wall clock per scenario id, used to schedule the longest work first.
+   *
+   * Absent on a first sweep, which is why this is optional rather than required: with no
+   * history there is nothing to sort by and the file order stands.
+   */
+  readonly durationHints?: ReadonlyMap<string, number> | undefined;
 }
 
 /**
@@ -524,13 +534,42 @@ export interface MeasureParams {
  * the same concurrency, while a candidate passes train first so a losing layout can be
  * retired before its held-out runs are spent. That trade is set out at `measure`.
  */
-export async function measureLayout(params: MeasureParams): Promise<readonly ScenarioRun[]> {
+/**
+ * Every attempt to run, longest known work first.
+ *
+ * A pool that draws work in file order can hand out its longest task last and then
+ * finish that task alone while every other worker idles. Measured on this corpus: a
+ * scenario taking 254s started at t=122s and set the sweep's whole 376s makespan.
+ * Longest-first is the standard remedy for that and costs nothing to apply.
+ *
+ * Unknown scenarios sort LAST rather than first. An unknown is not evidence of being
+ * short, but promoting one above a scenario measured long would be scheduling on a
+ * guess, and the cost of guessing wrong is exactly the tail this exists to remove.
+ * With no hints at all every key ties; the sort is stable, so the file order stands.
+ *
+ * Extracted from {@link measureLayout} because that function spawns a process per
+ * attempt, and an ordering rule reachable only by spending an hour of API time is an
+ * ordering rule with no coverage.
+ */
+export function orderAttempts(
+  scenarios: readonly DisclosureScenario[],
+  runsPerScenario: number,
+  hints?: ReadonlyMap<string, number> | undefined,
+): { scenario: DisclosureScenario; attempt: number }[] {
   const attempts: { scenario: DisclosureScenario; attempt: number }[] = [];
-  for (const scenario of params.scenarios) {
-    for (let attempt = 1; attempt <= params.runsPerScenario; attempt += 1) {
+  for (const scenario of scenarios) {
+    for (let attempt = 1; attempt <= runsPerScenario; attempt += 1) {
       attempts.push({ scenario, attempt });
     }
   }
+  if (hints !== undefined && hints.size > 0) {
+    attempts.sort((a, b) => (hints.get(b.scenario.id) ?? 0) - (hints.get(a.scenario.id) ?? 0));
+  }
+  return attempts;
+}
+
+export async function measureLayout(params: MeasureParams): Promise<readonly ScenarioRun[]> {
+  const attempts = orderAttempts(params.scenarios, params.runsPerScenario, params.durationHints);
 
   // Read once for the whole sweep. Every attempt installs its own throwaway copy of this
   // layout, but they all install the SAME description, so reading it per attempt was one

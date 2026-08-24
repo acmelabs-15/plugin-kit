@@ -12,7 +12,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { layoutDescription, measureWithGate } from "../disclosure-measure.ts";
+import { layoutDescription, measureWithGate, orderAttempts } from "../disclosure-measure.ts";
 import {
   loadModeOf,
   scoreRuns,
@@ -29,6 +29,7 @@ function run(overrides: Partial<ScenarioRun> = {}): ScenarioRun {
     filesRead: [],
     skillLoaded: true,
     loadedVia: "skill",
+    durationMs: 1000,
     contextTokens: 1000,
     assertionsPassed: 2,
     assertionsTotal: 2,
@@ -255,3 +256,56 @@ describe("layoutDescription", () => {
     );
   });
 });
+
+// Scheduling. A pool drawing work in file order can hand out its longest task last and
+// then finish it alone while every other worker idles: measured on the real corpus, a
+// 254s scenario that started at t=122s set the sweep's whole 376s makespan.
+
+const sc = (id: string) => ({ id, prompt: "p", expectations: [] }) as never;
+
+test("with no history the file order is preserved exactly", () => {
+  expect(orderAttempts([sc("a"), sc("b"), sc("c")], 1).map((o) => o.scenario.id)).toEqual([
+    "a",
+    "b",
+    "c",
+  ]);
+});
+
+test("an empty hint map is treated as no history rather than as all-zero", () => {
+  expect(orderAttempts([sc("a"), sc("b")], 1, new Map()).map((o) => o.scenario.id)).toEqual([
+    "a",
+    "b",
+  ]);
+});
+
+test("known-long scenarios are scheduled first", () => {
+  const hints = new Map([
+    ["a", 10_000],
+    ["b", 254_000],
+    ["c", 51_000],
+  ]);
+  expect(orderAttempts([sc("a"), sc("b"), sc("c")], 1, hints).map((o) => o.scenario.id)).toEqual([
+    "b",
+    "c",
+    "a",
+  ]);
+});
+
+test("an unknown scenario sorts last, because unknown is not evidence of being short", () => {
+  const hints = new Map([["known", 5_000]]);
+  expect(orderAttempts([sc("unknown"), sc("known")], 1, hints).map((o) => o.scenario.id)).toEqual([
+    "known",
+    "unknown",
+  ]);
+});
+
+test("every attempt of a scenario is still produced", () => {
+  const hints = new Map([
+    ["a", 1],
+    ["b", 2],
+  ]);
+  const order = orderAttempts([sc("a"), sc("b")], 3, hints);
+  expect(order.length).toBe(6);
+  expect(order.filter((o) => o.scenario.id === "a").map((o) => o.attempt)).toEqual([1, 2, 3]);
+});
+

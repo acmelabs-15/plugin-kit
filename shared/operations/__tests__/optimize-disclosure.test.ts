@@ -92,6 +92,7 @@ function run(overrides: Partial<ScenarioRun> = {}): ScenarioRun {
     filesRead: [],
     skillLoaded: true,
     loadedVia: "skill",
+    durationMs: 1000,
     contextTokens: 1000,
     assertionsPassed: 2,
     assertionsTotal: 2,

@@ -350,6 +350,14 @@ export interface ScenarioRun {
   readonly contextTokens: number;
   readonly assertionsPassed: number;
   readonly assertionsTotal: number;
+  /**
+   * Wall clock for this run, used to schedule later sweeps longest-first.
+   *
+   * Recorded rather than estimated because durations vary about sevenfold across this
+   * corpus -- 51s to 376s measured -- and a pool handed its longest task last finishes
+   * that task alone while every other worker idles.
+   */
+  readonly durationMs: number;
   /** Set when the harness could not complete the run; such runs are excluded from rates. */
   readonly error?: string;
 }
