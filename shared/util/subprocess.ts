@@ -25,6 +25,9 @@
  *    treat a timeout as a normal exit.
  */
 
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+
 /** Anything env-shaped. Injectable so the merge is testable without mutating the real env. */
 export type EnvSource = Readonly<Record<string, string | undefined>>;
 
@@ -221,6 +224,72 @@ export async function runCommand(
   } finally {
     deadline.clear();
     if (!hasExited(proc)) proc.kill("SIGKILL");
+  }
+}
+
+/**
+ * Flags that keep a helper call out of the operator's own configuration.
+ *
+ * Verbatim from the measurement path in `../operations/measure-triggering.ts`, and both
+ * are load-bearing. Measured on a helper call spawned WITHOUT them from a bare working
+ * directory: the router selected the plugin skill `skill-creator:skill-creator` and issued
+ * a `Read` nobody asked for. A grader that goes on side quests is not a guardrail, and its
+ * verdicts stop being comparable across machines the moment they depend on which plugins
+ * the operator happens to have enabled.
+ *
+ * `--setting-sources project` is the flag that does it. Measured against a temporary root
+ * holding one skill: with the flag the run saw that skill plus Claude Code's own built-ins
+ * and NOTHING else -- no plugin skills, and no user-level skills either, which is more than
+ * its name promises. Without it the same root saw 118, the operator's whole inventory.
+ *
+ * `--strict-mcp-config` rides along for the reason the measurement path gives -- no MCP
+ * server is needed to judge a transcript, and each one is a connection attempt on every
+ * call, on a path that makes hundreds. It is also simply the combination that was
+ * measured; shipping one of the two would ship an arrangement no evidence covers.
+ */
+const HELPER_ISOLATION_FLAGS: readonly string[] = [
+  "--setting-sources",
+  "project",
+  "--strict-mcp-config",
+];
+
+/**
+ * Run a single-turn helper call -- a grader, a description improver, a scenario
+ * synthesizer -- isolated from whatever is installed on the operator's machine.
+ *
+ * Everything such a call needs to reach a judgement is already in its prompt, which is
+ * what makes the isolation free: these prompts embed the artifact, the transcript and the
+ * files the run produced, read by the PARENT before the call. Nothing downstream of here
+ * resolves a path, so the child has no legitimate use for the operator's working directory.
+ *
+ * `--grader-bare` is not a substitute, even though `--bare` does empty the inventory as a
+ * side effect -- measured: bare alone, with no isolation flags, reported zero skills. Three
+ * things stop it being the mechanism. It is OFF by default, so the ordinary path was
+ * unisolated. It exists at ONE of the four helper call sites, so it could never have
+ * covered the other three. And it authenticates strictly from `ANTHROPIC_API_KEY`, an
+ * apiKeyHelper, or a third-party provider -- never OAuth or the keychain -- so on a
+ * login-authenticated machine it latches off mid-run and every call after that is exposed
+ * again. It also switches off hooks, LSP, auto-memory and CLAUDE.md discovery, which is a
+ * great deal more than isolation asks for.
+ *
+ * The cwd is a fresh empty directory per call, removed on the way out. Per call rather
+ * than one root for the process because a shared root has to be cleaned up at exit, `rm`
+ * cannot be awaited from an exit handler, and no handler covers `SIGKILL` at all -- so the
+ * shared version leaks exactly where it must not. Two syscalls against a call measured at
+ * 13-124 seconds of network is not a cost worth trading a leak for.
+ *
+ * Flags are appended, so a caller's own `--model` or `--bare` is preserved.
+ */
+export async function runIsolatedHelper(
+  cmd: readonly string[],
+  options: Omit<CommandOptions, "cwd">,
+): Promise<CommandOutcome> {
+  const root = await mkdtemp(`${tmpdir()}/claude-helper-`);
+  try {
+    return await runCommand([...cmd, ...HELPER_ISOLATION_FLAGS], { ...options, cwd: root });
+  } finally {
+    // Best-effort: a helper's verdict must not be lost to a failed directory removal.
+    await rm(root, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 

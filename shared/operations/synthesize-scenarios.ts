@@ -62,7 +62,7 @@
  */
 
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "../cli.ts";
-import { runCommand } from "../util/subprocess.ts";
+import { runIsolatedHelper } from "../util/subprocess.ts";
 import {
   absolute,
   domainTerms,
@@ -1433,7 +1433,7 @@ async function callClaude(
   const cmd = ["claude", "-p", "--output-format", "text"];
   if (model !== undefined && model !== "") cmd.push("--model", model);
 
-  const outcome = await runCommand(cmd, { stdin: prompt, timeoutMs: timeoutSeconds * 1000 });
+  const outcome = await runIsolatedHelper(cmd, { stdin: prompt, timeoutMs: timeoutSeconds * 1000 });
   switch (outcome.kind) {
     case "timeout":
       throw new Error(`claude -p timed out after ${timeoutSeconds}s`);

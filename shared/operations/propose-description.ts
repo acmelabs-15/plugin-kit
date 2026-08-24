@@ -15,7 +15,7 @@
  */
 
 import { parseSkillMd } from "../parse/frontmatter.ts";
-import { runCommand } from "../util/subprocess.ts";
+import { runIsolatedHelper } from "../util/subprocess.ts";
 import {
   flagBoolean,
   flagString,
@@ -109,7 +109,7 @@ async function callClaude(
   const cmd = ["claude", "-p", "--output-format", "text"];
   if (model !== undefined && model !== "") cmd.push("--model", model);
 
-  const outcome = await runCommand(cmd, {
+  const outcome = await runIsolatedHelper(cmd, {
     stdin: prompt,
     timeoutMs: timeoutSeconds * 1000,
   });

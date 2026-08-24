@@ -21,7 +21,7 @@
 import { rm } from "node:fs/promises";
 
 import { mapWithConcurrency } from "../util/pool.ts";
-import { runCommand, runStreamingLines, type CommandOutcome } from "../util/subprocess.ts";
+import { runIsolatedHelper, runStreamingLines, type CommandOutcome } from "../util/subprocess.ts";
 import {
   computeFileStats,
   createRunCollector,
@@ -405,7 +405,7 @@ export async function callClaude(prompt: string, model: string | undefined): Pro
     // the judgement uses is already in the prompt. Worth having because this call happens
     // once per run and the harness makes hundreds.
     if (bare) cmd.push("--bare");
-    return runCommand(cmd, { stdin: prompt, timeoutMs: HELPER_CALL_TIMEOUT_SECONDS * 1000 });
+    return runIsolatedHelper(cmd, { stdin: prompt, timeoutMs: HELPER_CALL_TIMEOUT_SECONDS * 1000 });
   };
 
   // Opt-in, and it degrades rather than failing the run. Under `--bare` the CLI reads

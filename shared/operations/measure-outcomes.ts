@@ -95,7 +95,7 @@ import {
 import type { Spec } from "../cli.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { calculateStats, type Stats } from "../util/stats.ts";
-import { runCommand, runStreamingLines } from "../util/subprocess.ts";
+import { runIsolatedHelper, runStreamingLines } from "../util/subprocess.ts";
 import {
   flagNumber,
   flagString,
@@ -1001,7 +1001,7 @@ export function createClaudeGrader(params: {
       evalItem.expectations.map((text, index) => `${index + 1}. ${text}`).join("\n") +
       `\n\nTranscript:\n${run.transcript}`;
 
-    const outcome = await runCommand(["claude", "-p", "--output-format", "text"], {
+    const outcome = await runIsolatedHelper(["claude", "-p", "--output-format", "text"], {
       timeoutMs: 300_000,
       stdin: prompt,
     });
