@@ -199,6 +199,12 @@ The load-bearing number behind the whole disclosure operation is verified rather
 
 Two corrections fall out. The architecture document's "silently loses its tail" framing understated a two-part mechanism — per-skill truncation at 5,000 AND whole-skill dropping under the shared budget — and is now corrected in place with the source attached. And the gate's two thresholds acquire their real meaning: warn at 5,000 is the compaction-survival boundary the docs define; the band between warn and fail passes the gate but loses its tail on every compaction until the skill is re-invoked, which the docs name as the recovery. The measured ask-user-question skill sits at 5,795 body tokens — inside that band — so its trailing sections, including four of its six reference pointers, are exactly what a compacted session stops seeing. That fact belongs in the guidance rewrite's rationale for what stays in a body's first 5,000 tokens.
 
+## Event — 2026-08-24: LOCKED — recall-aware verdict semantics, and the rewrite dispatched
+
+Owner chose, verbatim: "Adopt the table (Recommended)". The locked semantics for `decideFileVerdict`: a file some scenario declares gets `signpost` below 0.5 recall (needed and missed — repair reachability, never delete) and `keep` at or above it whatever the raw rate; `inline` stays advisory, requires healthy recall, and carries the body-headroom and compaction-boundary notes; `prune` narrows to the one evidenced case — corpus carries ground truth, no scenario declares the file, and nobody reads it; a set with no ground truth at all can no longer produce `prune` — its zero-pulls-with-pointer case becomes a new `unmeasured` verdict naming the ambiguity and the ablation that resolves it. The proposer prompt follows: repair candidates for signpost, deletion candidates only for prune. The consistency objection recorded in the code comment is answered structurally: destructive verdicts now exist only where evidence does, so annotated and unannotated sets diverge in honesty rather than in action.
+
+Execution: the verdict implementation resumes with the engineer agent that built the reporting substrate and knows every surface; the doctrine and operator references rewrite in parallel under a separate dispatch, both grounded in the reference-disclosure analysis note's findings and the sourced compaction mechanism. First recall sweep of record supplied the motivating example — a file verdicted keep on 15% raw pulls at 0 of 2 recall.
+
 ## Observations
 
 ### Landed today
