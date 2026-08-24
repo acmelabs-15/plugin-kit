@@ -27,8 +27,10 @@ import {
   compareEnvelopes,
   compareRuns,
   COMPARABILITY_KEYS,
+  decideInstallState,
   detectInstallState,
   ENVELOPE_FILENAME,
+  InstallStateSchema,
   EnvelopeError,
   explainIncomparability,
   hashArtifact,
@@ -41,6 +43,7 @@ import {
   type Envelope,
   type RunBlock,
 } from "../envelope.ts";
+import type { Discovery, RootOutcome, SkillRecord } from "../tools/check-overlap.ts";
 
 const TMP = `${Bun.env["TMPDIR"] ?? "/tmp"}/envelope-${Bun.nanoseconds()}`;
 
@@ -612,5 +615,178 @@ describe("installConflict", () => {
     expect(
       installConflict({ operation: "optimize-disclosure", needs: "absent", found: "unknown" }),
     ).toBeNull();
+  });
+
+  // `not-reachable` is the one non-answer that DOES conflict, in both directions. `unknown`
+  // means no sweep applied and nothing at the call site can act on it; `not-reachable` means
+  // a sweep ran, was supposed to answer, and came back blind — so the condition that would
+  // void the run is live and merely unobserved.
+
+  test("a not-reachable state conflicts for a sweep needing the target absent", () => {
+    const text = installConflict({
+      operation: "measure-disclosure",
+      needs: "absent",
+      found: "not-reachable",
+    });
+    expect(text).not.toBeNull();
+    expect(text).toContain("could not establish");
+    // The consequence, not just the fact. A reader who learns only that something was
+    // unreadable does not learn that the pull rates below may be a table of nothing.
+    expect(text).toContain("unverified");
+  });
+
+  test("a not-reachable state conflicts for a sweep needing the target installed", () => {
+    const text = installConflict({
+      operation: "measure-triggering",
+      needs: "installed",
+      found: "not-reachable",
+    });
+    expect(text).not.toBeNull();
+    expect(text).toContain("second copy");
+  });
+
+  test("not-reachable never reads as the clean answer that absent reads as", () => {
+    // The whole point of the split, asserted as the asymmetry it is: the same operation and
+    // the same `needs`, one state silent and the other loud.
+    expect(
+      installConflict({ operation: "measure-disclosure", needs: "absent", found: "absent" }),
+    ).toBeNull();
+    expect(
+      installConflict({ operation: "measure-disclosure", needs: "absent", found: "not-reachable" }),
+    ).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The absent / not-reachable split (T-13)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Nothing is installed" and "I could not find out" produce the same empty sighting list and
+ * mean opposite things. Everything below drives {@link decideInstallState} directly, because
+ * the branch that matters most — a copy found while another root is unreadable — needs two
+ * roots a test can write to, and three of the four are `HOME`-derived and read at module load.
+ */
+describe("decideInstallState", () => {
+  const scanned = (root: string, found: number): RootOutcome => ({
+    root,
+    origin: "project",
+    status: "scanned",
+    found,
+  });
+  const unreadable = (root: string): RootOutcome => ({
+    root,
+    origin: "user",
+    status: "unreadable",
+    found: 0,
+  });
+  const copy = (path: string, name = "demo"): SkillRecord => ({
+    name,
+    description: "a copy",
+    path,
+    origin: "project",
+  });
+  const discovery = (over: Partial<Discovery> = {}): Discovery => ({
+    skills: [],
+    roots: [scanned("/p/.claude/skills", 0)],
+    homeless: false,
+    ...over,
+  });
+
+  test("a clean sweep finding nothing is absent, and says nothing", () => {
+    const sighting = decideInstallState({ name: "demo", discovery: discovery() });
+    expect(sighting.state).toBe("absent");
+    // The one state that earns silence: absence was established, so there is no caveat.
+    expect(sighting.cap).toBeNull();
+    expect(sighting.blindRoots).toEqual([]);
+  });
+
+  test("a clean sweep finding one copy is installed", () => {
+    const sighting = decideInstallState({
+      name: "demo",
+      discovery: discovery({ skills: [copy("/p/.claude/skills/demo/SKILL.md")] }),
+    });
+    expect(sighting.state).toBe("installed");
+    expect(sighting.cap).toContain("/p/.claude/skills/demo/SKILL.md");
+  });
+
+  test("a blind root turns nothing-found into not-reachable, never absent", () => {
+    const sighting = decideInstallState({
+      name: "demo",
+      discovery: discovery({ roots: [scanned("/p/.claude/skills", 0), unreadable("/u/skills")] }),
+    });
+    expect(sighting.state).toBe("not-reachable");
+    expect(sighting.blindRoots).toEqual(["/u/skills"]);
+    expect(sighting.cap).toContain("/u/skills");
+    // The claim it refuses to make, in words. An empty list from a partial sweep is not
+    // evidence, and the sentence has to say which of the two a reader is holding.
+    expect(sighting.cap).toContain("NOT been shown");
+  });
+
+  test("a blind root downgrades a single sighting too, because uniqueness is a claim", () => {
+    // The branch the old shape missed entirely: blindness only downgraded the answer when
+    // the sighting list happened to be empty, so one copy found plus one root unread
+    // reported a confident `installed` — a claim that this is THE copy, from a sweep that
+    // had not looked everywhere a second one could be.
+    const sighting = decideInstallState({
+      name: "demo",
+      discovery: discovery({
+        skills: [copy("/p/.claude/skills/demo/SKILL.md")],
+        roots: [scanned("/p/.claude/skills", 1), unreadable("/u/skills")],
+      }),
+    });
+    expect(sighting.state).toBe("not-reachable");
+    // The sighting is not thrown away with the claim — a reader still needs to know a copy
+    // was seen, and where.
+    expect(sighting.sightings).toEqual(["/p/.claude/skills/demo/SKILL.md"]);
+    expect(sighting.cap).toContain("/p/.claude/skills/demo/SKILL.md");
+  });
+
+  test("two sightings stay shadowed under blindness, because more roots can only add copies", () => {
+    // The one conclusion blindness cannot take away. `shadowed` already says the router had
+    // a choice; an unread root could add a third copy and would not change that.
+    const sighting = decideInstallState({
+      name: "demo",
+      discovery: discovery({
+        skills: [copy("/p/a/SKILL.md"), copy("/p/b/SKILL.md")],
+        roots: [scanned("/p/.claude/skills", 2), unreadable("/u/skills")],
+      }),
+    });
+    expect(sighting.state).toBe("shadowed");
+    expect(sighting.cap).toContain("There may be more");
+  });
+
+  test("an unset HOME is not-reachable, not unknown — a sweep ran and was blind", () => {
+    // `unknown` is for a sweep that did not apply or did not run. Three of the four roots
+    // could not be NAMED here, which is a sweep that ran and saw a quarter of the machine.
+    const sighting = decideInstallState({
+      name: "demo",
+      discovery: discovery({ homeless: true }),
+    });
+    expect(sighting.state).toBe("not-reachable");
+    expect(sighting.cap).toContain("HOME");
+  });
+
+  test("a copy under a different name is not a sighting", () => {
+    const sighting = decideInstallState({
+      name: "demo",
+      discovery: discovery({ skills: [copy("/p/.claude/skills/other/SKILL.md", "other")] }),
+    });
+    expect(sighting.state).toBe("absent");
+  });
+
+  test("the state survives a round trip through the schema, so it is a real wire value", () => {
+    // A state the enum rejects would be caught only at `writeEnvelope`, on the machine that
+    // produced the run, after the run had been paid for.
+    expect(InstallStateSchema.safeParse("not-reachable").success).toBe(true);
+  });
+
+  test("not-reachable and absent are not comparable, so no delta crosses the split", () => {
+    const result = compareRuns(
+      runBlock({ installState: "absent" }),
+      runBlock({ installState: "not-reachable" }),
+    );
+    expect(result.comparable).toBe(false);
+    expect(result.differing).toEqual(["installState"]);
   });
 });

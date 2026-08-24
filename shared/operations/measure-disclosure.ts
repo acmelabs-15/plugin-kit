@@ -35,6 +35,7 @@ import {
   type FileStat,
   type GroundTruth,
   type ScenarioRun,
+  type SplitScore,
   type TokenMethod,
 } from "./disclosure.ts";
 import {
@@ -53,11 +54,33 @@ import {
   generateDisclosureReport,
   type DisclosureWarning,
 } from "../report/disclosure-report.ts";
-import { detectInstallState, installConflict, type InstallState } from "../envelope.ts";
+import {
+  detectInstallState,
+  ENVELOPE_FILENAME,
+  hashArtifact,
+  hashJsonValue,
+  installConflict,
+  writeEnvelope,
+  type Envelope,
+  type InstallState,
+} from "../envelope.ts";
+// The envelope builder is IMPORTED, not reimplemented. It already owns the row vocabulary,
+// the per-file verdict reasons and the exclusion accounting, and those are exactly the
+// judgements the two entry points must never disagree about -- a forked builder is how two
+// producers stop agreeing about what a pull rate means. What differs between them is which
+// caps are true, and the builder takes `operation` so it can gate those itself.
+import {
+  buildDisclosureEnvelope,
+  createRunTally,
+  type DisclosureRow,
+  type OptimizeOutput,
+  type RunTally,
+} from "./optimize-disclosure.ts";
 import {
   parseSelectors,
   selectRowsById,
   SubsetError,
+  subsetCap,
   subsetProgressDetail,
   subsetSummaryLine,
   type ScenarioSubsetStamp,
@@ -121,6 +144,16 @@ export interface MeasureDisclosureParams {
   /** Grades the assertions. Deliberately not the measurement model; see `DEFAULT_GRADER_MODEL`. */
   readonly graderModel?: string | undefined;
   readonly logDir?: string | undefined;
+  /**
+   * Called once per scenario run, whatever became of it. Point it at {@link createRunTally}.
+   *
+   * A callback rather than a field on {@link MeasureOutput}, because `results.json` is a wire
+   * contract and the envelope is additive to it: a run that asks for no envelope must produce
+   * the same bytes it always did. It is also the only way the CLI can see how runs ENDED —
+   * `MeasureOutput` reports how many never loaded the body, and says nothing at all about how
+   * many timed out or failed outright, which is half of what `provenance` has to account for.
+   */
+  readonly onRunOutcome?: ((run: ScenarioRun) => void) | undefined;
   readonly onProgress?: ((settled: number, total: number) => void) | undefined;
   readonly onStarted?:
     | ((inFlight: number, started: number, total: number) => void)
@@ -315,6 +348,11 @@ export async function measureDisclosure(
     onStarted: params.onStarted,
   });
 
+  // After the sweep rather than on the pool's hot path, for the reason the optimizer gives
+  // for the same loop: nothing reads the tally until the envelope is built, so counting
+  // during the run would buy nothing.
+  if (params.onRunOutcome !== undefined) for (const run of runs) params.onRunOutcome(run);
+
   // `holdout: null` and `gateReason: null` say the same thing they say in the optimizer:
   // no holdout was configured, so the train score IS the score. `summarizeLayout` computes
   // the file table from the train runs, which here is every run.
@@ -433,6 +471,159 @@ export function reportWarnings(output: MeasureOutput): readonly DisclosureWarnin
   return warnings;
 }
 
+// ---------------------------------------------------------------------------
+// The results envelope
+// ---------------------------------------------------------------------------
+
+export interface MeasurementEnvelopeInput {
+  readonly output: MeasureOutput;
+  /**
+   * How the runs ended, from `onRunOutcome`.
+   *
+   * The only source for two of the four outcomes. `MeasureOutput` reports how many runs
+   * never loaded the body and says nothing whatever about how many timed out or failed
+   * outright, and `provenance` has to account for all four.
+   */
+  readonly tally: RunTally;
+  readonly workers: number;
+  readonly timeoutSeconds: number;
+  readonly inlineThreshold: number;
+  readonly graderModel: string;
+  /** From `hashJsonValue` over the scenarios that RAN. See the CLI for why that matters. */
+  readonly scenarioSetHash: string;
+  readonly targetSha: string;
+  /** Extra caveats. The tier-study and subset caps are derived here, not passed. */
+  readonly caps?: readonly string[];
+  readonly startedAt?: Date;
+}
+
+/**
+ * Build the results envelope for one measurement pass.
+ *
+ * Pure and exported, for the reason `buildTriggeringEnvelope` and `buildDisclosureEnvelope`
+ * both give: every judgement here is about how the measurement will be read, and a judgement
+ * reachable only by spending an hour of API time is a judgement with no coverage.
+ *
+ * IT ADAPTS RATHER THAN BUILDS
+ * ----------------------------
+ * `MeasureOutput` is this entry point's own wire shape and `buildDisclosureEnvelope` speaks
+ * the optimizer's, so the work here is stating a measurement in that vocabulary -- one
+ * iteration, accepted, nothing held out, baseline equal to best -- which is the same
+ * translation `main` already performs to reach the HTML report. The alternative is a second
+ * builder, and two builders are free to disagree about what a pull rate means, what a
+ * `prune` verdict is grounded in, and which runs belong in a denominator. Those are the
+ * judgements that must not fork; which CAPS are true is the part that genuinely differs, and
+ * the builder gates that on `operation` rather than making this file restate it.
+ */
+export function buildMeasurementEnvelope(
+  input: MeasurementEnvelopeInput,
+): Envelope<DisclosureRow> {
+  const output = input.output;
+
+  // Error-free runs, which is what `SplitScore.runs` counts. `classifyRun` marks a run
+  // `unloaded` in exactly the case `scoreRuns` counts as `runsWithoutSkill` -- both ask
+  // whether the body reached context on a run that did not error, and `skillLoaded` and
+  // `loadedVia` are assigned together -- so the two agree by construction and their sum is
+  // the error-free population.
+  const errorFreeRuns = input.tally.measured + input.tally.unloaded;
+  const delivered = errorFreeRuns - output.runs_without_skill - output.runs_loaded_via_file;
+
+  const train: SplitScore = {
+    scenarios: output.scenario_count,
+    runs: errorFreeRuns,
+    assertionsPassed: output.assertions_passed,
+    assertionsTotal: output.assertions_total,
+    passRate: output.pass_rate,
+    meanContextTokens: output.context_tokens,
+    runsWithoutSkill: output.runs_without_skill,
+    runsLoadedViaFile: output.runs_loaded_via_file,
+    loadRate: errorFreeRuns === 0 ? 1 : delivered / errorFreeRuns,
+  };
+
+  // Baseline equal to best on every paired field, on purpose. The builder omits a headline
+  // delta when the two are equal, so a measurement reports NO saving rather than a saving of
+  // zero -- and a reader never has two numbers side by side inviting the conclusion that a
+  // restructure was attempted and achieved nothing.
+  const asOptimized: OptimizeOutput = {
+    skill_name: output.skill_name,
+    skill_path: output.skill_path,
+    exit_reason: "measurement_only",
+    token_method: output.token_method,
+    tokens_are_estimated: output.tokens_are_estimated,
+    holdout: 0,
+    train_size: output.scenario_count,
+    holdout_size: 0,
+    runs_per_scenario: output.runs_per_scenario,
+    baseline_body_tokens: output.body_tokens,
+    best_body_tokens: output.body_tokens,
+    baseline_context_tokens: output.context_tokens,
+    best_context_tokens: output.context_tokens,
+    best_layout_path: output.skill_path,
+    applied_edits: [],
+    files: output.files,
+    iterations: [
+      {
+        iteration: 1,
+        label: "measured (as authored)",
+        candidateId: null,
+        rationale: `${output.files.length} bundled file(s), ${output.body_tokens} body tokens`,
+        bodyTokens: output.body_tokens,
+        train,
+        holdout: null,
+        accepted: true,
+        note: "measurement only — no restructure was attempted",
+      },
+    ],
+    notes: [],
+    ground_truth: output.ground_truth,
+  };
+
+  // Derived here rather than accepted from the caller, which is the same fence the rest of
+  // this file keeps: a caveat available to whoever remembered to pass it is a caveat that
+  // goes missing. Neither sentence is the one `reportWarnings` renders, and that is
+  // deliberate -- the banner explains what the run is, while a `caps` entry explains why the
+  // tooling will refuse a comparison, and only one of those is useful next to a hash.
+  const derivedCaps: string[] = [];
+  if (output.subset !== undefined) derivedCaps.push(subsetCap(output.subset));
+  if (output.tier_study !== undefined) {
+    derivedCaps.push(
+      `TIER STUDY: this run swept on ${output.tier_study} rather than the ${MEASUREMENT_MODEL} ` +
+        `detection instrument, so it is not a signposting measurement of record — a stronger ` +
+        `tier reaches the right file in spite of a bad pointer. \`run.model\` carries the ` +
+        `substitution and is a comparability key, so the tooling will refuse a delta against ` +
+        `a run of record rather than reporting a change of instrument as a change of layout.`,
+    );
+  }
+
+  return buildDisclosureEnvelope({
+    output: asOptimized,
+    operation: "measure-disclosure",
+    tally: input.tally,
+    // No early stop, no gating and no candidate budget: a measurement asks for exactly this
+    // many runs, so anything unspent is a run that failed to report rather than one saved.
+    plannedRuns: output.scenario_count * output.runs_per_scenario,
+    // Never null, which is this operation's strongest comparability property and comes free
+    // from the model being hardcoded rather than defaulted. Two measurement runs cannot
+    // silently differ by whatever each operator had configured, and a tier study — the only
+    // thing that moves this value — therefore FAILS `compareRuns` against a run of record
+    // instead of quietly producing a delta across two different instruments.
+    model: output.tier_study ?? MEASUREMENT_MODEL,
+    graderModel: input.graderModel,
+    workers: input.workers,
+    timeoutSeconds: input.timeoutSeconds,
+    inlineThreshold: input.inlineThreshold,
+    scenarioSetHash: input.scenarioSetHash,
+    targetSha: input.targetSha,
+    // Both already decided, before the sweep, by `warnOnInstallConflict`. Reusing them
+    // rather than sweeping the machine a second time is what stops the envelope disagreeing
+    // with the warning the operator was shown and with the banner on the report.
+    installState: output.install_state,
+    installConflict: output.install_conflict,
+    caps: [...derivedCaps, ...(input.caps ?? [])],
+    ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt }),
+  });
+}
+
 const USAGE =
   "Usage: bun shared/operations/measure-disclosure.ts --skill-path <path> --scenarios <path> [options]\n\n" +
   "Measures what a skill costs to invoke as authored: body tokens paid on every run, which\n" +
@@ -449,6 +640,12 @@ const USAGE =
   "small change can be checked against the scenarios it was about without paying for the\n" +
   "rest. A subset run is STAMPED not-of-record in results.json and said out loud: its pull\n" +
   "rates are over a hand-picked set and must never be quoted against a full sweep.\n\n" +
+  `--results-dir also writes ${ENVELOPE_FILENAME} beside results.json: the conditions the run\n` +
+  "was produced under, the counted-versus-all totals with the cause of every excluded run,\n" +
+  "and a scenario-set hash taken over the rows that RAN. The hash and the model are\n" +
+  "comparability keys, so a subset run and a tier study are mechanically refused a delta\n" +
+  "against a measurement of record rather than being compared by whoever is squinting at two\n" +
+  "files. results.json is unchanged; --envelope names a different path for it.\n\n" +
   "To restructure the layout as well, use optimize-disclosure.ts.";
 
 /** The flag spec, exported so the defaults are reachable from the suite. */
@@ -501,6 +698,22 @@ export const MEASURE_FLAGS: Spec = {
     help: "Save results.json, report.html and per-run logs here",
   },
   report: { kind: "string", default: "none", help: "Write the HTML report here ('none' to skip)" },
+  // Additive, and DEFAULTED ON whenever a run is already saving its output. `results.json`
+  // is unchanged to the byte -- the envelope is a second file beside it -- so nothing is
+  // traded by writing it, and this file's own doctrine settles which way the default falls:
+  // the removed flags were removed because correct behaviour available to whoever remembered
+  // to ask for it is behaviour that goes missing, and a run whose conditions were never
+  // recorded is exactly the run nobody can interpret six weeks later. An operator saving
+  // results wants the conditions those results were produced under; making them type a
+  // second flag to get them is the habit-flag pattern, not a guard against one.
+  //
+  // Same spelling and same default as `optimize-disclosure.ts`, which is the sibling that
+  // also has a `--results-dir`. `measure-triggering.ts` is `--envelope`-only because it has
+  // no results directory to hang one off, not because it decided differently.
+  envelope: {
+    kind: "string",
+    help: `Also write the results envelope here (default: <results-dir>/${ENVELOPE_FILENAME})`,
+  },
   verbose: { kind: "boolean", default: false, help: "Print per-file verdicts to stderr" },
   help: { kind: "boolean", short: "h", help: "Show this message" },
 };
@@ -688,12 +901,15 @@ async function main(): Promise<void> {
     },
   });
 
+  const tally = createRunTally();
+
   let output: MeasureOutput;
   try {
     output = await measureDisclosure({
       skillPath,
       scenarios,
       runsPerScenario,
+      onRunOutcome: tally.record,
       numWorkers: flagNumber(flags, "num-workers"),
       timeoutSeconds: flagNumber(flags, "timeout"),
       inlineThreshold: flagNumber(flags, "inline-threshold"),
@@ -798,6 +1014,32 @@ async function main(): Promise<void> {
     );
     if (reportPath !== "none") await Bun.write(reportPath, html);
     if (resultsDir !== undefined) await Bun.write(`${resultsDir}/report.html`, html);
+  }
+
+  const envelopePath =
+    flagString(flags, "envelope") ??
+    (resultsDir === undefined ? undefined : `${resultsDir}/${ENVELOPE_FILENAME}`);
+  if (envelopePath !== undefined) {
+    await writeEnvelope(
+      envelopePath,
+      buildMeasurementEnvelope({
+        output,
+        tally: tally.snapshot(),
+        workers: flagNumber(flags, "num-workers"),
+        timeoutSeconds: flagNumber(flags, "timeout"),
+        inlineThreshold: flagNumber(flags, "inline-threshold"),
+        graderModel: flagString(flags, "grader-model") ?? DEFAULT_GRADER_MODEL,
+        // Over the scenarios that RAN, not over the file. `evalSetHash` is a comparability
+        // key, so a subset hashes differently from the full set and from every other
+        // subset, and `compareRuns` refuses a delta that would otherwise be a change of
+        // denominator reported as a change of result. `scenarios` is already the narrowed
+        // set by this point -- `applyScenarioOnly` ran before anything was sized against it
+        // -- so this is the enforcement rather than a second place to remember the rule.
+        scenarioSetHash: hashJsonValue(scenarios),
+        targetSha: await hashArtifact(skillPath),
+      }),
+    );
+    console.error(`Envelope written to: ${envelopePath}`);
   }
 
   if (output.tokens_are_estimated) {

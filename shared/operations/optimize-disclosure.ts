@@ -1039,8 +1039,17 @@ export interface DisclosureEnvelopeInput {
   readonly graderModel: string;
   readonly workers: number;
   readonly timeoutSeconds: number;
-  readonly maxIterations: number;
-  readonly maxCandidates: number;
+  /**
+   * The loop's iteration budget. Ignored, and meaningless, when `operation` is a measurement.
+   *
+   * Optional for the reason the measurement entry point is separate at all: a measurement
+   * pass has no `--max-iterations` flag, so a required field here would force it to invent a
+   * number, and the cap built from that number would name a flag its own `--help` does not
+   * list. See the `selecting` gate in the builder.
+   */
+  readonly maxIterations?: number;
+  /** The per-iteration candidate budget. Optional for the same reason as `maxIterations`. */
+  readonly maxCandidates?: number;
   readonly inlineThreshold: number;
   readonly scenarioSetHash: string;
   readonly targetSha: string;
@@ -1152,6 +1161,19 @@ export function buildDisclosureEnvelope(
   input: DisclosureEnvelopeInput,
 ): Envelope<DisclosureRow> {
   const output = input.output;
+  const operation = input.operation ?? "optimize-disclosure";
+
+  // Whether anything was SELECTED, which is the whole difference between the two callers.
+  //
+  // A measurement pass runs one layout once and restructures nothing, so every cap below
+  // that talks about an iteration budget, a candidate budget or a train/held-out split
+  // describes machinery it does not have. Gated rather than filled in with ones and zeros,
+  // because `caps` is the one field a reader consults to find out what bounded the coverage:
+  // a sentence there naming `--max-candidates` on a run whose `--help` has no such flag is
+  // not a weaker caveat, it is a false one, and a reader who catches it stops believing the
+  // rest of the list. The rows, the verdicts and the exclusion accounting are shared, which
+  // is the part that must never fork.
+  const selecting = operation === "optimize-disclosure";
 
   const rows: DisclosureRow[] = output.files.map((file) => ({
     path: file.path,
@@ -1226,7 +1248,10 @@ export function buildDisclosureEnvelope(
     });
   }
   headline.push({ label: "bundled files measured", value: rows.length, unit: "files" });
-  headline.push({ label: "iterations run", value: iterationsRun, unit: "iterations" });
+  // Omitted on a measurement pass rather than reported as 1. "Iterations run: 1" invites a
+  // reader to conclude a restructure was attempted and produced nothing, which is the
+  // opposite of what a measurement did.
+  if (selecting) headline.push({ label: "iterations run", value: iterationsRun, unit: "iterations" });
   // Omitted rather than reported as 0 when no scenario declared the empty list, for the
   // same reason the pass rate above is omitted when nothing was asserted: an over-fetch of
   // 0% is a clean bill of health, and a set with no negative rows has not earned one.
@@ -1254,16 +1279,24 @@ export function buildDisclosureEnvelope(
     );
   }
 
-  caps.push(
-    `The loop was allowed at most ${input.maxIterations} iteration(s) ` +
-      `(\`--max-iterations\`) and ran ${iterationsRun}; it stopped for: ${output.exit_reason}.`,
-  );
-  caps.push(
-    `At most ${input.maxCandidates} candidate layout(s) were measured per iteration ` +
-      `(\`--max-candidates\`). The generator orders candidates by how much unconditional ` +
-      `cost they could remove, so anything past the ${input.maxCandidates}th was never ` +
-      `measured — a cheaper layout may exist and was not looked at.`,
-  );
+  if (selecting) {
+    caps.push(
+      `The loop was allowed at most ${input.maxIterations} iteration(s) ` +
+        `(\`--max-iterations\`) and ran ${iterationsRun}; it stopped for: ${output.exit_reason}.`,
+    );
+    caps.push(
+      `At most ${input.maxCandidates} candidate layout(s) were measured per iteration ` +
+        `(\`--max-candidates\`). The generator orders candidates by how much unconditional ` +
+        `cost they could remove, so anything past the ${input.maxCandidates}th was never ` +
+        `measured — a cheaper layout may exist and was not looked at.`,
+    );
+  } else {
+    caps.push(
+      `Nothing was restructured. This run measured the layout AS AUTHORED and proposed no ` +
+        `alternative, so every verdict below is a hypothesis about a cheaper layout rather ` +
+        `than a measurement of one — no candidate was built, and none was tested.`,
+    );
+  }
   caps.push(
     `Each scenario was run ${output.runs_per_scenario} time(s) per layout ` +
       `(\`--runs-per-scenario\`), so every pull rate in \`rows\` rests on at most that many ` +
@@ -1292,18 +1325,32 @@ export function buildDisclosureEnvelope(
   // The split is a cap on the ROWS specifically, and it is the one most easily missed:
   // `computeFileStats` is handed the train runs alone, so a reference that only the
   // held-out scenarios needed shows a pull rate of zero and a verdict to match.
-  if (output.holdout_size > 0) {
-    caps.push(
-      `${output.holdout_size} of ${output.train_size + output.holdout_size} scenario(s) ` +
-        `were held out for selection (\`--holdout ${output.holdout}\`). Pull rates and ` +
-        `verdicts in \`rows\` are computed over the ${output.train_size} TRAIN scenario(s) ` +
-        `only, so a file needed exclusively by a held-out scenario reads as never pulled.`,
-    );
+  // A split exists so a layout proposed from one half can be judged on the other. Nothing is
+  // proposed on a measurement pass, so neither branch is available to it: there is no
+  // held-out half to warn about and no selection to call optimistic. Saying "the winning
+  // layout was selected on the same scenarios that proposed it" about a run that selected
+  // nothing is the false-caveat failure this gate exists to prevent.
+  if (selecting) {
+    if (output.holdout_size > 0) {
+      caps.push(
+        `${output.holdout_size} of ${output.train_size + output.holdout_size} scenario(s) ` +
+          `were held out for selection (\`--holdout ${output.holdout}\`). Pull rates and ` +
+          `verdicts in \`rows\` are computed over the ${output.train_size} TRAIN scenario(s) ` +
+          `only, so a file needed exclusively by a held-out scenario reads as never pulled.`,
+      );
+    } else {
+      caps.push(
+        `No scenarios were held out (\`--holdout ${output.holdout}\`), so the winning layout ` +
+          `was selected on the same scenarios that proposed it. Every figure above is a ` +
+          `training score and will be optimistic.`,
+      );
+    }
   } else {
     caps.push(
-      `No scenarios were held out (\`--holdout ${output.holdout}\`), so the winning layout ` +
-        `was selected on the same scenarios that proposed it. Every figure above is a ` +
-        `training score and will be optimistic.`,
+      `Every one of the ${output.train_size} scenario(s) is evidence about the same ` +
+        `unmodified layout, so none was held back and the rows are computed over all of ` +
+        `them. That is not the optimizer's optimistic training score — nothing was selected ` +
+        `on this evidence, so there is no selection for it to be optimistic about.`,
     );
   }
 
@@ -1333,26 +1380,67 @@ export function buildDisclosureEnvelope(
   const unspent = input.plannedRuns - runsSpent;
   if (unspent > 0) {
     caps.push(
-      `${unspent} of ${input.plannedRuns} planned run(s) went unspent: a candidate that ` +
-        `loses on the train split never earns its held-out runs, and the loop stops early ` +
-        `when nothing improves. That is a saving rather than a gap, but the sweep looked at ` +
-        `less than the budget implies.`,
+      selecting
+        ? `${unspent} of ${input.plannedRuns} planned run(s) went unspent: a candidate that ` +
+          `loses on the train split never earns its held-out runs, and the loop stops early ` +
+          `when nothing improves. That is a saving rather than a gap, but the sweep looked ` +
+          `at less than the budget implies.`
+        : `${unspent} of ${input.plannedRuns} planned run(s) never reported. A measurement ` +
+          `has no early stop and no gating, so this is not a saving — the sweep returned ` +
+          `fewer runs than it was asked for, and every figure rests on that much less ` +
+          `evidence than the scenario count implies.`,
     );
   }
   // Two denominators, said out loud. `scored` is every run the loop spent across every
   // layout it tried; `countedRuns` in each row is the selected layout's train runs alone.
   // They are different numbers on purpose and a reader dividing one by the other gets
   // nonsense.
-  caps.push(
-    `\`provenance.scored\` counts every run the loop spent across all ${iterationsRun} ` +
-      `iteration(s) and every candidate it measured. The rows describe the SELECTED layout ` +
-      `only, over the runs in their own \`countedRuns\` — the two denominators are not the ` +
-      `same and are not meant to be.`,
-  );
+  if (selecting) {
+    caps.push(
+      `\`provenance.scored\` counts every run the loop spent across all ${iterationsRun} ` +
+        `iteration(s) and every candidate it measured. The rows describe the SELECTED layout ` +
+        `only, over the runs in their own \`countedRuns\` — the two denominators are not the ` +
+        `same and are not meant to be.`,
+    );
+  }
+
+  // COUNTED VERSUS ALL, WITH THE CAUSES NAMED AND COUNTED
+  // -----------------------------------------------------
+  // Unconditional, because both callers have the same gap and neither said so. `scored`
+  // counts every run the harness completed with the body in context; the assertion and
+  // context figures are over the runs the SKILL SYSTEM delivered, which is smaller by
+  // exactly the runs where the model read SKILL.md itself. `assertionsTotal` has always
+  // been a counted-runs figure that did not say it was one.
+  //
+  // The cost of not saying it is on the record: a reader comparing two runs' headline
+  // denominators, with no artifact naming which runs each had dropped and why, concluded a
+  // pair had been interrupted. Naming both totals and the per-cause counts is what makes
+  // that comparison answerable from the file instead of from a guess.
+  if (selectedScore !== null) {
+    const delivered =
+      selectedScore.runs - selectedScore.runsWithoutSkill - selectedScore.runsLoadedViaFile;
+    caps.push(
+      `Counted versus all: the denominator behind every rate in \`headline\` and behind every ` +
+        `\`assertionsTotal\` is ${delivered}, out of ${selectedScore.runs} error-free run(s) ` +
+        `on the layout the rows describe. Dropped: ${selectedScore.runsWithoutSkill} where the body never ` +
+        `reached context, and ${selectedScore.runsLoadedViaFile} where it reached context ` +
+        `because the model READ SKILL.md itself rather than because the skill system ` +
+        `delivered it — a different experiment, so it does not share the denominator. ` +
+        `Outside that count entirely: ${input.tally.timeout} timeout(s) and ` +
+        `${input.tally.error} hard failure(s). \`provenance.scored\` is ` +
+        `${input.tally.measured} and is NOT this denominator — it counts the file-loaded ` +
+        `runs in. Two runs' headline figures are comparable only against each other's ` +
+        `counted totals, never against each other's run counts.`,
+    );
+  }
   if (selectedScore !== null && selectedScore.assertionsTotal === 0) {
     caps.push(
-      `No scenario carried expectations, so the pass-rate guardrail could not fire. The ` +
-        `loop optimized context cost with nothing checking that the skill still works.`,
+      selecting
+        ? `No scenario carried expectations, so the pass-rate guardrail could not fire. The ` +
+          `loop optimized context cost with nothing checking that the skill still works.`
+        : `No scenario carried expectations, so the pass rate above is measured against ` +
+          `nothing and says only that the runs completed. It is not evidence that the skill ` +
+          `works.`,
     );
   }
 

@@ -565,9 +565,23 @@ One shape that every measured operation writes alongside its own output. Defined
 | `timeoutSeconds` | **yes** | Per-unit wall clock budget, `null` when nothing can time out |
 | `evalSetHash` | **yes** | Content hash of the questions asked, `null` when the operation asks none. Hashed from the **parsed** set, so reindenting a file does not make two runs look incomparable while renaming a query correctly does |
 | `targetSha` | no | Content hash of the artifact under test, `sha256:<64 hex>`. Excludes `node_modules` and `.git` and nothing else |
-| `installState` | no | `absent`, `installed`, `shadowed` or `unknown` — see below |
+| `installState` | no | `absent`, `installed`, `shadowed`, `not-reachable` or `unknown` — see below |
 
-**`installState` is an observation, not an assertion.** It records what the machine's installed set looked like, because the operations genuinely disagree about what they need: a triggering sweep needs the artifact installed for the router to reach it, and a disclosure sweep needs it *not* to be — content served through the skill system never produces a `Read`, so a disclosure run against an installed copy floors every pull rate at zero and produces a clean-looking table of `prune` verdicts resting on nothing. The same value is healthy for one operation and fatal for another, and only the operation can say which. `unknown` means the sweep did not run or ran blind; never write it to mean "probably absent", and never write `absent` on a run where nothing looked.
+**`installState` is an observation, not an assertion.** It records what the machine's installed set looked like, because the operations genuinely disagree about what they need: a triggering sweep needs the artifact installed for the router to reach it, and a disclosure sweep needs it *not* to be — content served through the skill system never produces a `Read`, so a disclosure run against an installed copy floors every pull rate at zero and produces a clean-looking table of `prune` verdicts resting on nothing. The same value is healthy for one operation and fatal for another, and only the operation can say which.
+
+**`absent` is itself a claim, so three of the five values are about the quality of the answer rather than about the machine.** "Nothing is installed" and "I could not find out" produce the same empty sighting list and mean opposite things — the same absent-versus-empty distinction `expects_references` draws above, where an omitted key and an empty array are not interchangeable. `absent` is reserved for a sweep that covered its roots and established absence.
+
+| Value | What it says |
+|---|---|
+| `absent` | The sweep covered its roots and nothing claims the target's name |
+| `installed` | Exactly one copy is installed under its own name |
+| `shadowed` | More than one installation answers to the name and can win its probes |
+| `not-reachable` | A sweep ran and was blind to part of the install surface, so absence *and* uniqueness were both left unestablished |
+| `unknown` | No sweep applied, or none ran |
+
+`not-reachable` and `unknown` are both non-answers and are still not the same one. `unknown` means no sweep was applicable — the target is an agent and the sweep only globs `**/SKILL.md` — or discovery threw before reading anything: a standing limitation nothing at the call site can act on. `not-reachable` means a sweep ran, was supposed to answer, and came back partially blind: a root that exists and would not enumerate, or `HOME` unset so three of the four roots could not be named. That one is a machine that can be repaired and re-run.
+
+The asymmetry carries into `installConflict`, which returns `null` for `unknown` and a sentence for `not-reachable`. Blindness also downgrades a *positive* answer: one copy found while another root is unreadable is `not-reachable`, not `installed`, because `installed` claims uniqueness that a partial sweep has not earned. Two or more sightings stay `shadowed` under blindness, since an unread root can only add copies. Never write `unknown` to mean "probably absent", never write `absent` on a run where nothing looked, and never let a blind sweep report either.
 
 ### `provenance` — how the numbers were arrived at, and what bounded them
 
@@ -609,12 +623,16 @@ All three are required arrays. Empty is fine; absent is refused.
 |---|---|---|
 | `measure-triggering` | one query: `query`, `shouldTrigger`, `triggers`, `runs`, `triggerRate`, `pass`, `earlyStopped` | `pass`, `fail` |
 | `optimize-description` | one iteration: `iteration`, `description`, `trainPassed`, `trainTotal`, `testPassed`, `testTotal`, `selected` | `selected`, `scored` |
-| `optimize-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `recall`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `unmeasured`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
+| `optimize-disclosure`, `measure-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `recall`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `unmeasured`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
 | `validate` | one finding: `file`, `line`, `severity`, `rule`, `message`, `section` | `valid`/`invalid` for the artifact, `invalid`/`warned`/`no-findings` per section, `not-checked` for a check that did not run |
 
 **`no-findings` is not `pass`, and the distinction is load-bearing.** A section that ran and was satisfied and a section that declined to look both come back as zero errors and zero warnings. `pass` would be a judgement the validator has not earned on the second, so a clean section says only what came back, and a check that did not run gets its own `not-checked` verdict beside it.
 
-**`measure-disclosure` has no row above because it writes no envelope.** It has no `--envelope` flag either. What a measurement pass emits is a flat `MeasureOutput` on stdout, the same JSON to `results.json` when `--results-dir` is passed, and `report.html` when that or `--report` is — and nothing else. Its output shape is an open decision. `buildDisclosureEnvelope` takes an `operation` parameter so the `optimize-disclosure` row is reachable from a measurement pass without forking the builder, but nothing calls it that way yet; where this operation appears elsewhere on this page, that is its scoring behaviour or its membership of the closed operation set, not a file it writes. So its install state is not in `provenance.installState`. It is in `install_state` and `install_conflict` on `MeasureOutput`, which carry the sighting and, when a copy of the skill turns out to be installed, the sentence saying every pull rate in that run is floored at zero.
+**`measure-disclosure` shares that row rather than having one of its own, and shares the builder that produces it.** `buildDisclosureEnvelope` takes an `operation` parameter for exactly this, and `buildMeasurementEnvelope` in `../operations/measure-disclosure.ts` calls it: the rows, the per-file verdict reasons and the exclusion accounting are the judgements the two entry points must never disagree about, so there is one implementation of them and not two. `results.json` is unchanged to the byte — the envelope is a second file beside it, and `install_state` and `install_conflict` stay on `MeasureOutput` as well as reaching `run.installState` and the first line of `caps`.
+
+What differs between the two callers is which caps are *true*, and the builder gates those on `operation` rather than filling them in with ones and zeros. A measurement pass restructures nothing, so it declares no iteration budget, no candidate budget and no train/held-out split — a `caps` entry naming `--max-candidates` on a run whose `--help` has no such flag is not a weaker caveat but a false one, and a reader who catches one stops believing the list. In their place it declares that nothing was restructured, and that every scenario is evidence about the same unmodified layout.
+
+**Both disclosure callers declare counted-versus-all, with the cause of every excluded run named and counted.** `provenance.scored` counts the runs the harness completed with the body in context; the assertion and context figures are over the runs the *skill system delivered*, which is smaller by exactly the runs where the model read `SKILL.md` itself. `assertionsTotal` has always been a counted-runs figure that did not say it was one, and the cost of not saying it is on the record — a reader comparing two runs' headline denominators, with no artifact naming which runs each had dropped and why, concluded a pair had been interrupted. The cap names both totals, the per-cause counts (never loaded, loaded by file read, timed out, failed outright), and the fact that `scored` is not the assertion denominator.
 
 ### Comparability — why a delta is sometimes refused
 
@@ -641,11 +659,12 @@ Change `workers`, `model` or `timeoutSeconds` and a run is incomparable with eve
 |---|---|---|
 | `../operations/measure-triggering.ts` | `--envelope <path>` | none — no flag, no envelope |
 | `../operations/optimize-disclosure.ts` | `--envelope <path>` | `<--results-dir>/<timestamp>/envelope.json`, when `--results-dir` was passed |
+| `../operations/measure-disclosure.ts` | `--envelope <path>` | `<--results-dir>/envelope.json`, when `--results-dir` was passed |
 | `../validate/validate.ts` | `--envelope <path>` | none — no flag, no envelope |
 
 `../operations/optimize-description.ts` accepts `--envelope` and exports `buildDescriptionEnvelope`, but does not yet write the file; the row and verdict shapes above are what it will emit. Until it does, a description-optimization run leaves only `results.json` and `report.html`.
 
-`../operations/measure-disclosure.ts` is missing from the table on purpose: it takes no `--envelope` flag and writes no envelope under any flag combination. It reports its install state in `results.json` instead — see the note under the row shapes above.
+**Why the two disclosure entry points default the envelope on and `measure-triggering.ts` does not.** It is not a disagreement: `measure-triggering.ts` has no `--results-dir` to hang a default off, so `--envelope` is the only way to name a path. Where a results directory exists, an operator saving a run's output wants the conditions that output was produced under, and requiring a second flag to get them is the habit-flag pattern rather than a guard against one — correct behaviour available to whoever remembered to ask for it is behaviour that goes missing. Nothing is traded by defaulting it on, because `results.json` does not change.
 
 ### It is validated on the way out
 

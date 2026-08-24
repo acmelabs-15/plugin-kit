@@ -115,16 +115,37 @@ export type OperationName = z.infer<typeof OperationNameSchema>;
  * router to reach it at all. So the same value is healthy for one operation and fatal for
  * another, and only the operation can say which.
  *
- * `unknown` is a real answer, not a placeholder: it means the sweep could not see enough
- * of the machine to have an opinion. Recording it is strictly better than recording
- * `absent`, which is a claim.
+ * `absent` IS A CLAIM; THE TWO WAYS OF NOT HAVING ONE ARE KEPT APART
+ * ------------------------------------------------------------------
+ * "Nothing is installed" and "I could not find out" produce the same empty list and mean
+ * opposite things, which is the same absent-versus-empty distinction the scenario sets draw
+ * with `expects_references`: a scenario declaring the empty list has measured something, and
+ * a scenario declaring nothing has not. So three of the five values below are about the
+ * QUALITY of the answer rather than about the machine, and `absent` is reserved for a sweep
+ * that actually established absence.
  *
- *   absent     Nothing on the machine claims the target's name besides the source under test.
- *   installed  A copy of the target is installed under its own name.
- *   shadowed   Something else is installed under the target's name and can win its probes.
- *   unknown    The sweep did not run, or ran blind. Never write it to mean "probably absent".
+ * `not-reachable` and `unknown` are both non-answers and are still not the same non-answer.
+ * `unknown` says no sweep was applicable or none ran -- the target is an agent and the sweep
+ * only globs `**\/SKILL.md`, or discovery threw before it read anything. `not-reachable`
+ * says a sweep DID run and came back partially blind: a root that exists and would not
+ * enumerate, or `HOME` unset so three of the four roots could not even be named. The
+ * difference is actionable. `unknown` is a standing limitation nobody can fix at the call
+ * site; `not-reachable` is a machine that can be repaired, re-run, and turned into an answer.
+ *
+ *   absent         The sweep covered its roots and nothing claims the target's name.
+ *   installed      Exactly one copy of the target is installed under its own name.
+ *   shadowed       More than one installation answers to the name and can win its probes.
+ *   not-reachable  A sweep ran and was blind to part of the install surface, so absence and
+ *                  uniqueness were BOTH left unestablished. Never collapse this into `absent`.
+ *   unknown        No sweep applied, or none ran. Never write it to mean "probably absent".
  */
-export const InstallStateSchema = z.enum(["absent", "installed", "shadowed", "unknown"]);
+export const InstallStateSchema = z.enum([
+  "absent",
+  "installed",
+  "shadowed",
+  "not-reachable",
+  "unknown",
+]);
 export type InstallState = z.infer<typeof InstallStateSchema>;
 
 /**
@@ -737,55 +758,97 @@ export async function detectInstallState(params: {
     };
   }
 
+  return decideInstallState({ name: params.name, discovery });
+}
+
+/**
+ * Turn one sweep into a state, without touching the filesystem.
+ *
+ * Split out and exported because the rule is the part worth testing and the sweep is not:
+ * `check-overlap.ts` owns and tests the sweep, while the decision below is where a blind
+ * root either downgrades a claim or silently fails to. Reaching every branch through real
+ * directories is not possible on any machine — a sighting in one root while another root is
+ * unreadable needs two roots the test can write to, and three of the four are `HOME`-derived
+ * and read once at module load. A branch reachable only by rearranging somebody's home
+ * directory is a branch with no coverage, and this one decides whether a void measurement
+ * reads as a clean one.
+ */
+export function decideInstallState(params: {
+  readonly name: string;
+  readonly discovery: Discovery;
+}): InstallSighting {
+  const discovery = params.discovery;
   const blindRoots = discovery.roots.filter((r) => r.status === "unreadable").map((r) => r.root);
   const sightings = discovery.skills
     .filter((skill) => skill.name === params.name)
     .map((skill) => skill.path);
 
-  if (discovery.homeless) {
+  // Why the sweep could not see the whole install surface, if it could not. Established
+  // BEFORE the state is decided, because blindness governs what a sighting count is entitled
+  // to claim -- it is not a footnote appended to a claim already made. That was the old
+  // shape's defect: a blind root only downgraded the answer when the sighting list happened
+  // to be empty, so one copy found plus one root unread reported a confident `installed`.
+  const blindness: string | null = discovery.homeless
+    ? "`HOME` is unset, so the user and plugin skill roots could not be located and only " +
+      "the project root was swept"
+    : blindRoots.length > 0
+      ? `${blindRoots.length} search root(s) exist and could not be read ` +
+        `(${blindRoots.join(", ")})`
+      : null;
+
+  // The source's own SKILL.md is excluded from the sweep, so every sighting here is a
+  // SEPARATE copy. Two or more means the router had a choice, nothing records which way it
+  // went, and the measured description may not be the one under test.
+  //
+  // This is the one conclusion blindness cannot take away, which is why it is tested first:
+  // a root the sweep could not read can only ADD copies, and `shadowed` already says there
+  // is more than one. Every other conclusion below is a claim about what is NOT there, and a
+  // partially blind sweep has not earned one.
+  if (sightings.length > 1) {
     return {
-      state: "unknown",
+      state: "shadowed",
       sightings,
       blindRoots,
       cap:
-        `Install state was not determined: \`HOME\` is unset, so the user and plugin skill ` +
-        `roots could not be located. Only the project root was swept.`,
+        `${sightings.length} installations answer to \`${params.name}\` ` +
+        `(${sightings.join(", ")}). Whichever the router picked is the one that was ` +
+        `measured, and it is not necessarily the source under test.` +
+        (blindness === null ? "" : ` There may be more: ${blindness}.`),
     };
   }
-  if (sightings.length === 0 && blindRoots.length > 0) {
-    // The distinction that makes this worth reporting: "nothing found" and "nothing found
-    // where I could look" are the same output and opposite claims.
+
+  if (blindness !== null) {
+    // The distinction the state exists for: "nothing found" and "nothing found where I could
+    // look" are the same output and opposite claims. A single sighting under blindness is the
+    // same problem one step along -- it establishes that a copy is installed and NOT that it
+    // is the only one, so the `installed` claim of uniqueness is not available either.
     return {
-      state: "unknown",
+      state: "not-reachable",
       sightings,
       blindRoots,
       cap:
-        `Install state was not determined: ${blindRoots.length} search root(s) exist and ` +
-        `could not be read (${blindRoots.join(", ")}). A copy installed under one of those ` +
-        `would not appear here.`,
+        `Install state was not established: ${blindness}. ` +
+        (sightings.length === 0
+          ? `A copy installed under an unread root would not appear here, so this run has ` +
+            `NOT been shown to be free of a competing copy.`
+          : `A copy of \`${params.name}\` was seen at ${sightings[0]}, but a second one ` +
+            `under an unread root would not have appeared, so this run has NOT been shown ` +
+            `to have measured that copy rather than another.`),
     };
   }
+
   if (sightings.length === 0) {
     return { state: "absent", sightings, blindRoots, cap: null };
   }
 
-  // The source's own SKILL.md is excluded from the sweep, so every sighting here is a
-  // SEPARATE copy. One is an ordinary installation -- the artifact is installed and that
-  // is what answers. Two or more means the router had a choice, nothing records which way
-  // it went, and the measured description may not be the one under test.
-  const state: InstallState = sightings.length === 1 ? "installed" : "shadowed";
   return {
-    state,
+    state: "installed",
     sightings,
     blindRoots,
     cap:
-      state === "installed"
-        ? `A copy of \`${params.name}\` is installed at ${sightings[0]}. Anything this run ` +
-          `measured through the skill system was served by that copy, not by the source ` +
-          `directory.`
-        : `${sightings.length} installations answer to \`${params.name}\` ` +
-          `(${sightings.join(", ")}). Whichever the router picked is the one that was ` +
-          `measured, and it is not necessarily the source under test.`,
+      `A copy of \`${params.name}\` is installed at ${sightings[0]}. Anything this run ` +
+      `measured through the skill system was served by that copy, not by the source ` +
+      `directory.`,
   };
 }
 
@@ -798,6 +861,17 @@ export async function detectInstallState(params: {
  * happens, and every bundled file scores a pull rate of zero, which reads as "delete all
  * of these". A triggering sweep needs the opposite.
  *
+ * A NON-ANSWER IS A CONFLICT WHEN A SWEEP WAS SUPPOSED TO PRODUCE ONE
+ * -------------------------------------------------------------------
+ * `not-reachable` returns a sentence and `unknown` returns null, and the asymmetry is the
+ * point. `unknown` means no sweep was applicable to this target at all -- a standing,
+ * declared limitation that {@link detectInstallState} has already written into `caps`, and
+ * that nothing at the call site can act on. `not-reachable` means a sweep ran, was supposed
+ * to answer, and came back blind to part of the machine. The condition that would void the
+ * run is live and merely unobserved, which is exactly the case that must not read as clean:
+ * every sweep this repository has been burned by looked healthy, and the one documented
+ * cause was a copy nobody had checked for.
+ *
  * @returns a `caps` sentence, or null when there is no conflict.
  */
 export function installConflict(params: {
@@ -806,6 +880,21 @@ export function installConflict(params: {
   readonly found: InstallState;
 }): string | null {
   if (params.found === "unknown") return null;
+  if (params.found === "not-reachable") {
+    return (
+      `\`${params.operation}\` needs the target ${params.needs === "absent" ? "NOT " : ""}` +
+      `to be installed, and the sweep could not establish whether it is: part of the ` +
+      `install surface could not be read. ` +
+      (params.needs === "absent"
+        ? `An unseen installed copy floors every pull rate at zero — content served through ` +
+          `the skill system never produces a \`Read\` — so this run has not been shown to ` +
+          `have measured anything. Treat the figures as unverified rather than clean, and ` +
+          `re-run once the unread roots are readable.`
+        : `An unseen second copy would have answered the probes with a different ` +
+          `description from the one under test, so this run has not been shown to have ` +
+          `measured the target. Re-run once the unread roots are readable.`)
+    );
+  }
   if (params.needs === "absent" && params.found !== "absent") {
     return (
       `\`${params.operation}\` needs the target NOT to be installed, and it is ` +

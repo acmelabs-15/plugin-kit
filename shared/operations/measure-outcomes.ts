@@ -85,6 +85,7 @@ import {
   detectInstallState,
   hashArtifact,
   hashJsonValue,
+  installConflict,
   type ArtifactKind,
   type Envelope,
   type HeadlineMetric,
@@ -1159,6 +1160,23 @@ async function main(): Promise<void> {
     name: definition.name,
     sourcePath: targetPath,
   });
+  // `needs: "absent"`, which is the baseline arm's requirement rather than the treatment
+  // arm's. This operation's whole claim is a DIFFERENCE between two arms, and the baseline
+  // arm is defined by the artifact being withheld from it; a copy installed on the machine
+  // is a copy both arms could reach, which collapses the difference toward zero and reports
+  // that as "the artifact does not help".
+  //
+  // The three sibling operations all recorded this sentence and this one recorded only the
+  // sighting, so a state that could void the delta reached `caps` as a neutral observation
+  // and never as a conflict. That is the gap: on a `not-reachable` sweep the observation
+  // reads as bookkeeping, and only the conflict says the run has not been shown to measure
+  // anything.
+  const conflict = installConflict({
+    operation: "measure-outcomes",
+    needs: "absent",
+    found: sighting.state,
+  });
+  if (conflict !== null) console.error(`\nWARNING: ${conflict}`);
   const shared = {
     model: model ?? null,
     graderModel,
@@ -1168,7 +1186,9 @@ async function main(): Promise<void> {
     evalSetHash: hashJsonValue(evals),
     targetSha: await hashArtifact(targetPath),
     installState: sighting.state,
-    caps: [sighting.cap].filter((cap): cap is string => cap !== null),
+    // The conflict FIRST, ahead of the sighting it is derived from: a reader who stops after
+    // the first line of `caps` has to have read the one that says the figures may be void.
+    caps: [conflict, sighting.cap].filter((cap): cap is string => cap !== null),
     startedAt: new Date(),
   };
   const baseline = selectBaseline(artifact);

@@ -19,6 +19,7 @@ import { rm } from "node:fs/promises";
 import {
   ACCEPT_EDITS_NOTICE,
   applyScenarioOnly,
+  buildMeasurementEnvelope,
   liveReportPath,
   MEASURE_FLAGS,
   MEASUREMENT_MODEL,
@@ -33,6 +34,15 @@ import type { MeasureParams } from "../disclosure-measure.ts";
 import { NO_GROUND_TRUTH } from "../disclosure.ts";
 import type { DisclosureScenario, ScenarioRun } from "../disclosure.ts";
 import { SubsetError, type ScenarioSubsetStamp } from "../subset.ts";
+import type { DisclosureRow, RunTally } from "../optimize-disclosure.ts";
+import {
+  COMPARABILITY_KEYS,
+  compareEnvelopes,
+  EnvelopeSchema,
+  explainIncomparability,
+  hashJsonValue,
+  type Envelope,
+} from "../../envelope.ts";
 
 const TMP = `${Bun.env["TMPDIR"] ?? "/tmp"}/measure-disclosure-${Bun.nanoseconds()}`;
 
@@ -364,37 +374,43 @@ describe("the subset marker", () => {
   });
 });
 
+/**
+ * A `MeasureOutput` with nothing interesting in it.
+ *
+ * At module scope rather than inside one `describe` because the envelope block below needs
+ * the same fixture: an envelope is built FROM this shape, so a second hand-written copy
+ * would be free to drift from the one the warnings are asserted against.
+ */
+function output(overrides: Partial<MeasureOutput> = {}): MeasureOutput {
+  return {
+    skill_name: "probe",
+    skill_path: "skills/probe",
+    install_state: "absent",
+    install_conflict: null,
+    token_method: "estimator:chars-over-4",
+    tokens_are_estimated: true,
+    scenario_count: 1,
+    runs_per_scenario: 1,
+    runs_without_skill: 0,
+    runs_loaded_via_file: 0,
+    body_tokens: 100,
+    context_tokens: 1000,
+    pass_rate: 1,
+    assertions_passed: 1,
+    assertions_total: 1,
+    files: [],
+    ground_truth: NO_GROUND_TRUTH,
+    ...overrides,
+  };
+}
+
+function subsetOf(ids: readonly string[]): ScenarioSubsetStamp {
+  const { subset } = applyScenarioOnly({ scenarios: THREE, only: ids.join(",") });
+  if (subset === null) throw new Error("expected a subset");
+  return subset;
+}
+
 describe("the report banner", () => {
-  /** A `MeasureOutput` with nothing interesting in it, for the warning assertions. */
-  function output(overrides: Partial<MeasureOutput> = {}): MeasureOutput {
-    return {
-      skill_name: "probe",
-      skill_path: "skills/probe",
-      install_state: "absent",
-      install_conflict: null,
-      token_method: "estimator:chars-over-4",
-      tokens_are_estimated: true,
-      scenario_count: 1,
-      runs_per_scenario: 1,
-      runs_without_skill: 0,
-      runs_loaded_via_file: 0,
-      body_tokens: 100,
-      context_tokens: 1000,
-      pass_rate: 1,
-      assertions_passed: 1,
-      assertions_total: 1,
-      files: [],
-      ground_truth: NO_GROUND_TRUTH,
-      ...overrides,
-    };
-  }
-
-  function subsetOf(ids: readonly string[]): ScenarioSubsetStamp {
-    const { subset } = applyScenarioOnly({ scenarios: THREE, only: ids.join(",") });
-    if (subset === null) throw new Error("expected a subset");
-    return subset;
-  }
-
   test("an ordinary run raises nothing, so its report is what it always was", () => {
     expect(reportWarnings(output())).toEqual([]);
   });
@@ -462,6 +478,234 @@ describe("the report banner", () => {
     expect(banner).toBeGreaterThan(-1);
     expect(tiles).toBeGreaterThan(-1);
     expect(banner).toBeLessThan(tiles);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The results envelope
+// ---------------------------------------------------------------------------
+
+/**
+ * The measurement entry point was the only measured operation writing no envelope, so a
+ * disclosure run's conditions — which model, which scenarios, what the machine's installed
+ * set looked like, which runs were left out and why — survived nowhere. Everything below
+ * drives the pure builder, for the reason the rest of this file gives: a judgement reachable
+ * only by spending an hour of API time is a judgement with no coverage.
+ */
+describe("the measurement envelope", () => {
+  /** A tally in which every run was measured, which is the uninteresting baseline. */
+  const cleanTally = (over: Partial<RunTally> = {}): RunTally => ({
+    measured: 2,
+    unloaded: 0,
+    timeout: 0,
+    error: 0,
+    ...over,
+  });
+
+  function envelope(
+    over: Partial<MeasureOutput> = {},
+    tally: RunTally = cleanTally(),
+    scenarios: readonly DisclosureScenario[] = THREE,
+  ): Envelope<DisclosureRow> {
+    return buildMeasurementEnvelope({
+      output: output({ scenario_count: scenarios.length, runs_per_scenario: 1, ...over }),
+      tally,
+      workers: 4,
+      timeoutSeconds: 600,
+      inlineThreshold: 0.8,
+      graderModel: "sonnet",
+      scenarioSetHash: hashJsonValue(scenarios),
+      targetSha: "sha256:abc",
+    });
+  }
+
+  const capsOf = (env: Envelope<DisclosureRow>): string => env.provenance.caps.join("\n");
+
+  test("the run block names this operation, not the optimizer it borrows the builder from", () => {
+    const env = envelope();
+    expect(env.run.operation).toBe("measure-disclosure");
+    expect(env.run.artifact).toBe("skill");
+    expect(env.run.target).toBe("probe");
+  });
+
+  test("the model is the hardcoded instrument and is never null", () => {
+    // The strongest comparability property this operation has, and it comes free from the
+    // model being hardcoded rather than defaulted: two runs cannot silently differ by
+    // whatever each operator had configured.
+    expect(envelope().run.model).toBe(MEASUREMENT_MODEL);
+  });
+
+  test("a tier study records the substituted model, so the two arms differ on a key", () => {
+    expect(envelope({ tier_study: "opus" }).run.model).toBe("opus");
+  });
+
+  test("the install state and its conflict are carried, not swept a second time", () => {
+    // Re-sweeping would let the envelope disagree with the warning the operator was shown
+    // and with the banner on the report, which are the other two places this sentence lands.
+    const env = envelope({ install_state: "installed", install_conflict: "a copy is installed" });
+    expect(env.run.installState).toBe("installed");
+    expect(env.provenance.caps[0]).toBe("a copy is installed");
+    // A verdict of its own, whose subject is the skill rather than a file, so a consumer
+    // rendering only verdicts still meets it.
+    expect(env.verdicts[0]).toEqual({
+      subject: "probe",
+      verdict: "unsound",
+      reason: "a copy is installed",
+    });
+  });
+
+  test("the timeout policy is `excluded`, the opposite of the trigger harness's", () => {
+    expect(envelope().provenance.timeoutPolicy).toBe("excluded");
+    expect(envelope().provenance.unit).toBe("scenario run");
+  });
+
+  // COUNTED VERSUS ALL. `assertions_total` has always been a counted-runs figure that did
+  // not say so, and comparing two runs' headline denominators with nothing naming the
+  // excluded runs is what produced the interrupted-pair misdiagnosis.
+
+  test("the envelope names both totals and the cause of every excluded run", () => {
+    const env = envelope(
+      { runs_without_skill: 1, runs_loaded_via_file: 2, assertions_total: 4 },
+      { measured: 6, unloaded: 1, timeout: 2, error: 1 },
+    );
+    const caps = capsOf(env);
+    // Seven error-free runs (measured + unloaded), of which one never loaded and two loaded
+    // by the model reading SKILL.md, leaves four behind the assertion figures.
+    expect(caps).toContain("out of 7 error-free run(s)");
+    expect(caps).toContain("`assertionsTotal` is 4");
+    expect(caps).toContain("1 where the body never reached context");
+    expect(caps).toContain("2 where it reached context because the model READ SKILL.md");
+    expect(caps).toContain("2 timeout(s)");
+    expect(caps).toContain("1 hard failure(s)");
+    // And the trap named: `scored` counts the file-loaded runs IN, so it is not the
+    // assertion denominator even though both are "runs that worked".
+    expect(env.provenance.scored).toBe(6);
+    expect(caps).toContain("`provenance.scored` is 6 and is NOT this denominator");
+  });
+
+  test("the excluded and failed counts follow this operation's policy, not the trigger one", () => {
+    const env = envelope({}, { measured: 6, unloaded: 1, timeout: 2, error: 1 });
+    // `excluded` folds unloaded runs in; `failed` counts only what the harness could not
+    // complete. The two are deliberately not disjoint from `scored`.
+    expect(env.provenance.excluded).toBe(4);
+    expect(env.provenance.failed).toBe(3);
+  });
+
+  // THE OPTIMIZER'S VOCABULARY MUST NOT LEAK. `caps` is the field a reader consults to find
+  // out what bounded the coverage; a sentence there naming a flag this tool does not have is
+  // a false one, and a reader who catches it stops believing the rest of the list.
+
+  test("no cap names machinery a measurement does not have", () => {
+    const caps = capsOf(envelope());
+    for (const absent of ["--max-candidates", "--max-iterations", "--holdout", "candidate layout"]) {
+      expect(caps).not.toContain(absent);
+    }
+    expect(envelope().headline.map((metric) => metric.label)).not.toContain("iterations run");
+  });
+
+  test("it says instead that nothing was restructured, which is the real bound", () => {
+    expect(capsOf(envelope())).toContain("Nothing was restructured");
+    expect(capsOf(envelope())).toContain("no candidate was built");
+  });
+
+  test("baseline equals best, so no headline reports a saving of zero", () => {
+    // A delta of zero beside a body-token count invites the conclusion that a restructure
+    // was attempted and achieved nothing.
+    for (const metric of envelope().headline) expect(metric).not.toHaveProperty("delta");
+  });
+
+  test("a subset run declares the cap that explains why a comparison will be refused", () => {
+    const caps = capsOf(envelope({ subset: subsetOf(["alpha"]) }));
+    expect(caps).toContain("--only ran 1 of 3 row(s)");
+    expect(caps).toContain("NOT a measurement of record");
+  });
+
+  test("a tier study declares its cap, and names the comparability consequence", () => {
+    const caps = capsOf(envelope({ tier_study: "opus" }));
+    expect(caps).toContain("TIER STUDY");
+    expect(caps).toContain("comparability key");
+  });
+
+  test("an ordinary run declares neither, so its caps carry no not-of-record claim", () => {
+    const caps = capsOf(envelope());
+    expect(caps).not.toContain("TIER STUDY");
+    expect(caps).not.toContain("--only ran");
+  });
+
+  test("the envelope survives writeEnvelope, which is the only validator", () => {
+    // Building an envelope the schema would refuse is a defect that otherwise surfaces on
+    // the operator's machine at the end of an hour-long sweep.
+    expect(() => EnvelopeSchema.parse(envelope())).not.toThrow();
+  });
+});
+
+describe("comparing two disclosure runs", () => {
+  function arm(options: {
+    readonly scenarios?: readonly DisclosureScenario[];
+    readonly tierStudy?: string;
+    readonly subset?: ScenarioSubsetStamp;
+  }): Envelope<DisclosureRow> {
+    const scenarios = options.scenarios ?? THREE;
+    return buildMeasurementEnvelope({
+      output: output({
+        scenario_count: scenarios.length,
+        runs_per_scenario: 1,
+        ...(options.tierStudy === undefined ? {} : { tier_study: options.tierStudy }),
+        ...(options.subset === undefined ? {} : { subset: options.subset }),
+      }),
+      tally: { measured: scenarios.length, unloaded: 0, timeout: 0, error: 0 },
+      workers: 4,
+      timeoutSeconds: 600,
+      inlineThreshold: 0.8,
+      graderModel: "sonnet",
+      // Over the rows that RAN, which is what makes the refusal below mechanical rather
+      // than a matter of whoever is reading two files noticing.
+      scenarioSetHash: hashJsonValue(scenarios),
+      targetSha: "sha256:abc",
+    });
+  }
+
+  test("two full-set arms over the identical scenario set compare comparable", () => {
+    // The case that has to keep working. If the hash or the model varied per run for any
+    // reason of its own, every legitimate before/after would be refused and the check would
+    // be worse than useless — it would train a reader to ignore it.
+    const result = compareEnvelopes(arm({}), arm({}));
+    expect(result.comparable).toBe(true);
+    expect(result.differing).toEqual([]);
+  });
+
+  test("a full-set arm and a subset arm are refused, on the set hash", () => {
+    const full = arm({});
+    const narrow = arm({ scenarios: [THREE[0]!], subset: subsetOf(["alpha"]) });
+    const result = compareEnvelopes(full, narrow);
+    expect(result.comparable).toBe(false);
+    expect(result.differing).toContain("evalSetHash");
+    // Mechanically, from the rows themselves: the stamp SAYS the run is narrow, and the
+    // hash over the rows that ran is what makes the tooling act on it.
+    expect(full.run.evalSetHash).not.toBe(narrow.run.evalSetHash);
+    expect(explainIncomparability(result)).toContain("`evalSetHash`");
+  });
+
+  test("two different subsets of one file are refused against each other too", () => {
+    const a = arm({ scenarios: [THREE[0]!], subset: subsetOf(["alpha"]) });
+    const b = arm({ scenarios: [THREE[1]!], subset: subsetOf(["beta"]) });
+    expect(compareEnvelopes(a, b).differing).toContain("evalSetHash");
+  });
+
+  test("a tier-study arm and a run of record are refused, on the model", () => {
+    // Two different instruments. A stronger tier reaches the right file in spite of a bad
+    // pointer, so a delta between these two reports a change of instrument as a change of
+    // layout — which is precisely what the comparability check exists to prevent.
+    const result = compareEnvelopes(arm({}), arm({ tierStudy: "opus" }));
+    expect(result.comparable).toBe(false);
+    expect(result.differing).toEqual(["model"]);
+    expect(explainIncomparability(result)).toContain("`model`");
+  });
+
+  test("every comparability key is filled in, so none of them can compare equal by absence", () => {
+    // A key left `undefined` on both sides compares equal and silently stops discriminating.
+    const run = arm({}).run;
+    for (const key of COMPARABILITY_KEYS) expect(run[key]).toBeDefined();
   });
 });
 
