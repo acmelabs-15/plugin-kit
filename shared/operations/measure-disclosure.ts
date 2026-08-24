@@ -42,6 +42,8 @@ import {
   setGraderBare,
   summarizeLayout,
 } from "./disclosure-measure.ts";
+import { availableParallelism } from "node:os";
+
 import { generateDisclosureReport } from "../report/disclosure-report.ts";
 import { detectInstallState, installConflict, type InstallState } from "../envelope.ts";
 import type { Spec } from "../cli.ts";
@@ -348,6 +350,22 @@ async function main(): Promise<void> {
   const reportPath = flagString(flags, "report") ?? "none";
   const runsPerScenario = flagNumber(flags, "runs-per-scenario");
   const verbose = flagBoolean(flags, "verbose");
+
+  // The default is derived from the machine; an explicit value still overrides it,
+  // deliberately, because an account being rate limited is a reason to turn this DOWN
+  // that no machine measurement can see. Overshooting is the direction that hurts and it
+  // hurts hard: measured on a 10-core box, 48 workers ran about five times SLOWER per run
+  // than 24, at 0.6% CPU idle and load average 143. So the escape hatch stays and the
+  // cliff gets a sign.
+  const requestedWorkers = flagNumber(flags, "num-workers");
+  if (requestedWorkers !== undefined && requestedWorkers > availableParallelism() * 3) {
+    console.error(
+      `Warning: --num-workers ${requestedWorkers} is more than three times this machine's ` +
+        `${availableParallelism()} cores. Measured on a 10-core box, 48 workers ran about ` +
+        `five times SLOWER per run than 24 — past its peak the machine thrashes rather ` +
+        `than saturating. The default here is ${DEFAULT_NUM_WORKERS}, twice the core count.`,
+    );
+  }
 
   const dashboardReport = liveReportPath(reportPath, resultsDir);
 
