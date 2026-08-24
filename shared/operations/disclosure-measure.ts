@@ -35,9 +35,11 @@ import {
   parseGrading,
   scoreRuns,
   splitSkillMd,
+  summarizeGroundTruth,
   trainGate,
   type DisclosureScenario,
   type FileStat,
+  type GroundTruth,
   type ScenarioRun,
   type SplitScore,
   type TokenCounter,
@@ -698,6 +700,14 @@ export interface LayoutMeasurement {
   /** Why `trainGate` refused to spend held-out runs on this layout, or null if it did not. */
   readonly gateReason: string | null;
   readonly files: readonly FileStat[];
+  /**
+   * What the scenario set declared as ground truth, and what its negative rows measured.
+   *
+   * Always present, including for a set that declared none -- that state is the reason
+   * every `recall` in `files` is null, and a reader who cannot see it has no way to tell
+   * "nothing was declared" from "nothing was found".
+   */
+  readonly groundTruth: GroundTruth;
 }
 
 /**
@@ -718,9 +728,18 @@ export async function summarizeLayout(params: {
   readonly counter: TokenCounter;
   readonly measured: GatedMeasurement;
   readonly inlineThreshold: number;
+  /**
+   * The scenarios behind the train runs, for the ground truth some of them carry.
+   *
+   * Optional, and defaulting to none. A caller that passes nothing gets exactly today's
+   * output with every `recall` null and `groundTruth.annotatedScenarios` zero, which is
+   * the truthful description of a measurement with no ground truth to measure against.
+   */
+  readonly scenarios?: readonly DisclosureScenario[] | undefined;
 }): Promise<LayoutMeasurement> {
   const body = splitSkillMd(await Bun.file(`${params.dir}/SKILL.md`).text()).body;
   const inventory = await inventoryBundledFiles(params.dir, body, params.counter);
+  const scenarios = params.scenarios ?? [];
   return {
     dir: params.dir,
     bodyTokens: params.counter.count(body),
@@ -728,6 +747,19 @@ export async function summarizeLayout(params: {
     train: params.measured.train,
     holdout: params.measured.holdout,
     gateReason: params.measured.gateReason,
-    files: computeFileStats(inventory, params.measured.trainRuns, params.inlineThreshold),
+    files: computeFileStats(
+      inventory,
+      params.measured.trainRuns,
+      params.inlineThreshold,
+      scenarios,
+    ),
+    // Over the TRAIN runs, matching `files` exactly. The held-out split is withheld from
+    // the figures that drive proposals, and an over-fetch rate taken over a different set
+    // of runs from the recall printed beside it is two experiments in one table.
+    groundTruth: summarizeGroundTruth({
+      scenarios,
+      runs: params.measured.trainRuns,
+      inventory,
+    }),
   };
 }

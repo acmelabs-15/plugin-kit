@@ -42,9 +42,12 @@ import {
   createRunCollector,
   DEFAULT_INLINE_THRESHOLD,
   DEFAULT_PASS_RATE_TOLERANCE,
+  formatFileStatLine,
+  formatGroundTruthLine,
   generateCandidates,
   inventoryBundledFiles,
   loadTokenCounter,
+  NO_GROUND_TRUTH,
   parseExtractionProposal,
   parseGrading,
   parseScenarioSet,
@@ -57,8 +60,10 @@ import {
   type BodySection,
   type DisclosureCandidate,
   type DisclosureScenario,
+  type FileRecall,
   type FileStat,
   type FileVerdict,
+  type GroundTruth,
   type LoadMode,
   type ProposedExtraction,
   type ScenarioRun,
@@ -346,6 +351,16 @@ export interface OptimizeOutput {
   readonly iterations: readonly IterationRecord[];
   /** Anything the rewriter did that an author should look at before adopting the result. */
   readonly notes: readonly string[];
+  /**
+   * What the scenario set declared as ground truth, over the selected layout's train runs.
+   *
+   * A new key in a wire contract, added rather than substituted: every field above it is
+   * untouched, so a consumer that does not know this one exists reads the file exactly as
+   * before. It is here because the per-file `recall` in `files` needs it -- a null recall
+   * means "no scenario named this file", and only this block can say whether that is
+   * because the set annotates nothing at all.
+   */
+  readonly ground_truth: GroundTruth;
 }
 
 /** A layout that has been measured -- on both splits, or on train alone if it was gated. */
@@ -554,7 +569,17 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
     // Shared with `../measure-disclosure.ts`, which is the point: a baseline measurement and
     // a measurement pass are the same claim about the same skill, so they fold runs into a
     // layout record through one function rather than two that have to be kept in step.
-    return await summarizeLayout({ dir, counter, measured, inlineThreshold: params.inlineThreshold });
+    // The WHOLE set, not `trainScenarios`. `summarizeLayout` scores the train runs it is
+    // given, and looks each run's scenario up by id -- so handing it every scenario costs
+    // nothing and keeps the baseline's both-splits sweep from losing the ground truth of
+    // the held-out rows the moment it partitions them back apart.
+    return await summarizeLayout({
+      dir,
+      counter,
+      measured,
+      inlineThreshold: params.inlineThreshold,
+      scenarios: params.scenarios,
+    });
   };
 
   try {
@@ -752,12 +777,9 @@ function printLayout(label: string, layout: MeasuredLayout): void {
       `${Math.round(score.meanContextTokens)} context tokens/run, ` +
       `pass ${formatPercent(score.passRate, 0)} (${score.assertionsPassed}/${score.assertionsTotal})`,
   );
-  for (const file of layout.files) {
-    console.error(
-      `  ${file.verdict.padEnd(9)} ${String(file.pulls).padStart(2)}/${file.countedRuns} ` +
-        `${file.path} (${file.tokens} tokens${file.signposted ? "" : ", not signposted"})`,
-    );
-  }
+  for (const file of layout.files) console.error(formatFileStatLine(file));
+  const truth = formatGroundTruthLine(layout.groundTruth);
+  if (truth !== null) console.error(truth);
 }
 
 interface BuildInput {
@@ -792,6 +814,7 @@ function buildReportInput(input: BuildInput): DisclosureReportInput {
     holdoutSize: input.holdoutSize,
     runsPerScenario: input.params.runsPerScenario,
     files: input.current?.files ?? [],
+    groundTruth: input.current?.groundTruth ?? NO_GROUND_TRUTH,
     iterations: input.iterations,
     exitReason: input.exitReason,
     appliedTo: input.appliedTo,
@@ -834,6 +857,7 @@ function buildOutput(input: {
     files: input.current?.files ?? [],
     iterations: input.iterations,
     notes: input.notes,
+    ground_truth: input.current?.groundTruth ?? NO_GROUND_TRUTH,
   };
 }
 
@@ -890,6 +914,16 @@ export interface DisclosureRow {
    */
   readonly countedRuns: number;
   readonly pullRate: number;
+  /**
+   * How often the runs that SHOULD have reached this file did, or null when none declared it.
+   *
+   * A SECOND denominator in the same row, and it is not `countedRuns`. This one counts only
+   * the delivered runs of scenarios naming this file, so a reference three scenarios need
+   * is judged against those three rather than against the whole sweep -- which is the
+   * question a pull rate cannot answer and the reason a low rate and a bad pointer look
+   * identical without it.
+   */
+  readonly recall: FileRecall | null;
   /** Whether the body names this file at all. A `signpost` verdict turns on it. */
   readonly signposted: boolean;
   readonly verdict: FileVerdict;
@@ -1084,6 +1118,7 @@ export function buildDisclosureEnvelope(
     pulls: file.pulls,
     countedRuns: file.countedRuns,
     pullRate: file.pullRate,
+    recall: file.recall ?? null,
     signposted: file.signposted,
     verdict: file.verdict,
   }));
@@ -1150,6 +1185,13 @@ export function buildDisclosureEnvelope(
   }
   headline.push({ label: "bundled files measured", value: rows.length, unit: "files" });
   headline.push({ label: "iterations run", value: iterationsRun, unit: "iterations" });
+  // Omitted rather than reported as 0 when no scenario declared the empty list, for the
+  // same reason the pass rate above is omitted when nothing was asserted: an over-fetch of
+  // 0% is a clean bill of health, and a set with no negative rows has not earned one.
+  const overFetch = output.ground_truth.overFetch;
+  if (overFetch !== null) {
+    headline.push({ label: "over-fetch rate", value: overFetch.rate, unit: "fraction" });
+  }
 
   // The conflict goes FIRST, before the caller's own caps and before every mechanical one
   // below. It is not a caveat about coverage like the rest of this list -- it is the
@@ -1185,6 +1227,25 @@ export function buildDisclosureEnvelope(
       `(\`--runs-per-scenario\`), so every pull rate in \`rows\` rests on at most that many ` +
       `runs per scenario. A rate from a single run is a boolean wearing a percentage sign.`,
   );
+
+  // Said as a coverage cap, because that is exactly what it is: every `recall` in `rows` is
+  // null and no over-fetch was measured, and a reader who does not know the set declares no
+  // ground truth has no way to tell that from a layout whose pointers were never followed.
+  if (output.ground_truth.annotatedScenarios === 0) {
+    caps.push(
+      `No scenario declares \`expects_references\`, so no recall or over-fetch was measured ` +
+        `and every \`recall\` in \`rows\` is null. The pull rates say how often each file was ` +
+        `read, never how often it was read when it was needed — a reference only three ` +
+        `scenarios need shows a low rate however good its pointer is.`,
+    );
+  } else if (overFetch === null) {
+    caps.push(
+      `${output.ground_truth.annotatedScenarios} scenario(s) declare ground truth, but none ` +
+        `declares the EMPTY list, so over-fetch was not measured. Recall alone is maximized ` +
+        `by a layout that pulls every bundled file on every run, which is the cost this ` +
+        `operation exists to cut; a scenario expecting to reach nothing is what catches it.`,
+    );
+  }
 
   // The split is a cap on the ROWS specifically, and it is the one most easily missed:
   // `computeFileStats` is handed the train runs alone, so a reference that only the
@@ -1667,6 +1728,7 @@ async function main(): Promise<void> {
       holdoutSize: output.holdout_size,
       runsPerScenario: output.runs_per_scenario,
       files: output.files,
+      groundTruth: output.ground_truth,
       iterations: output.iterations,
       exitReason: output.exit_reason,
       appliedTo,

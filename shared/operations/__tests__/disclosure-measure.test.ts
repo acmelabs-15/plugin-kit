@@ -12,8 +12,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { layoutDescription, measureWithGate, orderAttempts } from "../disclosure-measure.ts";
 import {
+  layoutDescription,
+  measureWithGate,
+  orderAttempts,
+  summarizeLayout,
+  type GatedMeasurement,
+} from "../disclosure-measure.ts";
+import {
+  estimatingCounter,
   loadModeOf,
   scoreRuns,
   type BundledFile,
@@ -254,6 +261,78 @@ describe("layoutDescription", () => {
         "\n" +
         "Do not use when the second paragraph rules the case out.",
     );
+  });
+});
+
+/**
+ * The fold both entry points share, which is the path `results.json` actually takes.
+ *
+ * `measureDisclosure` and `optimizeDisclosure` both spawn `claude`, so neither is reachable
+ * from the suite -- but everything between the runs and the file on disk goes through here,
+ * so this is where the shape a consumer reads can be pinned without an hour of API time.
+ */
+describe("summarizeLayout and ground truth", () => {
+  let root = "";
+
+  beforeEach(async () => {
+    root = `${process.env["TMPDIR"] ?? "/tmp"}/disclosure-ground-truth-${crypto.randomUUID().slice(0, 8)}`;
+    await Bun.write(`${root}/SKILL.md`, ["---", "name: demo", "description: Demo.", "---", "", "See references/deep.md.", ""].join("\n"));
+    await Bun.write(`${root}/references/deep.md`, "Deep detail.\n");
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const measured = (runs: readonly ScenarioRun[]): GatedMeasurement => ({
+    trainRuns: [...runs],
+    holdoutRuns: [],
+    train: scoreRuns(runs),
+    holdout: null,
+    gateReason: null,
+  });
+
+  test("recall and over-fetch reach the record a consumer reads", async () => {
+    const layout = await summarizeLayout({
+      dir: root,
+      counter: estimatingCounter(),
+      inlineThreshold: 0.8,
+      measured: measured([
+        run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+        run({ scenarioId: "needs", attempt: 2 }),
+        run({ scenarioId: "negative", attempt: 3, filesRead: ["references/deep.md"] }),
+      ]),
+      scenarios: [
+        { id: "needs", prompt: "p", expectations: [], expectsReferences: ["references/deep.md"] },
+        { id: "negative", prompt: "p", expectations: [], expectsReferences: [] },
+      ],
+    });
+    const deep = layout.files.find((file) => file.path === "references/deep.md");
+    expect(deep?.pulls).toBe(2);
+    expect(deep?.recall).toEqual({ reads: 1, expectedRuns: 2, rate: 0.5 });
+    expect(layout.groundTruth.overFetch).toEqual({
+      scenarios: 1,
+      runs: 1,
+      runsThatRead: 1,
+      rate: 1,
+    });
+  });
+
+  test("a caller passing no scenarios gets today's output plus a stated absence", async () => {
+    // The backward-compatible path. Every pull rate is what it always was, `recall` is null
+    // rather than zero, and `groundTruth` says no scenario declared anything -- which is
+    // the difference between "not measured" and "measured and found wanting".
+    const layout = await summarizeLayout({
+      dir: root,
+      counter: estimatingCounter(),
+      inlineThreshold: 0.8,
+      measured: measured([run({ filesRead: ["references/deep.md"] })]),
+    });
+    const deep = layout.files.find((file) => file.path === "references/deep.md");
+    expect(deep?.pullRate).toBe(1);
+    expect(deep?.recall).toBeNull();
+    expect(layout.groundTruth.annotatedScenarios).toBe(0);
+    expect(layout.groundTruth.overFetch).toBeNull();
   });
 });
 

@@ -27,12 +27,16 @@ import {
   computeFileStats,
   createRunCollector,
   decideFileVerdict,
+  DEFAULT_INLINE_THRESHOLD,
   estimateTokens,
   estimatingCounter,
+  formatFileStatLine,
+  formatGroundTruthLine,
   generateCandidates,
   inventoryBundledFiles,
   loadModeOf,
   loadTokenCounter,
+  NO_GROUND_TRUTH,
   parseExtractionProposal,
   parseGrading,
   parseScenarioSet,
@@ -42,9 +46,11 @@ import {
   shortlistExtractions,
   splitScenarios,
   splitSkillMd,
+  summarizeGroundTruth,
   sumUsage,
   trainGate,
   type BundledFile,
+  type DisclosureScenario,
   type DisclosureCandidate,
   type FileStat,
   type ScenarioRun,
@@ -317,6 +323,232 @@ describe("computeFileStats", () => {
     const stats = computeFileStats(inventory, [run({ error: "spawn failed" })]);
     expect(stats.every((file) => file.countedRuns === 0)).toBe(true);
     expect(stats.every((file) => file.verdict === "keep")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ground truth: recall and over-fetch
+// ---------------------------------------------------------------------------
+
+/**
+ * A scenario row. Omitting `expects` produces a row that declares NO ground truth, which
+ * is a different thing from one declaring the empty list -- see the tests below.
+ */
+function scenario(id: string, expects?: readonly string[]): DisclosureScenario {
+  return {
+    id,
+    prompt: `prompt for ${id}`,
+    expectations: [],
+    ...(expects === undefined ? {} : { expectsReferences: expects }),
+  };
+}
+
+describe("per-file recall", () => {
+  const inventory = [bundled("references/deep.md")];
+
+  test("recall has its own denominator, which is not the pull rate's", () => {
+    // The whole reason recall exists. One scenario of three needs this reference and reads
+    // it on both its runs; the other two never should. A pull rate says 50% and cannot
+    // distinguish that from a pointer half the runs that needed it failed to follow.
+    const stats = computeFileStats(
+      inventory,
+      [
+        run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+        run({ scenarioId: "needs", attempt: 2, filesRead: ["references/deep.md"] }),
+        run({ scenarioId: "other-a" }),
+        run({ scenarioId: "other-b" }),
+      ],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("needs", ["references/deep.md"]), scenario("other-a", []), scenario("other-b", [])],
+    );
+    expect(stats[0]?.pullRate).toBe(0.5);
+    expect(stats[0]?.recall).toEqual({ reads: 2, expectedRuns: 2, rate: 1 });
+  });
+
+  test("a pointer the runs that needed it did not follow scores below its pull rate", () => {
+    const stats = computeFileStats(
+      inventory,
+      [
+        run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+        run({ scenarioId: "needs", attempt: 2 }),
+      ],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("needs", ["references/deep.md"])],
+    );
+    expect(stats[0]?.recall).toEqual({ reads: 1, expectedRuns: 2, rate: 0.5 });
+  });
+
+  test("a file no scenario declared has a null recall, which is not a recall of zero", () => {
+    // Null and 0 are the difference between "nothing claims this file is ever needed" and
+    // "every run that needed it failed to open it". Reported as 0 the second reading is
+    // free, and it argues for deleting a file the evidence says nothing about.
+    const stats = computeFileStats(inventory, [run()], DEFAULT_INLINE_THRESHOLD, [
+      scenario("annotated", ["references/other.md"]),
+    ]);
+    expect(stats[0]?.recall).toBeNull();
+  });
+
+  test("the recall denominator is delivered runs, matching the pull rate exactly", () => {
+    const stats = computeFileStats(
+      inventory,
+      [
+        run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+        // Never loaded, so it never had a pointer to follow.
+        run({ scenarioId: "needs", attempt: 2, skillLoaded: false }),
+        // Read the file, but found the body itself rather than being sent by a pointer.
+        run({ scenarioId: "needs", attempt: 3, loadedVia: "file", filesRead: ["references/deep.md"] }),
+        // Never happened. Silence is not evidence of absence.
+        run({ scenarioId: "needs", attempt: 4, error: "timed out after 600s" }),
+      ],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("needs", ["references/deep.md"])],
+    );
+    expect(stats[0]?.recall).toEqual({ reads: 1, expectedRuns: 1, rate: 1 });
+    expect(stats[0]?.countedRuns).toBe(1);
+  });
+
+  test("recall does not move the verdict, which stays a function of the pull rate", () => {
+    // Ground truth is optional, so a decision rule that consulted it would decide one thing
+    // about an annotated set and another about the same layout measured by a bare one.
+    const runs = [
+      run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+      run({ scenarioId: "other", attempt: 2 }),
+    ];
+    const bare = computeFileStats(inventory, runs);
+    const annotated = computeFileStats(inventory, runs, DEFAULT_INLINE_THRESHOLD, [
+      scenario("needs", ["references/deep.md"]),
+      scenario("other", []),
+    ]);
+    expect(annotated[0]?.verdict).toBe(bare[0]?.verdict);
+    expect(annotated[0]?.pullRate).toBe(bare[0]?.pullRate);
+  });
+});
+
+describe("summarizeGroundTruth", () => {
+  const inventory = [bundled("references/deep.md"), bundled("references/other.md")];
+
+  test("an absent expects_references is not an empty one", () => {
+    // The defect this whole distinction exists to prevent. `silent` declares nothing and
+    // must be outside every denominator; `negative` declares the empty list and is the one
+    // real negative case. Collapse them and over-fetch is measured over 2 runs with 1 read
+    // -- a 50% failure invented out of a scenario that never made a claim.
+    const truth = summarizeGroundTruth({
+      scenarios: [scenario("silent"), scenario("negative", [])],
+      runs: [
+        run({ scenarioId: "silent", filesRead: ["references/deep.md"] }),
+        run({ scenarioId: "negative", attempt: 2 }),
+      ],
+      inventory,
+    });
+    expect(truth.annotatedScenarios).toBe(1);
+    expect(truth.negativeScenarios).toBe(1);
+    expect(truth.annotatedRuns).toBe(1);
+    expect(truth.overFetch).toEqual({ scenarios: 1, runs: 1, runsThatRead: 0, rate: 0 });
+  });
+
+  test("a negative run that read a bundled file is the over-fetch it is meant to catch", () => {
+    const truth = summarizeGroundTruth({
+      scenarios: [scenario("negative", [])],
+      runs: [
+        run({ scenarioId: "negative", filesRead: ["references/deep.md"] }),
+        run({ scenarioId: "negative", attempt: 2 }),
+      ],
+      inventory,
+    });
+    expect(truth.overFetch).toEqual({ scenarios: 1, runs: 2, runsThatRead: 1, rate: 0.5 });
+  });
+
+  test("a run that read three files it should not have is one over-fetch, not three", () => {
+    // Over-fetch is a property of a run. Counting it per file would report the same failure
+    // once for each file and make a greedy run look like several.
+    const truth = summarizeGroundTruth({
+      scenarios: [scenario("negative", [])],
+      runs: [
+        run({
+          scenarioId: "negative",
+          filesRead: ["references/deep.md", "references/other.md"],
+        }),
+      ],
+      inventory,
+    });
+    expect(truth.overFetch?.runsThatRead).toBe(1);
+  });
+
+  test("a read of something outside the inventory is not an over-fetch", () => {
+    // The collector records every in-skill read except SKILL.md, and the inventory drops
+    // `node_modules/`, `__tests__/`, lockfiles and dotfiles. None of those is a disclosure
+    // finding when read, and scoring them would make a working skill look greedy.
+    const truth = summarizeGroundTruth({
+      scenarios: [scenario("negative", [])],
+      runs: [run({ scenarioId: "negative", filesRead: ["node_modules/left-pad/index.js"] })],
+      inventory,
+    });
+    expect(truth.overFetch?.runsThatRead).toBe(0);
+  });
+
+  test("a set declaring no ground truth reports none rather than a recall of zero", () => {
+    const truth = summarizeGroundTruth({
+      scenarios: [scenario("a"), scenario("b")],
+      runs: [run({ scenarioId: "a" }), run({ scenarioId: "b", attempt: 2 })],
+      inventory,
+    });
+    expect(truth).toEqual(NO_GROUND_TRUTH);
+    expect(truth.overFetch).toBeNull();
+  });
+
+  test("positives with no negatives leave over-fetch unmeasured, not at zero", () => {
+    // Recall alone is maximized by a layout that pulls every file on every run. Reporting
+    // 0% over-fetch for a set that never checked would certify exactly that layout.
+    const truth = summarizeGroundTruth({
+      scenarios: [scenario("needs", ["references/deep.md"])],
+      runs: [run({ scenarioId: "needs", filesRead: ["references/deep.md"] })],
+      inventory,
+    });
+    expect(truth.annotatedScenarios).toBe(1);
+    expect(truth.overFetch).toBeNull();
+  });
+});
+
+describe("the terminal lines both entry points print", () => {
+  const stats = computeFileStats(
+    [bundled("references/deep.md")],
+    [
+      run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+      run({ scenarioId: "other", attempt: 2 }),
+    ],
+    DEFAULT_INLINE_THRESHOLD,
+    [scenario("needs", ["references/deep.md"]), scenario("other", [])],
+  );
+
+  test("a file's line carries recall beside the pull rate, with both denominators", () => {
+    const line = formatFileStatLine(stats[0] as FileStat);
+    expect(line).toContain("1/2");
+    expect(line).toContain("recall 1/1");
+    expect(line).toContain("references/deep.md");
+  });
+
+  test("a file nothing declared says nothing rather than printing a dash", () => {
+    const bare = computeFileStats([bundled("references/deep.md")], [run()]);
+    expect(formatFileStatLine(bare[0] as FileStat)).not.toContain("recall");
+  });
+
+  test("the ground-truth line reports over-fetch with its denominator", () => {
+    const line = formatGroundTruthLine(
+      summarizeGroundTruth({
+        scenarios: [scenario("needs", ["references/deep.md"]), scenario("negative", [])],
+        runs: [
+          run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+          run({ scenarioId: "negative", attempt: 2, filesRead: ["references/deep.md"] }),
+        ],
+        inventory: [bundled("references/deep.md")],
+      }),
+    );
+    expect(line).toContain("2 annotated scenario(s)");
+    expect(line).toContain("over-fetch 1/1");
+  });
+
+  test("a set with no ground truth gets no line at all, so the callers can say why", () => {
+    expect(formatGroundTruthLine(NO_GROUND_TRUTH)).toBeNull();
   });
 });
 
@@ -1528,6 +1760,72 @@ describe("generateDisclosureReport", () => {
     expect(html).toContain(">signpost<");
   });
 
+  // Ground truth on the page. The figures are only useful beside the pull rate they
+  // qualify, and only honest with their denominators showing -- a reference three
+  // scenarios need is judged against three scenarios' runs, and 67% against a pull rate
+  // over ninety runs invites a comparison of two fractions sharing no denominator.
+  const annotated = {
+    ...base,
+    files: computeFileStats(
+      [bundled("references/always.md"), bundled("references/hidden.md", { signposted: false })],
+      [
+        run({ scenarioId: "needs", filesRead: ["references/always.md"] }),
+        run({ scenarioId: "needs", attempt: 2 }),
+        run({ scenarioId: "negative", attempt: 3, filesRead: ["references/always.md"] }),
+      ],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("needs", ["references/always.md"]), scenario("negative", [])],
+    ),
+    groundTruth: summarizeGroundTruth({
+      scenarios: [scenario("needs", ["references/always.md"]), scenario("negative", [])],
+      runs: [
+        run({ scenarioId: "needs", filesRead: ["references/always.md"] }),
+        run({ scenarioId: "needs", attempt: 2 }),
+        run({ scenarioId: "negative", attempt: 3, filesRead: ["references/always.md"] }),
+      ],
+      inventory: [bundled("references/always.md"), bundled("references/hidden.md")],
+    }),
+  };
+
+  test("the file table carries a recall column with its own denominator", () => {
+    const html = generateDisclosureReport(annotated);
+    expect(html).toContain("<th>Recall</th>");
+    // Read on one of the two runs that declared it, beside a pull rate over all three.
+    expect(html).toContain(">1/2<");
+    expect(html).toContain(">2/3<");
+  });
+
+  test("a file no scenario declared says so rather than showing a dash", () => {
+    const html = generateDisclosureReport(annotated);
+    expect(html).toContain("not declared");
+  });
+
+  test("over-fetch is shown with the runs it was measured over", () => {
+    const html = generateDisclosureReport(annotated);
+    expect(html).toContain("over-fetch");
+    expect(html).toContain("1/1 run(s) of the 1 scenario(s) that should have reached nothing");
+  });
+
+  test("a set that declared no ground truth is told so, and shows no over-fetch tile", () => {
+    // The state a bare scenario set produces. Rendering 0% here would be a clean bill of
+    // health issued by a page that measured nothing.
+    const html = generateDisclosureReport(base);
+    expect(html).toContain("No scenario declares <code>expects_references</code>");
+    expect(html).not.toContain("ground truth declared");
+  });
+
+  test("positives with no negatives say over-fetch was not measured", () => {
+    const html = generateDisclosureReport({
+      ...base,
+      groundTruth: summarizeGroundTruth({
+        scenarios: [scenario("needs", ["references/always.md"])],
+        runs: [run({ scenarioId: "needs", filesRead: ["references/always.md"] })],
+        inventory: [bundled("references/always.md")],
+      }),
+    });
+    expect(html).toContain("None of them declares the EMPTY list");
+  });
+
   test("puts the guardrail next to the body-token trend", () => {
     const html = generateDisclosureReport(base);
     expect(html).toContain("Body tokens against the guardrail");
@@ -1873,6 +2171,7 @@ describe("the results envelope", () => {
         }),
       ],
       notes: [],
+      ground_truth: NO_GROUND_TRUTH,
       ...overrides,
     };
   }
@@ -2056,6 +2355,70 @@ describe("the results envelope", () => {
     // runs alone, so a reference only the held-out scenarios needed reads as never pulled.
     expect(caps).toContain("2 of 5 scenario(s) were held out");
     expect(caps).toContain("TRAIN scenario(s) only");
+  });
+
+  test("a set declaring no ground truth is a coverage cap, not a silent absence", () => {
+    // Every `recall` in `rows` is null in this state. Without the cap a reader cannot tell
+    // that from a layout whose pointers were never followed, and the two argue for opposite
+    // actions -- annotate the scenarios, or delete the files.
+    const caps = buildDisclosureEnvelope(envelopeInput()).provenance.caps.join("\n");
+    expect(caps).toContain("No scenario declares `expects_references`");
+    expect(caps).toContain("every `recall` in `rows` is null");
+  });
+
+  test("ground truth with no negative rows is its own cap, because recall alone flatters", () => {
+    const annotated = {
+      annotatedScenarios: 3,
+      negativeScenarios: 0,
+      annotatedRuns: 6,
+      overFetch: null,
+    };
+    const caps = buildDisclosureEnvelope(
+      envelopeInput({ output: output({ ground_truth: annotated }) }),
+    ).provenance.caps.join("\n");
+    expect(caps).toContain("3 scenario(s) declare ground truth, but none declares the EMPTY list");
+    expect(caps).not.toContain("No scenario declares");
+  });
+
+  test("over-fetch reaches the headline only when a negative scenario declared it", () => {
+    expect(
+      buildDisclosureEnvelope(envelopeInput()).headline.map((metric) => metric.label),
+    ).not.toContain("over-fetch rate");
+    const measured = buildDisclosureEnvelope(
+      envelopeInput({
+        output: output({
+          ground_truth: {
+            annotatedScenarios: 4,
+            negativeScenarios: 2,
+            annotatedRuns: 8,
+            overFetch: { scenarios: 2, runs: 4, runsThatRead: 1, rate: 0.25 },
+          },
+        }),
+      }),
+    ).headline.find((metric) => metric.label === "over-fetch rate");
+    expect(measured?.value).toBe(0.25);
+  });
+
+  test("each row carries its recall, on a denominator that is not countedRuns", () => {
+    const files = computeFileStats(
+      [bundled("references/deep.md")],
+      [
+        run({ scenarioId: "needs", filesRead: ["references/deep.md"] }),
+        run({ scenarioId: "needs", attempt: 2 }),
+        run({ scenarioId: "other", attempt: 3 }),
+      ],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("needs", ["references/deep.md"]), scenario("other", [])],
+    );
+    const row = buildDisclosureEnvelope(envelopeInput({ output: output({ files }) })).rows[0];
+    expect(row?.countedRuns).toBe(3);
+    expect(row?.recall).toEqual({ reads: 1, expectedRuns: 2, rate: 0.5 });
+  });
+
+  test("a row nothing declared carries an explicit null rather than dropping the key", () => {
+    const row = buildDisclosureEnvelope(envelopeInput()).rows[0];
+    expect(row).toHaveProperty("recall");
+    expect(row?.recall).toBeNull();
   });
 
   test("no holdout is a cap of its own rather than a missing sentence", () => {

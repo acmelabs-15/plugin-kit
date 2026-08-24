@@ -500,6 +500,12 @@ describe("the results envelope", () => {
           files: [],
           iterations: [],
           notes: [],
+          ground_truth: {
+            annotatedScenarios: 0,
+            negativeScenarios: 0,
+            annotatedRuns: 0,
+            overFetch: null,
+          },
         },
         tally: { measured: 8, unloaded: 0, timeout: 2, error: 0 },
         plannedRuns: 10,

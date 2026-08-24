@@ -26,11 +26,14 @@
 
 import {
   DEFAULT_INLINE_THRESHOLD,
+  formatFileStatLine,
+  formatGroundTruthLine,
   loadTokenCounter,
   parseScenarioSet,
   scoreRuns,
   type DisclosureScenario,
   type FileStat,
+  type GroundTruth,
   type TokenMethod,
 } from "./disclosure.ts";
 import {
@@ -109,6 +112,15 @@ export interface MeasureOutput {
   readonly assertions_passed: number;
   readonly assertions_total: number;
   readonly files: readonly FileStat[];
+  /**
+   * What the scenario set declared as ground truth, and what its negative rows measured.
+   *
+   * Additive, and always written. Every field beside it is unchanged, so a consumer that
+   * has never heard of recall reads this file exactly as it did before -- and one that has
+   * can tell an unannotated set from a layout that answered none of its pointers, which is
+   * the distinction a bare rate of zero destroys.
+   */
+  readonly ground_truth: GroundTruth;
 }
 
 /**
@@ -201,6 +213,7 @@ export async function measureDisclosure(
       gateReason: null,
     },
     inlineThreshold: params.inlineThreshold,
+    scenarios: params.scenarios,
   });
 
   if (layout.train.runsLoadedViaFile > 0) {
@@ -216,6 +229,24 @@ export async function measureDisclosure(
       `Warning: the skill never loaded on ${layout.train.runsWithoutSkill} run(s). Those runs ` +
         `are excluded from every pull rate, so the verdicts rest on less evidence than the ` +
         `run count suggests.`,
+    );
+  }
+
+  // Said rather than shown as 0%. A set with no `expects_references` anywhere has not
+  // measured a recall of zero, it has measured no recall at all, and the two look identical
+  // in a column of dashes to anyone who does not already know which they are reading.
+  if (layout.groundTruth.annotatedScenarios === 0) {
+    console.error(
+      "Note: no scenario declares `expects_references`, so no ground truth exists and recall " +
+        "is not reported. The pull rates below stand alone, exactly as they did before — they " +
+        "say how often each file was read, never how often it was read when it was needed.",
+    );
+  } else if (layout.groundTruth.overFetch === null) {
+    console.error(
+      `Note: ${layout.groundTruth.annotatedScenarios} scenario(s) declare ground truth, but ` +
+        `none declares the empty list, so over-fetch is not reported. Recall alone is maximized ` +
+        `by a layout that pulls every file on every run; a scenario expecting to reach nothing ` +
+        `is what catches that.`,
     );
   }
 
@@ -241,6 +272,7 @@ export async function measureDisclosure(
     assertions_passed: layout.train.assertionsPassed,
     assertions_total: layout.train.assertionsTotal,
     files: layout.files,
+    ground_truth: layout.groundTruth,
   };
 }
 
@@ -407,12 +439,9 @@ async function main(): Promise<void> {
   await reporter.finish("done");
 
   if (verbose) {
-    for (const file of output.files) {
-      console.error(
-        `  ${file.verdict.padEnd(9)} ${String(file.pulls).padStart(2)}/${file.countedRuns} ` +
-          `${file.path} (${file.tokens} tokens${file.signposted ? "" : ", not signposted"})`,
-      );
-    }
+    for (const file of output.files) console.error(formatFileStatLine(file));
+    const truth = formatGroundTruthLine(output.ground_truth);
+    if (truth !== null) console.error(truth);
   }
 
   const json = JSON.stringify(output, null, 2);
@@ -438,6 +467,7 @@ async function main(): Promise<void> {
         holdoutSize: 0,
         runsPerScenario: output.runs_per_scenario,
         files: output.files,
+        groundTruth: output.ground_truth,
         iterations: [
           {
             iteration: 1,

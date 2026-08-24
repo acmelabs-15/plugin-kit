@@ -22,6 +22,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { scenarioSetFindings } from "../schemas/scenario-set.ts";
 import { PythonRandom } from "../util/mt19937.ts";
+import { formatPercent } from "../util/pyfloat.ts";
 
 // ---------------------------------------------------------------------------
 // Token counting
@@ -376,7 +377,88 @@ export interface FileStat extends BundledFile {
   readonly countedRuns: number;
   readonly pullRate: number;
   readonly verdict: FileVerdict;
+  /**
+   * How often the runs that SHOULD have reached this file did, or null when none declared it.
+   *
+   * Null is not zero and the difference is the whole point. Zero would say the pointer was
+   * followed on none of the runs that needed it; null says no scenario in the set claims
+   * this file is ever needed, so there is no denominator and nothing has been measured.
+   * Reporting the second as the first is how an unannotated set produces a wall of 0%
+   * recall and invites a deletion nothing in the evidence supports.
+   *
+   * Optional in the type so a hand-built `FileStat` still compiles; {@link computeFileStats}
+   * always sets it, so the field is present in every file this repository writes.
+   */
+  readonly recall?: FileRecall | null;
 }
+
+/**
+ * What the ground truth says about one bundled file.
+ *
+ * Numerator and denominator are carried beside the ratio rather than folded into it,
+ * because the denominators here are small by nature -- a reference three scenarios need
+ * has a denominator of three times `--runs-per-scenario` -- and 67% over three runs and
+ * 67% over ninety are different claims that print identically.
+ */
+export interface FileRecall {
+  /** Counted runs of scenarios declaring this file that actually read it. */
+  readonly reads: number;
+  /** Counted runs of scenarios declaring this file. Never zero; the stat is null instead. */
+  readonly expectedRuns: number;
+  readonly rate: number;
+}
+
+/**
+ * What the negative rows say: content reached on runs that should have reached none.
+ *
+ * The counterweight to recall, and the reason an empty `expects_references` is a real
+ * value rather than a missing one. Recall alone is maximized by a layout that pulls every
+ * bundled file on every run, which is precisely the token-wasting failure the body budget
+ * exists to prevent. Over-fetch is what makes that layout look as bad as it is.
+ */
+export interface OverFetch {
+  /** Scenarios declaring the empty array. */
+  readonly scenarios: number;
+  /** Counted runs of those scenarios. */
+  readonly runs: number;
+  /** Of those runs, how many read at least one file in the inventory. */
+  readonly runsThatRead: number;
+  readonly rate: number;
+}
+
+/**
+ * What ground truth the scenario set declared, and what the negative rows measured.
+ *
+ * Reported whether or not any row carries `expects_references`, because "no ground truth
+ * was declared" is the finding a reader needs in order to know why every `recall` below is
+ * null. A set with none produces `annotatedScenarios: 0` and a null `overFetch`, which is
+ * the honest shape of having measured nothing -- not a rate of zero.
+ */
+export interface GroundTruth {
+  /** Scenarios carrying `expects_references` at all. Rows omitting it are not counted. */
+  readonly annotatedScenarios: number;
+  /** Of those, the ones declaring the empty array -- the negative cases. */
+  readonly negativeScenarios: number;
+  /** Counted runs whose scenario declared ground truth, positive or negative. */
+  readonly annotatedRuns: number;
+  /** Null when no scenario declared the empty array. A rate over no runs is not zero. */
+  readonly overFetch: OverFetch | null;
+}
+
+/**
+ * What a set that declared no ground truth measured, for a layout that has none to report.
+ *
+ * A named constant rather than an object literal at each call site, so "nothing was
+ * declared" is one value the whole repository agrees on -- and so a reader of a
+ * `results.json` written before the first layout was measured sees the same shape they
+ * will see afterwards.
+ */
+export const NO_GROUND_TRUTH: GroundTruth = {
+  annotatedScenarios: 0,
+  negativeScenarios: 0,
+  annotatedRuns: 0,
+  overFetch: null,
+};
 
 /**
  * What the pull rate says to do about a file.
@@ -447,17 +529,10 @@ export function computeFileStats(
   inventory: readonly BundledFile[],
   runs: readonly ScenarioRun[],
   inlineThreshold: number = DEFAULT_INLINE_THRESHOLD,
+  scenarios: readonly DisclosureScenario[] = [],
 ): readonly FileStat[] {
-  // INJECTED runs only. A run that got the body by reading SKILL.md itself had it in
-  // context all the same, but it was already inside the skill directory when it chose what
-  // to open next -- so a reference it read is not evidence that a pointer in the body sent
-  // it there, which is the only thing a pull rate claims. Counting those would measure a
-  // rummaging model and report it as layout quality.
-  //
-  // It also makes the failure loud. If the Skill grant ever breaks again, `countedRuns`
-  // collapses toward zero and the verdicts visibly rest on nothing, rather than quietly
-  // describing the wrong regime the way they did before it was found.
-  const counted = runs.filter((run) => run.error === undefined && run.loadedVia === "skill");
+  const counted = deliveredRuns(runs);
+  const expectations = expectationsById(scenarios);
   const pullsByPath = new Map<string, number>();
   for (const run of counted) {
     for (const path of new Set(run.filesRead)) {
@@ -483,8 +558,170 @@ export function computeFileStats(
         },
         inlineThreshold,
       ),
+      // Recall is REPORTED, never fed back into the verdict above. The decision rule keys on
+      // the pull rate alone and stays that way deliberately: ground truth is optional, so a
+      // rule that consulted it would decide one thing about an annotated set and another
+      // about the same layout measured by an unannotated one.
+      recall: recallFor(file.path, counted, expectations),
     };
   });
+}
+
+/**
+ * The runs every rate here is taken over: error-free, and the body delivered by the skill
+ * system.
+ *
+ * One function rather than the same two-clause filter written in each place that needs it.
+ * Pull rate, recall and over-fetch are three views of one experiment, and the day one of
+ * them starts counting a run the others drop, the three stop being comparable while still
+ * printing side by side in the same table.
+ *
+ * INJECTED runs only. A run that got the body by reading SKILL.md itself had it in context
+ * all the same, but it was already inside the skill directory when it chose what to open
+ * next -- so a reference it read is not evidence that a pointer in the body sent it there,
+ * which is the only thing a pull rate claims. Counting those would measure a rummaging
+ * model and report it as layout quality.
+ *
+ * It also makes the failure loud. If the Skill grant ever breaks again, `countedRuns`
+ * collapses toward zero and the verdicts visibly rest on nothing, rather than quietly
+ * describing the wrong regime the way they did before it was found.
+ */
+export function deliveredRuns(runs: readonly ScenarioRun[]): readonly ScenarioRun[] {
+  return runs.filter((run) => run.error === undefined && run.loadedVia === "skill");
+}
+
+/**
+ * Scenario id to the paths it declared, for the scenarios that declared any.
+ *
+ * A row omitting `expects_references` is ABSENT from this map, and a row carrying `[]` is
+ * present with an empty list. That distinction is the whole contract: absent means the row
+ * declares no ground truth and must stay out of every denominator, empty means the row
+ * should reach nothing and feeds over-fetch. Collapsing them -- which a `?? []` default
+ * would do in one keystroke -- silently turns every unannotated scenario into a negative
+ * case and makes recall look perfect.
+ */
+function expectationsById(
+  scenarios: readonly DisclosureScenario[],
+): ReadonlyMap<string, readonly string[]> {
+  const byId = new Map<string, readonly string[]>();
+  for (const scenario of scenarios) {
+    if (scenario.expectsReferences !== undefined) byId.set(scenario.id, scenario.expectsReferences);
+  }
+  return byId;
+}
+
+/** One file's recall over the delivered runs of the scenarios that declared it. */
+function recallFor(
+  path: string,
+  counted: readonly ScenarioRun[],
+  expectations: ReadonlyMap<string, readonly string[]>,
+): FileRecall | null {
+  let reads = 0;
+  let expectedRuns = 0;
+  for (const run of counted) {
+    if (!(expectations.get(run.scenarioId) ?? []).includes(path)) continue;
+    expectedRuns += 1;
+    if (run.filesRead.includes(path)) reads += 1;
+  }
+  return expectedRuns === 0 ? null : { reads, expectedRuns, rate: reads / expectedRuns };
+}
+
+/**
+ * What ground truth the set declared, and how often the negative rows reached anything.
+ *
+ * Separate from {@link computeFileStats} because it is not a per-file fact. Over-fetch is a
+ * property of a RUN -- did this run, which should have opened nothing, open something --
+ * and attributing it to whichever file happened to be opened would report the same failure
+ * once per file and make a run that read three files look like three failures.
+ *
+ * `inventory` rather than `run.filesRead` decides what counts as reaching something. The
+ * collector records every in-skill read except `SKILL.md`, and the inventory excludes
+ * `node_modules/`, `__tests__/`, lockfiles and dotfiles -- none of which is a disclosure
+ * finding when read, and all of which would otherwise score as an over-fetch.
+ */
+export function summarizeGroundTruth(params: {
+  readonly scenarios: readonly DisclosureScenario[];
+  readonly runs: readonly ScenarioRun[];
+  readonly inventory: readonly BundledFile[];
+}): GroundTruth {
+  const annotated = params.scenarios.filter(
+    (scenario) => scenario.expectsReferences !== undefined,
+  );
+  const negatives = annotated.filter(
+    (scenario) => (scenario.expectsReferences ?? []).length === 0,
+  );
+  const negativeIds = new Set(negatives.map((scenario) => scenario.id));
+  const annotatedIds = new Set(annotated.map((scenario) => scenario.id));
+  const bundled = new Set(params.inventory.map((file) => file.path));
+
+  const counted = deliveredRuns(params.runs);
+  const negativeRuns = counted.filter((run) => negativeIds.has(run.scenarioId));
+  const runsThatRead = negativeRuns.filter((run) =>
+    run.filesRead.some((path) => bundled.has(path)),
+  ).length;
+
+  return {
+    annotatedScenarios: annotated.length,
+    negativeScenarios: negatives.length,
+    annotatedRuns: counted.filter((run) => annotatedIds.has(run.scenarioId)).length,
+    // Null rather than a rate of zero when nothing declared the negative case, for the
+    // reason a null `recall` is not a zero: an over-fetch rate of 0% is a clean bill of
+    // health, and printing one for a set that never checked is the most flattering way to
+    // report having measured nothing.
+    overFetch:
+      negativeRuns.length === 0
+        ? null
+        : {
+            scenarios: negatives.length,
+            runs: negativeRuns.length,
+            runsThatRead,
+            rate: runsThatRead / negativeRuns.length,
+          },
+  };
+}
+
+/**
+ * One file's stat as a terminal line, for the `--verbose` tables both entry points print.
+ *
+ * One formatter rather than the byte-identical pair that used to live in
+ * `measure-disclosure.ts` and `optimize-disclosure.ts`. Two copies of a line whose whole
+ * job is to let a reader compare a measurement pass against the optimizer's baseline is
+ * how the two stop being comparable the first time either grows a column.
+ *
+ * Recall is appended only when a scenario declared this file. There is no dash for the
+ * null case on purpose: a column of dashes reads as a measurement that came back empty,
+ * and the caller says once, in words, that no ground truth was declared.
+ */
+export function formatFileStatLine(file: FileStat): string {
+  const recall =
+    file.recall === null || file.recall === undefined
+      ? ""
+      : ` recall ${file.recall.reads}/${file.recall.expectedRuns}`;
+  return (
+    `  ${file.verdict.padEnd(9)} ${String(file.pulls).padStart(2)}/${file.countedRuns}` +
+    `${recall} ${file.path} (${file.tokens} tokens${file.signposted ? "" : ", not signposted"})`
+  );
+}
+
+/**
+ * The ground-truth summary as one terminal line, or null when there is nothing to say.
+ *
+ * Null rather than a line reading "0 annotated scenarios", because the callers already
+ * warn in full sentences about a set that declared none -- and a second, terser statement
+ * of the same absence would be the one a reader believes.
+ */
+export function formatGroundTruthLine(truth: GroundTruth): string | null {
+  if (truth.annotatedScenarios === 0) return null;
+  const negatives =
+    truth.overFetch === null
+      ? "no negative scenarios, so over-fetch is not measured"
+      : `over-fetch ${truth.overFetch.runsThatRead}/${truth.overFetch.runs} ` +
+        `(${formatPercent(truth.overFetch.rate, 0)}) across ${truth.overFetch.scenarios} ` +
+        `negative scenario(s)`;
+  return (
+    `  ground truth: ${truth.annotatedScenarios} annotated scenario(s) over ` +
+    `${truth.annotatedRuns} run(s), ${negatives}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -552,10 +789,10 @@ export interface SplitScore {
  */
 export function scoreRuns(runs: readonly ScenarioRun[]): SplitScore {
   const errorFree = runs.filter((run) => run.error === undefined);
-  // Same rule as `computeFileStats`, for the same reason: a body the model fetched itself
-  // is a different experiment from a body the skill system delivered, and the two must not
-  // share a denominator.
-  const measured = errorFree.filter((run) => run.loadedVia === "skill");
+  // The same rule as every other rate here, through the same function: a body the model
+  // fetched itself is a different experiment from a body the skill system delivered, and
+  // the two must not share a denominator.
+  const measured = deliveredRuns(runs);
   const assertionsPassed = measured.reduce((total, run) => total + run.assertionsPassed, 0);
   const assertionsTotal = measured.reduce((total, run) => total + run.assertionsTotal, 0);
   const contextTokens = measured.reduce((total, run) => total + run.contextTokens, 0);

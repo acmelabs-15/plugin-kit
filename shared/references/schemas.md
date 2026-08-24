@@ -1,6 +1,6 @@
 # JSON schemas
 
-Every JSON structure the scripts, the viewer and the subagents read or write. This is a lookup file rather than a read-through one: open it when you are hand-writing or repairing one of these files, or when a report renders blank and you need to know which name it was matching on. Jump to the section named after the file — `evals.json`, `eval_metadata.json`, `grading.json`, `metrics.json`, `timing.json`, `benchmark.json`, `comparison.json`, `analysis.json`, `feedback.json`, description-optimization outputs, `envelope.json`, run status files.
+Every JSON structure the scripts, the viewer and the subagents read or write. This is a lookup file rather than a read-through one: open it when you are hand-writing or repairing one of these files, or when a report renders blank and you need to know which name it was matching on. Jump to the section named after the file — `evals.json`, `eval_metadata.json`, `grading.json`, `metrics.json`, `timing.json`, `benchmark.json`, `comparison.json`, `analysis.json`, `feedback.json`, description-optimization outputs, disclosure outputs, `envelope.json`, run status files.
 
 Field names are literal. The viewer in particular matches them exactly and renders empty or zero values for anything it does not recognize, without erroring — so a typo here shows up as a silently blank report rather than a crash. That is the failure this file exists to prevent, and it is why "it produced no error" is not evidence a hand-built file is right.
 
@@ -35,7 +35,7 @@ The evals for a skill. Located at `evals/evals.json` inside the skill directory.
 - `evals[].prompt` — the task to execute
 - `evals[].expected_output` — human-readable description of success
 - `evals[].files` — optional input file paths, relative to the skill root
-- `evals[].expects_references` — optional, skill-relative paths this scenario SHOULD send the model to. Read by `optimize-disclosure.ts` to report RECALL: of the scenarios that ought to have reached a reference, how many did. A pull rate alone cannot answer that, because a reference only three scenarios need shows a low rate however good its pointer is, which is indistinguishable in the data from a pointer nobody follows. An **empty array is meaningful** and is the negative case — this scenario should reach nothing — without which a layout that pulled every file on every run would score perfectly. Omit the key entirely to declare no ground truth for that scenario
+- `evals[].expects_references` — optional, skill-relative paths this scenario SHOULD send the model to. In live use rather than merely recognized by the reader: one annotated corpus, the `ask-user-question` disclosure evals, populates it today, so a set carrying this key is a set the figures below are already computed over. Read by both `measure-disclosure.ts` and `optimize-disclosure.ts` to report RECALL: of the scenarios that ought to have reached a reference, how many did. A pull rate alone cannot answer that, because a reference only three scenarios need shows a low rate however good its pointer is, which is indistinguishable in the data from a pointer nobody follows. An **empty array is meaningful** and is the negative case — this scenario should reach nothing — without which a layout that pulled every file on every run would score perfectly. Omit the key entirely to declare no ground truth for that scenario. Absent and empty are **not** interchangeable: an omitted key keeps the row out of every denominator, an empty array puts it into the over-fetch denominator, and a reader that collapses the two turns every unannotated scenario into a negative case and makes recall look perfect. What the two figures come out as is under "Disclosure outputs" below
 - `evals[].expectations` — verifiable statements; added after the first runs are in flight, not when the file is created
 
 ---
@@ -405,6 +405,63 @@ Written by the viewer when the user clicks "Submit All Reviews". Located at the 
 
 **`report.html`** — the human-readable version of the same data. The live copy is opened in the browser immediately and rewritten after every iteration, so it is something to watch rather than something to wait for; it lives wherever `--report` points, which is a temp directory by default. The copy under the results directory is that same report in its final state, written once the run ends. Presentation only; nothing reads either back.
 
+---
+
+## Disclosure outputs
+
+`bun ../operations/measure-disclosure.ts` and `bun ../operations/optimize-disclosure.ts` both write a `results.json` under `--results-dir`, and both carry the same two ground-truth figures. The fields below are additive — everything a consumer read before is unchanged and in place.
+
+**`files[].recall`** — per bundled file, how often the runs that SHOULD have reached it did. `null` when no scenario declared that file, which is **not** a recall of zero: null means nothing claims the file is ever needed, zero means every run that needed it failed to open it, and the two argue for opposite actions.
+
+```json
+{
+  "files": [
+    {
+      "path": "references/rubric.md",
+      "loadMode": "read", "tokens": 1840,
+      "pulls": 3, "countedRuns": 12, "pullRate": 0.25,
+      "recall": {"reads": 3, "expectedRuns": 4, "rate": 0.75},
+      "signposted": true, "verdict": "keep"
+    },
+    {
+      "path": "references/legacy.md",
+      "loadMode": "read", "tokens": 620,
+      "pulls": 0, "countedRuns": 12, "pullRate": 0,
+      "recall": null,
+      "signposted": true, "verdict": "prune"
+    }
+  ]
+}
+```
+
+- `recall.reads` — of the runs below, how many read the file
+- `recall.expectedRuns` — runs of the scenarios whose `expects_references` names this file. **A different denominator from `countedRuns`**, and much smaller: a reference three scenarios need is judged against those three scenarios' runs. Both fractions are reported because a ratio over four runs and a ratio over ninety print identically
+- `recall.rate` — `reads / expectedRuns`
+
+Both denominators are taken over the same runs the pull rate uses: error-free, and the body delivered by the skill system rather than read out of the directory by the model.
+
+**`ground_truth`** — what the scenario set declared, and what its negative rows measured. Always written, including for a set that declared none, because that state is the reason every `recall` above is null.
+
+```json
+{
+  "ground_truth": {
+    "annotatedScenarios": 5,
+    "negativeScenarios": 2,
+    "annotatedRuns": 10,
+    "overFetch": {"scenarios": 2, "runs": 4, "runsThatRead": 1, "rate": 0.25}
+  }
+}
+```
+
+- `annotatedScenarios` — scenarios carrying `expects_references` at all. Rows omitting the key are **not** counted here
+- `negativeScenarios` — of those, the ones declaring the empty array
+- `annotatedRuns` — counted runs whose scenario declared ground truth, positive or negative
+- `overFetch` — the share of delivered runs of the negative scenarios that read any file in the inventory. Over-fetch is a property of a RUN, so a run that read three files it should not have is one over-fetch and not three; a read of something outside the inventory (`node_modules/`, `__tests__/`, a lockfile, a dotfile) is not one at all. **`null` when no scenario declares the empty array** — a rate over no runs is not zero, and a 0% over-fetch is a clean bill of health that a set which never checked has not earned
+
+A set with `annotatedScenarios: 0` is the honest shape of having measured nothing: every `recall` is null, `overFetch` is null, and both scripts say so on stderr rather than printing a column of zeros. The optimizer additionally carries this as a `provenance.caps` sentence in `envelope.json`, and each of its `rows` carries the same `recall` field as `files[]` above. Nothing here feeds the verdict rule — `decideFileVerdict` keys on the pull rate alone, deliberately, so that an annotated set and a bare one reach the same verdict about the same layout.
+
+---
+
 **If what you actually need from a results directory is "under what conditions was this produced, and can I compare it to last week's run", neither of these files has it** — a `results.json` records what a run found and says nothing about the model, the concurrency, the timeout, the eval set or the installed state it found it under. That is `envelope.json`, documented in the next section, and it is written beside `results.json` by the loops that support it.
 
 ---
@@ -448,7 +505,8 @@ One shape that every measured operation writes alongside its own output. Defined
   ],
   "rows": [
     {"path": "references/advanced.md", "loadMode": "read", "tokens": 900,
-     "pulls": 0, "countedRuns": 6, "pullRate": 0, "signposted": true, "verdict": "prune"}
+     "pulls": 0, "countedRuns": 6, "pullRate": 0, "recall": {"reads": 0, "expectedRuns": 2, "rate": 0},
+     "signposted": true, "verdict": "prune"}
   ],
   "verdicts": [
     {"subject": "references/advanced.md", "verdict": "prune",

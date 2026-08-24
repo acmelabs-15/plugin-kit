@@ -27,7 +27,15 @@ import {
   THEME_TOKENS,
 } from "./theme.ts";
 import { formatPercent, htmlEscape } from "../util/pyfloat.ts";
-import type { FileStat, FileVerdict, SplitScore, TokenMethod } from "../operations/disclosure.ts";
+import { NO_GROUND_TRUTH } from "../operations/disclosure.ts";
+import type {
+  FileRecall,
+  FileStat,
+  FileVerdict,
+  GroundTruth,
+  SplitScore,
+  TokenMethod,
+} from "../operations/disclosure.ts";
 
 /** One iteration's row: what was tried, what it cost, and whether it survived. */
 export interface IterationRecord {
@@ -86,6 +94,13 @@ export interface DisclosureReportInput {
   readonly runsPerScenario: number;
   /** The file table, from the most recent measurement of the current layout. */
   readonly files: readonly FileStat[];
+  /**
+   * What ground truth the scenario set declared, and what its negative rows measured.
+   *
+   * Optional so a caller mid-run, or one that predates recall, still renders: absent is
+   * treated as "none declared", which is the same thing the figures would show anyway.
+   */
+  readonly groundTruth?: GroundTruth | undefined;
   readonly iterations: readonly IterationRecord[];
   readonly exitReason: string;
   /** Where the winning layout was written, when one was. */
@@ -126,10 +141,12 @@ export interface DisclosureReportOptions {
 /**
  * The only bespoke CSS in this report.
  *
- * Four rules, each earning its place: a bar built from the shared surface tokens, a
+ * Five rules, each earning its place: a bar built from the shared surface tokens, a
  * verdict pill that reuses `.chip` and only recolours it, a right-aligned numeric
- * cell the shared `.tbl` does not define for this column count, and one tone for a warning
- * severe enough to void the page.
+ * cell the shared `.tbl` does not define for this column count, one tone for a warning
+ * severe enough to void the page, and the gap between the ground-truth tiles and the file
+ * table they introduce — the shared grids carry no bottom margin, which is the same reason
+ * `.g4 + .note` exists below.
  *
  * Only the fatal tone is local. A qualifying warning uses the shared `.note.warn`, whose
  * treatment is what a local rule would have duplicated exactly — and a byte-identical copy of
@@ -158,6 +175,7 @@ const REPORT_CSS = `
      14px inter-card gap, so the note reads as following the row rather than as a fifth
      card in it. */
   .g4 + .note{ margin-top:18px; }
+  .g2 + .panel{ margin-top:18px; }
 `;
 
 function bar(fraction: number, tone: "" | "good" | "warn" | "bad" = ""): string {
@@ -181,6 +199,26 @@ const VERDICT_GLOSS: Readonly<Record<FileVerdict, string>> = {
   keep: "conditional content, which is what deferral is for",
 };
 
+/**
+ * The recall cell: a rate over its own denominator, or a stated absence.
+ *
+ * The denominator is rendered rather than implied, because it is not the pull rate's. A
+ * reference three scenarios need is judged against three scenarios' runs, and "67%" beside
+ * a pull rate over ninety runs invites a reader to compare two fractions that share no
+ * denominator. The numbers here are small enough that the pair matters more than the ratio.
+ *
+ * A file no scenario named says so in words. A dash reads as a measurement that came back
+ * empty, which is the confusion between "not declared" and "never followed" that the whole
+ * absent-versus-empty distinction exists to prevent.
+ */
+function recallCell(recall: FileRecall | null | undefined): string {
+  if (recall === null || recall === undefined) {
+    return '<span class="faint">not declared</span>';
+  }
+  const tone = recall.rate >= 0.8 ? "good" : recall.rate >= 0.5 ? "warn" : "bad";
+  return `<div class="barcell">${bar(recall.rate, tone)}<span class="num">${recall.reads}/${recall.expectedRuns}</span></div>`;
+}
+
 function fileRow(file: FileStat): string {
   const tone = file.verdict === "keep" ? "" : file.verdict === "inline" ? "good" : "warn";
   return `            <tr>
@@ -188,11 +226,74 @@ function fileRow(file: FileStat): string {
               <td class="muted">${htmlEscape(file.loadMode)}</td>
               <td class="n">${file.tokens}</td>
               <td><div class="barcell">${bar(file.pullRate, tone)}<span class="num">${file.pulls}/${file.countedRuns}</span></div></td>
+              <td>${recallCell(file.recall)}</td>
               <td>${file.signposted ? "yes" : '<span class="faint">no</span>'}</td>
               <td><span class="chip v-${file.verdict}">${file.verdict}</span></td>
               <td class="why">${htmlEscape(VERDICT_GLOSS[file.verdict])}</td>
             </tr>
 `;
+}
+
+/**
+ * The sentence under the file table explaining what the recall column is measured against.
+ *
+ * Three states, and each needs different words. A set that declares nothing has to be told
+ * so, or a column of "not declared" reads as a broken measurement. A set with positives but
+ * no negatives has a real recall and a missing counterweight, which is the state that
+ * flatters a layout pulling everything. Only the third has both.
+ */
+/**
+ * The two ground-truth tiles above the file table, or nothing when none was declared.
+ *
+ * Beside the recall column rather than in the headline row at the top of the page, because
+ * these two figures answer questions about that table specifically -- what the recall
+ * column was measured against, and what the negative rows found -- and a reader meets them
+ * at the moment they need them rather than four sections earlier.
+ *
+ * Both tiles lead with a count, not a rate. Over-fetch shows `2/6` in its footer for the
+ * same reason recall does in its cell: these denominators are small, and a percentage on
+ * its own hides how thin the evidence under it is.
+ */
+function groundTruthTiles(truth: GroundTruth): string {
+  if (truth.annotatedScenarios === 0) return "";
+  const overFetch = truth.overFetch;
+  return `    <div class="g2">
+      <div class="metric">
+        <div class="ml">ground truth declared</div>
+        <div class="mv">${truth.annotatedScenarios}</div>
+        <div class="mf">scenario(s) declaring what they should reach, across ${truth.annotatedRuns} run(s) — the denominator behind the recall column</div>
+      </div>
+      <div class="metric">
+        <div class="ml">over-fetch</div>
+        <div class="mv">${overFetch === null ? "—" : formatPercent(overFetch.rate, 0)}</div>
+        <div class="mf">${
+          overFetch === null
+            ? "no scenario declares the empty list, so nothing checks a layout that pulls everything"
+            : `${overFetch.runsThatRead}/${overFetch.runs} run(s) of the ${overFetch.scenarios} scenario(s) that should have reached nothing read a bundled file`
+        }</div>
+      </div>
+    </div>
+`;
+}
+
+function recallNote(truth: GroundTruth): string {
+  if (truth.annotatedScenarios === 0) {
+    return `No scenario declares <code>expects_references</code>, so there is no ground truth
+    and no recall to report. The pull rates above say how often each file was read, never how
+    often it was read <em>when it was needed</em> — a reference only three scenarios need
+    shows a low rate however good its pointer is, which looks identical in the data to a
+    pointer nobody follows.`;
+  }
+  const denominators = `Recall is counted over the runs of the ${truth.annotatedScenarios}
+    scenario(s) that declared what they should reach — a different, and much smaller,
+    denominator from the pull rate beside it, which is why both fractions are shown.`;
+  if (truth.overFetch === null) {
+    return `${denominators} None of them declares the EMPTY list, so over-fetch is not
+    measured: recall alone is maximized by a layout that pulls every file on every run, and
+    a scenario expecting to reach nothing is what catches that.`;
+  }
+  return `${denominators} Over-fetch is the counterweight, measured over the
+    ${truth.overFetch.scenarios} scenario(s) that should have reached nothing at all.`;
 }
 
 function splitCell(score: SplitScore | null): string {
@@ -303,6 +404,10 @@ export function generateDisclosureReport(
   const contextSaved = input.baselineContextTokens - input.bestContextTokens;
   const latest = input.iterations[input.iterations.length - 1];
   const guardScore = latest === undefined ? null : (latest.holdout ?? latest.train);
+  // Absent is rendered as "none declared" rather than refused. This page is rewritten
+  // after every measurement, long before a caller has ground truth to hand it, and a
+  // report that throws mid-run is worse than one that says nothing was declared yet.
+  const truth = input.groundTruth ?? NO_GROUND_TRUTH;
 
   // Derived here rather than asked of the caller. Both producers would have to read these off
   // the same `SplitScore` the tiles below are computed from, so deriving once is what stops the
@@ -424,21 +529,22 @@ ${
       <code>scripts/</code> and <code>assets/</code> are run and copied rather than read, so
       a zero there is the correct outcome and is scored as such.</p>
     </div>
-    <div class="panel pad0">
+${groundTruthTiles(truth)}    <div class="panel pad0">
       <table class="tbl">
         <thead>
           <tr>
             <th>File</th><th>Load mode</th><th class="n">Tokens</th><th>Pull rate</th>
-            <th>Signposted</th><th>Verdict</th><th>Why</th>
+            <th>Recall</th><th>Signposted</th><th>Verdict</th><th>Why</th>
           </tr>
         </thead>
         <tbody>
-${input.files.length === 0 ? '            <tr><td colspan="7" class="faint">No bundled files.</td></tr>\n' : input.files.map(fileRow).join("")}        </tbody>
+${input.files.length === 0 ? '            <tr><td colspan="8" class="faint">No bundled files.</td></tr>\n' : input.files.map(fileRow).join("")}        </tbody>
       </table>
     </div>
     <p class="fine">A pull is a <code>Read</code> whose path lands inside the skill directory.
     A file opened some other way — piped through a shell command, say — is invisible to this
     measurement and will read as never pulled.</p>
+    <p class="fine">${recallNote(truth)}</p>
   </section>
 
   <section class="sec">
