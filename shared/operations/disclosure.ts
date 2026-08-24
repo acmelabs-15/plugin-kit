@@ -13,10 +13,12 @@
  *
  * Pure Bun: `Bun.Glob` and `Bun.file` for the two functions that do read the disk
  * (inventory and content loading), `node:path` for path arithmetic because Bun offers no
- * native equivalent, and nothing else.
+ * native equivalent, and `node:fs` for the one call that must follow a symlink
+ * (`realpathSync`, see `canonicalise`). Nothing else.
  */
 
-import { relative, resolve } from "node:path";
+import { realpathSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { scenarioSetFindings } from "../schemas/scenario-set.ts";
 import { PythonRandom } from "../util/mt19937.ts";
@@ -1259,6 +1261,42 @@ export interface RunObservation {
 }
 
 /**
+ * Resolve a path to its real location, following symlinks.
+ *
+ * `resolve` is string arithmetic and leaves symlinks intact, which is not enough
+ * here. The skill under test is installed beneath `os.tmpdir()`, which on macOS
+ * returns `/var/folders/...` while `/var` is itself a symlink to `/private/var`.
+ * The model reports its reads through the canonical `/private/var/...`, so a skill
+ * directory held as `/var/...` matched none of them: every genuine in-skill read
+ * was classified as outside the skill, every bundled file reported zero pulls, and
+ * the whole file table came back `prune`. Measured on one skill, the same 54 runs
+ * scored 0 in-skill reads before and 106 after.
+ *
+ * The pass rate cannot catch this. The content still reaches the model -- only its
+ * classification is wrong -- so the guardrail confirms the broken number.
+ *
+ * A path that does not exist yet cannot be resolved directly (a `Write` names its
+ * file before creating it), so the longest existing ancestor is resolved and the
+ * missing remainder joined back on.
+ */
+function canonicalise(absolute: string): string {
+  const missing: string[] = [];
+  let head = absolute;
+  for (;;) {
+    try {
+      const real = realpathSync(head);
+      return missing.length === 0 ? real : join(real, ...missing);
+    } catch {
+      const parent = dirname(head);
+      // The filesystem root: nothing above it is left to resolve.
+      if (parent === head) return absolute;
+      missing.unshift(basename(head));
+      head = parent;
+    }
+  }
+}
+
+/**
  * Build the line handler that watches one run for disclosure signals.
  *
  * A factory returning a handler plus an accessor, mirroring `createTriggerReader`'s
@@ -1284,7 +1322,7 @@ export function createRunCollector(params: {
   readonly onLine: (line: string) => undefined;
   readonly observation: () => RunObservation;
 } {
-  const skillDir = resolve(params.skillDir);
+  const skillDir = canonicalise(resolve(params.skillDir));
   const filesRead: string[] = [];
   const filesWritten: string[] = [];
   const toolCalls: string[] = [];
@@ -1296,9 +1334,9 @@ export function createRunCollector(params: {
   /** A path inside the skill, relative to it -- or null when it is somewhere else. */
   const insideSkill = (filePath: string): string | null => {
     if (filePath === "") return null;
-    const absolute = filePath.startsWith("/")
-      ? resolve(filePath)
-      : resolve(params.projectRoot, filePath);
+    const absolute = canonicalise(
+      filePath.startsWith("/") ? resolve(filePath) : resolve(params.projectRoot, filePath),
+    );
     const rel = relative(skillDir, absolute);
     if (rel === "" || rel.startsWith("..") || rel.startsWith("/")) return null;
     return rel.split("\\").join("/");

@@ -15,8 +15,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   applyEdits,
@@ -932,6 +934,47 @@ describe("createRunCollector", () => {
       },
     ]);
     expect(observed.skillLoaded).toBe(true);
+  });
+
+  // A regression guard for the defect that made every disclosure measurement wrong:
+  // the installer records the skill under `os.tmpdir()`, which on macOS is `/var/...`,
+  // while the model reports its reads through the canonical `/private/var/...`. String
+  // resolution alone leaves the two unequal, so every in-skill read was classified as
+  // outside and every bundled file reported zero pulls and a `prune` verdict. This is
+  // the only test here that touches the disk, because a symlink cannot be faked with a
+  // synthetic path.
+  test("a skill reached through a symlink matches reads reported through its real path", () => {
+    const real = mkdtempSync(join(realpathSync(tmpdir()), "disclosure-symlink-"));
+    const link = `${real}-link`;
+    symlinkSync(real, link);
+    try {
+      mkdirSync(join(real, "skills/demo/references"), { recursive: true });
+      writeFileSync(join(real, "skills/demo/references/deep.md"), "x");
+
+      // Recorded through the symlink, read through the real path -- the live mismatch.
+      const collector = createRunCollector({
+        skillDir: join(link, "skills/demo"),
+        projectRoot: link,
+      });
+      collector.onLine(
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                name: "Read",
+                input: { file_path: join(real, "skills/demo/references/deep.md") },
+              },
+            ],
+          },
+        }),
+      );
+      expect(collector.observation().filesRead).toEqual(["references/deep.md"]);
+    } finally {
+      rmSync(link, { force: true });
+      rmSync(real, { recursive: true, force: true });
+    }
   });
 
   test("the same file read twice is reported once", () => {
