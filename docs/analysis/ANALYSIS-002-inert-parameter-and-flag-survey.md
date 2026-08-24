@@ -195,3 +195,4 @@ shape is now written down.
 
 - pairs_with [[ANALYSIS-001: Python to Bun Port Fidelity]]
 - pairs_with [[SESSION-2026-08-23_01: Plugin Kit Measurement Tooling Hardening]]
+- pairs_with [[ANALYSIS-004: What Makes a Bundled Reference Get Read]]

@@ -141,6 +141,30 @@ _Empty._
 - Numbering: first written as ANALYSIS-002, renumbered to ANALYSIS-003 after a concurrent agent claimed 002 for the inert-parameter-and-flag survey; both inbound edges were repointed and the 002 copy deleted
 - Relations: reciprocal edges formed with this ledger and with the port-fidelity analysis
 
+## Event — 2026-08-24: the disclosure path repaired, and the number it produces found to be the wrong number
+
+Work driven from the downstream `ask-user-question` project, whose session note carries the full narrative. Recorded here because every change lands in this repository. All commits on `restructure-shared-layer`, UNPUSHED and not on `main`.
+
+**Four defects fixed, each with a regression test failing on its parent commit.**
+
+- `4710db8` — the run collector compared paths with `resolve`, which leaves symlinks intact, so a skill under a `/var/...` temp root matched none of the reads the model reported through `/private/var/...`. Every bundled file scored 0 pulls and `prune`. Same 54 runs, same bytes: 159 Read calls and 0 classified in-skill before, 154 and 106 after.
+- `02248f3` — `skillLoaded` was set on seeing a `Skill` tool-use and never read the result, so a run whose every load attempt was refused recorded identically to one that loaded cleanly. `ScenarioRun.skillLoaded` already documented the opposite, so this restored the contract. `loadedVia` and `skillRequested` were added to keep the three outcomes apart.
+- `e70b881` — `measure-disclosure` wrote `report.html` and never set `detail.reportPath`, so every dashboard link for a measured sweep dead-ended on a status page. Both optimizer loops set it; only measured sweeps dead-ended.
+- `e0be400` — `computeFileStats` counted pulls over loaded runs while `scoreRuns` counted the pass rate and context cost over every error-free run. Two halves of one measurement disagreeing about what a valid unit is, which put a perverse incentive inside the optimizer: an unloaded run is cheap, so a candidate that broke loading reported a LOWER context cost. `792e17c` then narrowed both to injected runs only.
+
+**The root cause was never plugin-kit's.** The Skill tool's permission ladder falls through to `behavior: "ask"` whose message is the string `Execute skill: <name>` — a prompt label, not an error — and the binary's own SDK schema doc states that in bare `-p` an ask is terminal. Measured 0 of 4 runs loading without a grant, 4 of 4 with `--allowedTools Skill`. `34e68c7` adds the grant at the two affected spawn sites. `measure-triggering` was verified UNAFFECTED because it decides on the streamed tool_use request, before any permission check.
+
+**Performance, all measured on a 10-core box.**
+
+- `b91f945` — worker default derived from the machine, twice the core count, floored at 4 and capped at 24. At 54 runs: 12 workers 15.8s/run at 43-49% CPU idle, 24 workers 8.1s/run, 48 workers 43.6s/run at 0.6% idle and load 143. The curve peaks and overshooting costs about fivefold, hence the cap at the highest value measured good.
+- `4cbda74` — longest-first scheduling from recorded durations, which range 51s to 376s on one corpus.
+- `f8b4ff7` — the pool reported only `onSettled`, so a bar read 0/N for about 90 seconds while every worker was busy, and a parallel pool looked sequential.
+- `f0e31c7` — a warning past three times the core count.
+- REVERTED: decoupling grading from the run pool. Predicted 15-20%, measured MINUS 12% at 490s against 439s, because the grading limiter doubled peak concurrency into the thrashing zone. Discarded rather than kept.
+- DISCARDED in seven seconds: `--bare` for scenario runs. 0 of 3 loaded; it strips the skill system along with the hooks.
+
+**ANALYSIS-004 was authored from this work** and is the durable home for the research. Its sharpest finding bears directly on this repository's own history: a raw pull rate cannot separate a rarely-needed reference from a needed-and-missed one, so any keep-or-prune verdict already issued on one should be re-derived. The collector fixes corrected which reads were counted, never what they were divided by. ANALYSIS-003 Finding 11 records exactly such verdicts.
+
 ## Observations
 
 ### Landed today
@@ -180,3 +204,4 @@ _Empty._
 - pairs_with [[ANALYSIS-001: Python to Bun Port Fidelity]]
 - pairs_with [[ANALYSIS-002: Inert Parameter and Flag Survey]]
 - leads_to [[ANALYSIS-003: Measurement Fault Classes]]
+- required_by [[ANALYSIS-004: What Makes a Bundled Reference Get Read]]
