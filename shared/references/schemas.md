@@ -458,7 +458,22 @@ Both denominators are taken over the same runs the pull rate uses: error-free, a
 - `annotatedRuns` — counted runs whose scenario declared ground truth, positive or negative
 - `overFetch` — the share of delivered runs of the negative scenarios that read any file in the inventory. Over-fetch is a property of a RUN, so a run that read three files it should not have is one over-fetch and not three; a read of something outside the inventory (`node_modules/`, `__tests__/`, a lockfile, a dotfile) is not one at all. **`null` when no scenario declares the empty array** — a rate over no runs is not zero, and a 0% over-fetch is a clean bill of health that a set which never checked has not earned
 
-A set with `annotatedScenarios: 0` is the honest shape of having measured nothing: every `recall` is null, `overFetch` is null, and both scripts say so on stderr rather than printing a column of zeros. The optimizer additionally carries this as a `provenance.caps` sentence in `envelope.json`, and each of its `rows` carries the same `recall` field as `files[]` above. Nothing here feeds the verdict rule — `decideFileVerdict` keys on the pull rate alone, deliberately, so that an annotated set and a bare one reach the same verdict about the same layout.
+A set with `annotatedScenarios: 0` is the honest shape of having measured nothing: every `recall` is null, `overFetch` is null, and both scripts say so on stderr rather than printing a column of zeros. The optimizer additionally carries this as a `provenance.caps` sentence in `envelope.json`, and each of its `rows` carries the same `recall` field as `files[]` above.
+
+**Ground truth decides the verdict, and it is the only thing that unlocks a deletion.** `decideFileVerdict` branches on what evidence exists rather than on the pull rate alone:
+
+| What is known about the file | Verdict |
+|:--|:--|
+| At least one scenario declares it, and recall is below 0.5 | `signpost` — regardless of the raw pull rate; a file most of the runs that needed it could not reach is a broken pointer, and inlining it would bury the defect under a copy of the content |
+| At least one scenario declares it, recall is at or above 0.5, pull rate at or above the inline threshold | `inline` |
+| At least one scenario declares it, anything else | `keep` |
+| No scenario declares it, but the set declares ground truth somewhere, pull rate 0 | `prune` — the only deletion verdict, and the only one backed by positive evidence that nothing needs the file. Note it does not consult `signposted`: the ground truth already answered the question signposting was standing in for |
+| No scenario declares it, but the set declares ground truth somewhere, pull rate above 0 | `keep` |
+| The set declares no ground truth at all, pull rate 0, body names the file | `unmeasured` |
+| The set declares no ground truth at all, pull rate 0, body does not name the file | `signpost` |
+| The set declares no ground truth at all, otherwise | `inline` at or above the threshold, else `keep` |
+
+An unannotated set therefore reaches **no deletion verdict at any pull rate**. `unmeasured` is the state the old rule called `prune`: signposted, read by no run, and nothing declaring what should have reached it, so rarely-needed and needed-but-never-reached are indistinguishable in the data. The action is to add `expects_references` to the scenarios and measure again, and the optimizer proposes nothing at all for these files — deletion candidates are generated only from `prune`, and pointer repairs are an editorial decision the measurement does not make. An annotated set and a bare one thus diverge in how honest they are about what is unknown, never in how destructive they are about what is unproven.
 
 ---
 
@@ -577,7 +592,7 @@ All three are required arrays. Empty is fine; absent is refused.
 |---|---|---|
 | `measure-triggering` | one query: `query`, `shouldTrigger`, `triggers`, `runs`, `triggerRate`, `pass`, `earlyStopped` | `pass`, `fail` |
 | `optimize-description` | one iteration: `iteration`, `description`, `trainPassed`, `trainTotal`, `testPassed`, `testTotal`, `selected` | `selected`, `scored` |
-| `optimize-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
+| `optimize-disclosure` | one bundled file: `path`, `loadMode`, `tokens`, `pulls`, `countedRuns`, `pullRate`, `recall`, `signposted`, `verdict` | `inline`, `prune`, `signpost`, `unmeasured`, `misfiled`, `keep`, plus `unsound` for the whole skill when the install state conflicts |
 | `validate` | one finding: `file`, `line`, `severity`, `rule`, `message`, `section` | `valid`/`invalid` for the artifact, `invalid`/`warned`/`no-findings` per section, `not-checked` for a check that did not run |
 
 **`no-findings` is not `pass`, and the distinction is load-bearing.** A section that ran and was satisfied and a section that declined to look both come back as zero errors and zero warnings. `pass` would be a judgement the validator has not earned on the second, so a clean section says only what came back, and a check that did not run gets its own `not-checked` verdict beside it.

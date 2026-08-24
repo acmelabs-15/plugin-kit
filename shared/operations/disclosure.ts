@@ -461,20 +461,24 @@ export const NO_GROUND_TRUTH: GroundTruth = {
 };
 
 /**
- * What the pull rate says to do about a file.
+ * What the evidence says to do about a file.
  *
- * - `inline` -- pulled on nearly every run, so it is body content that pays an extra
- *   tool call for the privilege of arriving late.
- * - `prune` -- pulled on no run although the body points straight at it. The pointer
- *   works and nothing needs the file; deleting it is a hypothesis the loop can test.
- * - `signpost` -- pulled on no run and nothing in the body names it, so it could never
- *   have loaded. The pull rate says nothing about its value yet.
+ * - `inline` -- needed and reliably reached, on nearly every run. Body content paying an
+ *   extra tool call for the privilege of arriving late.
+ * - `prune` -- no scenario declares it and no run read it, in a set that DOES declare
+ *   ground truth elsewhere. The only surviving deletion verdict, and the only one issued
+ *   against positive evidence that nothing needs the file rather than against silence.
+ * - `signpost` -- reachability is broken. Either scenarios that needed it mostly failed to
+ *   reach it, or nothing in the body names it at all. The fix is a pointer, not a deletion.
+ * - `unmeasured` -- signposted, read by no run, and the set declares no ground truth, so
+ *   rarely-needed and needed-but-never-reached are indistinguishable here. Derive ground
+ *   truth before any removal decision. This is the state the old rule called `prune`.
  * - `misfiled` -- an `execute`- or `copy`-mode file that was read. Scripts are called and
  *   assets are copied; a read means either the body asks for the wrong verb or the file
  *   sits in the wrong directory.
  * - `keep` -- genuinely conditional content, which is what deferral is for.
  */
-export type FileVerdict = "inline" | "prune" | "signpost" | "misfiled" | "keep";
+export type FileVerdict = "inline" | "prune" | "signpost" | "unmeasured" | "misfiled" | "keep";
 
 export interface VerdictInput {
   readonly pulls: number;
@@ -482,6 +486,22 @@ export interface VerdictInput {
   readonly countedRuns: number;
   readonly signposted: boolean;
   readonly loadMode: LoadMode;
+  /**
+   * This file's own ground truth, or null when no scenario declared it.
+   *
+   * Required rather than optional, deliberately. An optional field defaulting to null
+   * would let a new call site silently get the evidence-free branch while looking like it
+   * had asked the full question, which is the exact failure this rule exists to remove.
+   */
+  readonly recall: FileRecall | null;
+  /**
+   * Whether the SET declared ground truth at all, for any file.
+   *
+   * The fact that separates "nothing needs this" from "nobody has said what needs this".
+   * A boolean rather than the annotated-scenario count, because the rule only ever asks
+   * whether the count is above zero and a count invites a second, drifting threshold.
+   */
+  readonly setHasGroundTruth: boolean;
 }
 
 /**
@@ -497,12 +517,41 @@ export interface VerdictInput {
 export const DEFAULT_INLINE_THRESHOLD = 0.8;
 
 /**
- * The decision rule, as a function of the pull rate and the load mode.
+ * How much of a file's declared demand has to be met before reachability is the problem.
+ *
+ * At 0.5 a file that more than half of the runs needing it failed to reach is called a
+ * reachability defect rather than conditional content. The judgement behind the number:
+ * below half, the pointer is failing more often than it works, and no amount of raw pull
+ * rate from OTHER scenarios makes that a working pointer.
+ */
+export const RECALL_REPAIR_THRESHOLD = 0.5;
+
+/**
+ * The decision rule: what to do about a file, given the evidence available about it.
  *
  * Load mode is checked first and it is not a formality. A `scripts/` file has a pull
  * rate of zero when everything is working -- its text is never supposed to enter context
  * -- so running the read-mode rule over it would propose deleting the skill's own
  * tooling. The same applies to `assets/`, which is copied rather than read.
+ *
+ * After that the rule branches on WHAT KIND OF EVIDENCE EXISTS, not on the pull rate
+ * alone, and the ordering carries the whole design: a destructive verdict is reachable
+ * only where there is positive evidence that nothing needs the file. An annotated set and
+ * a bare one therefore diverge in how honest they are about what is unknown, never in how
+ * destructive they are about what is unproven.
+ *
+ * 1. This file has ground truth. Recall decides. Below the repair threshold the verdict is
+ *    `signpost` REGARDLESS of the raw pull rate -- a file most of the runs that needed it
+ *    failed to reach is a broken pointer even when other scenarios read it constantly, and
+ *    inlining it would bury a reachability defect under a copy of the content.
+ * 2. The set has ground truth but does not name this file. Nothing declares a need for it,
+ *    so a zero pull rate is evidence of absence rather than silence, and `prune` is
+ *    earned. Note this ignores `signposted`: the ground truth has already answered "is it
+ *    needed", which is the question signposting was standing in for.
+ * 3. No ground truth anywhere. Nothing destructive is available. An unread signposted file
+ *    is `unmeasured` -- rarely-needed and needed-but-never-reached are indistinguishable
+ *    without declarations, and the old rule called that state `prune` and proposed
+ *    deleting files whose only crime was belonging to an unannotated set.
  */
 export function decideFileVerdict(input: VerdictInput, inlineThreshold: number): FileVerdict {
   if (!READ_MODES.has(input.loadMode)) {
@@ -512,8 +561,18 @@ export function decideFileVerdict(input: VerdictInput, inlineThreshold: number):
   // successful runs leaves every file in, and inventing verdicts from it would be the
   // most expensive kind of wrong: a restructure justified by no evidence at all.
   if (input.countedRuns === 0) return "keep";
+
+  if (input.recall !== null) {
+    if (input.recall.rate < RECALL_REPAIR_THRESHOLD) return "signpost";
+    return input.pullRate >= inlineThreshold ? "inline" : "keep";
+  }
+
+  if (input.setHasGroundTruth) {
+    return input.pullRate === 0 ? "prune" : "keep";
+  }
+
   if (input.pullRate >= inlineThreshold) return "inline";
-  if (input.pullRate === 0) return input.signposted ? "prune" : "signpost";
+  if (input.pullRate === 0) return input.signposted ? "unmeasured" : "signpost";
   return "keep";
 }
 
@@ -540,14 +599,27 @@ export function computeFileStats(
     }
   }
 
+  // Whether the SET declared anything, taken from the same map the per-file recall is read
+  // from. One source for both halves of the evidence question, so a file can never be told
+  // "no ground truth exists" by a rule that another line of this function disagrees with.
+  const setHasGroundTruth = expectations.size > 0;
+
   return inventory.map((file) => {
     const pulls = pullsByPath.get(file.path) ?? 0;
     const pullRate = counted.length === 0 ? 0 : pulls / counted.length;
+    // Computed BEFORE the verdict, because the verdict now reads it. Recall used to be
+    // reported and never fed back, on the reasoning that an optional input would make an
+    // annotated set and a bare one disagree about the same layout. They do now disagree,
+    // and that is the point: only the annotated one has grounds for a destructive verdict,
+    // so the two diverge in how honest they are about what is unknown rather than in how
+    // freely they propose deletions.
+    const recall = recallFor(file.path, counted, expectations);
     return {
       ...file,
       pulls,
       countedRuns: counted.length,
       pullRate,
+      recall,
       verdict: decideFileVerdict(
         {
           pulls,
@@ -555,14 +627,11 @@ export function computeFileStats(
           countedRuns: counted.length,
           signposted: file.signposted,
           loadMode: file.loadMode,
+          recall,
+          setHasGroundTruth,
         },
         inlineThreshold,
       ),
-      // Recall is REPORTED, never fed back into the verdict above. The decision rule keys on
-      // the pull rate alone and stays that way deliberately: ground truth is optional, so a
-      // rule that consulted it would decide one thing about an annotated set and another
-      // about the same layout measured by an unannotated one.
-      recall: recallFor(file.path, counted, expectations),
     };
   });
 }
@@ -906,12 +975,18 @@ export interface CandidateInput {
  * (they remove a round trip and usually a little cost), then prunes (they remove weight
  * without removing tokens, so they can only win when nothing else does).
  *
- * A `signpost` verdict deliberately produces NO candidate. The fix for a file nothing
- * points at is a sentence in the body saying what is in there and when to read it, and
- * where that sentence goes is an editorial decision the measurement cannot make -- a
- * pointer bolted onto the end of the body would measure the wrong thing and then get
- * rejected for costing tokens. It is reported as a finding instead, which is the
- * different fix the two cases need.
+ * A `signpost` verdict deliberately produces NO candidate. The fix for a file the runs
+ * that needed it could not reach is a sentence in the body saying what is in there and
+ * when to read it, and where that sentence goes is an editorial decision the measurement
+ * cannot make -- a pointer bolted onto the end of the body would measure the wrong thing
+ * and then get rejected for costing tokens. It is reported as a finding instead, which is
+ * the different fix the two cases need.
+ *
+ * `unmeasured` produces no candidate either, and for a stronger reason: there is nothing
+ * to propose. The action is to annotate the scenarios and measure again, which is work for
+ * an author rather than a layout this loop can test. Deletion candidates are therefore
+ * reachable ONLY through `prune`, which is reachable only where ground truth exists --
+ * the filters below are what enforces that, so the rule lives in one place.
  */
 export function generateCandidates(input: CandidateInput): readonly DisclosureCandidate[] {
   const candidates: DisclosureCandidate[] = [];
@@ -961,9 +1036,10 @@ export function generateCandidates(input: CandidateInput): readonly DisclosureCa
       id: `prune:${file.path}`,
       summary: `Delete ${file.path} (${file.tokens} tokens, never read)`,
       rationale:
-        `The body points at it and no run followed the pointer across ` +
-        `${file.countedRuns} runs. If deleting it does not move the pass rate, it was ` +
-        `carrying nothing.`,
+        `No scenario in the set declares this file, and no run read it across ` +
+        `${file.countedRuns} runs. The ground truth says nothing needs it and the ` +
+        `measurement says nothing reached for it, so deleting it is a hypothesis worth ` +
+        `testing. If it does not move the pass rate, the file was carrying nothing.`,
       edits: [{ kind: "prune", path: file.path }],
     });
   }

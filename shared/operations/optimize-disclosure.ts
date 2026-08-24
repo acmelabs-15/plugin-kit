@@ -199,10 +199,19 @@ async function proposeExtractions(params: {
     .map((section) => `- "${section.heading}" — ${section.tokens} tokens, ${section.lines} lines`)
     .join("\n");
   const fileLines = params.files
-    .map(
-      (file) =>
-        `- ${file.path} (${file.loadMode}, ${file.tokens} tokens) — read on ${file.pulls}/${file.countedRuns} runs`,
-    )
+    .map((file) => {
+      // Recall is the half of this line that says whether a low pull rate is a problem. A
+      // file read on 2 of 8 runs looks like dead weight until you know 2 runs were the only
+      // ones that ever needed it, at which point it is working exactly as intended.
+      const recall =
+        file.recall === null || file.recall === undefined
+          ? ", no scenario declares it"
+          : `, reached on ${file.recall.reads}/${file.recall.expectedRuns} of the runs that needed it`;
+      return (
+        `- ${file.path} (${file.loadMode}, ${file.tokens} tokens) — read on ` +
+        `${file.pulls}/${file.countedRuns} runs${recall} [${file.verdict}]`
+      );
+    })
     .join("\n");
   const scenarioLines = params.scenarios.map((scenario) => `- ${scenario.prompt}`).join("\n");
 
@@ -215,8 +224,21 @@ runs need out of the body, leaving a sentence saying what moved and when to read
 These are the training scenarios the skill was measured on:
 ${scenarioLines}
 
-These bundled files exist, with how often each was actually read:
+These bundled files exist, with how often each was actually read, how much of the demand
+declared for it was met, and the verdict the measurement reached:
 ${fileLines}
+
+What each verdict means for what you should propose:
+- [signpost] the runs that needed this file mostly did not reach it. The fix is a POINTER —
+  a sentence in the body naming the file and saying when to open it. Never propose deleting
+  a signposted-verdict file; a low pull rate here is a reachability defect, not dead weight.
+- [prune] no scenario declares this file and no run read it. Deletion is on the table.
+- [unmeasured] never read, and nothing declares what should reach it. Propose NOTHING for
+  these — neither a deletion nor a pointer. The action is for the author to annotate the
+  scenarios with expects_references and measure again, and any proposal made now would
+  rest on the absence of evidence rather than on evidence of absence.
+- [inline] needed and reliably reached on nearly every run.
+- [keep] genuinely conditional content, which is what deferral is for.
 
 These body sections are large enough that moving one out could pay for the extra tool
 call it would then cost:
@@ -1039,21 +1061,38 @@ export interface DisclosureEnvelopeInput {
 function verdictReason(row: DisclosureRow, inlineThreshold: number): string {
   const seen = `read on ${row.pulls}/${row.countedRuns} run(s)`;
   const rate = `${(row.pullRate * 100).toFixed(0)}%`;
+  // The recall clause, where there is one. Named separately because three of the branches
+  // below want it and each phrases the rest of its sentence differently.
+  const recall =
+    row.recall === null
+      ? ""
+      : ` Reached on ${row.recall.reads}/${row.recall.expectedRuns} of the run(s) that ` +
+        `declared they should reach it.`;
   switch (row.verdict) {
     case "inline":
       return (
         `${seen} (${rate}), at or above the ${inlineThreshold} inline threshold — this is ` +
-        `body content paying an extra tool call for the privilege of arriving late.`
+        `body content paying an extra tool call for the privilege of arriving late.${recall}`
       );
     case "prune":
       return (
-        `${seen}, although the body points straight at it. The pointer works and nothing ` +
-        `needed the file, so deleting it is a hypothesis the next iteration can test.`
+        `${seen}, and no scenario in the set declares it. The ground truth says nothing ` +
+        `needs this file and the measurement says nothing reached for it, so deleting it ` +
+        `is a hypothesis the next iteration can test.`
       );
     case "signpost":
+      return row.recall === null
+        ? `${seen}, and nothing in the body names it, so it could never have loaded. The ` +
+          `pull rate says nothing about its value yet — the fix is a sentence, not a deletion.`
+        : `most of the runs that needed this file did not reach it.${recall} That is a ` +
+          `broken pointer rather than unwanted content, whatever the ${rate} raw pull rate ` +
+          `suggests — the fix is a sentence, not a deletion.`;
+    case "unmeasured":
       return (
-        `${seen}, and nothing in the body names it, so it could never have loaded. The ` +
-        `pull rate says nothing about its value yet — the fix is a sentence, not a deletion.`
+        `${seen}, the body does name it, and no scenario in the set declares what should ` +
+        `reach it. Rarely-needed and needed-but-never-reached are indistinguishable in this ` +
+        `data, so no removal decision is available — add \`expects_references\` to the ` +
+        `scenarios and measure again.`
       );
     case "misfiled":
       return (
@@ -1069,11 +1108,14 @@ function verdictReason(row: DisclosureRow, inlineThreshold: number): string {
         );
       }
       // Zero pulls and a `keep` verdict can only mean a load mode whose files are not
-      // supposed to be read: `decideFileVerdict` sends an unread READ-mode file to `prune`
-      // or `signpost` and never here. Derived from the rule rather than by re-testing the
-      // load mode against a copy of `READ_MODES`, which would be a second list to keep in
-      // step -- and which would have quietly mishandled a root-level file read on some
-      // runs, since `root` is a read mode and does not look like one.
+      // supposed to be read: `decideFileVerdict` sends an unread READ-mode file to `prune`,
+      // `signpost` or `unmeasured` and never here. Still true under the evidence-branching
+      // rule -- every branch that can return `keep` requires either a pull or a recall at
+      // or above the repair threshold, and a recall that high cannot come from zero reads.
+      // Derived from the rule rather than by re-testing the load mode against a copy of
+      // `READ_MODES`, which would be a second list to keep in step -- and which would have
+      // quietly mishandled a root-level file read on some runs, since `root` is a read mode
+      // and does not look like one.
       if (row.pulls === 0) {
         return (
           `a \`${row.loadMode}\`-mode file that no run read, which is what a working ` +

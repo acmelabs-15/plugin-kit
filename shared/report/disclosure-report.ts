@@ -166,6 +166,11 @@ const REPORT_CSS = `
   .barcell .num{ font-family:var(--mono); font-size:11.5px; color:var(--muted); flex:0 0 62px; text-align:right; }
   .v-inline{ color:var(--accent); } .v-prune{ color:var(--bad); } .v-signpost{ color:var(--warn); }
   .v-misfiled{ color:var(--warn); } .v-keep{ color:var(--faint); }
+  /* The unmeasured verdict is a to-do, not a pass, and its neighbour in the table is keep,
+     which is the one thing it must not be mistaken for. Muted rather than faint keeps it
+     legible, and the dashed underline marks it as awaiting evidence without spending a
+     colour that would read as a severity it does not have. */
+  .v-unmeasured{ color:var(--muted); border-bottom:1px dashed var(--warn); }
   tr.rejected td{ opacity:.62; }
   tr.accepted td:first-child{ box-shadow:inset 2px 0 0 var(--good); }
   .why{ color:var(--muted); font-size:12px; line-height:1.55; }
@@ -192,9 +197,10 @@ function formatDuration(milliseconds: number): string {
 
 /** What each verdict means, in one clause, so the table needs no key elsewhere. */
 const VERDICT_GLOSS: Readonly<Record<FileVerdict, string>> = {
-  inline: "pulled on nearly every run — body content arriving late",
-  prune: "signposted and never pulled — test whether deleting it changes anything",
-  signpost: "nothing in the body points here, so it could never load",
+  inline: "needed and reliably reached on nearly every run — body content arriving late",
+  prune: "no scenario declares it and no run read it — test whether deleting it changes anything",
+  signpost: "the runs that needed it did not reach it — the fix is a pointer, not a deletion",
+  unmeasured: "never read, and nothing declares what should reach it — annotate the scenarios before deciding",
   misfiled: "read, but it lives in a directory whose files are run or copied",
   keep: "conditional content, which is what deferral is for",
 };
@@ -219,8 +225,21 @@ function recallCell(recall: FileRecall | null | undefined): string {
   return `<div class="barcell">${bar(recall.rate, tone)}<span class="num">${recall.reads}/${recall.expectedRuns}</span></div>`;
 }
 
+/**
+ * The pull-rate bar's tone, which is about the VERDICT rather than the rate.
+ *
+ * `unmeasured` takes the neutral tone rather than `warn`: its bar is always empty, and an
+ * amber empty bar reads as a measured failure when the whole point of the verdict is that
+ * nothing was measured. The badge beside it carries the to-do, in its own treatment.
+ */
+function pullTone(verdict: FileVerdict): "" | "good" | "warn" {
+  if (verdict === "inline") return "good";
+  if (verdict === "keep" || verdict === "unmeasured") return "";
+  return "warn";
+}
+
 function fileRow(file: FileStat): string {
-  const tone = file.verdict === "keep" ? "" : file.verdict === "inline" ? "good" : "warn";
+  const tone = pullTone(file.verdict);
   return `            <tr>
               <td><code>${htmlEscape(file.path)}</code></td>
               <td class="muted">${htmlEscape(file.loadMode)}</td>

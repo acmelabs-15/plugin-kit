@@ -557,46 +557,137 @@ describe("the terminal lines both entry points print", () => {
 // ---------------------------------------------------------------------------
 
 describe("decideFileVerdict", () => {
-  const base = { countedRuns: 10, signposted: true, loadMode: "read" as const };
-
-  test("a reference pulled on nearly every run is body content arriving late", () => {
-    expect(decideFileVerdict({ ...base, pulls: 9, pullRate: 0.9 }, 0.8)).toBe("inline");
-    expect(decideFileVerdict({ ...base, pulls: 8, pullRate: 0.8 }, 0.8)).toBe("inline");
-  });
-
-  test("a reference pulled some of the time is exactly what deferral is for", () => {
-    expect(decideFileVerdict({ ...base, pulls: 5, pullRate: 0.5 }, 0.8)).toBe("keep");
-    expect(decideFileVerdict({ ...base, pulls: 1, pullRate: 0.1 }, 0.8)).toBe("keep");
-  });
-
-  test("never pulled splits on signposting, because the two need different fixes", () => {
-    expect(decideFileVerdict({ ...base, pulls: 0, pullRate: 0 }, 0.8)).toBe("prune");
-    expect(decideFileVerdict({ ...base, pulls: 0, pullRate: 0, signposted: false }, 0.8)).toBe(
-      "signpost",
-    );
+  /** A set that declared nothing: the evidence-free regime. */
+  const bare = {
+    countedRuns: 10,
+    signposted: true,
+    loadMode: "read" as const,
+    recall: null,
+    setHasGroundTruth: false,
+  };
+  /** The same file in a set that declared ground truth, but not about this file. */
+  const undeclared = { ...bare, setHasGroundTruth: true };
+  /** Ground truth for this file, at a given rate over a given number of runs. */
+  const declared = (reads: number, expectedRuns: number) => ({
+    recall: { reads, expectedRuns, rate: reads / expectedRuns },
+    setHasGroundTruth: true,
   });
 
   test("a script that nobody read is working correctly, not dead weight", () => {
-    // The rule that would delete it read-mode-first is the reason load mode is checked
-    // before the pull rate: a `scripts/` file's text is never supposed to enter context.
-    expect(decideFileVerdict({ ...base, pulls: 0, pullRate: 0, loadMode: "execute" }, 0.8)).toBe(
+    // Load mode is checked before any of the evidence branches, which is why it is first:
+    // a `scripts/` file's text is never supposed to enter context.
+    expect(decideFileVerdict({ ...bare, pulls: 0, pullRate: 0, loadMode: "execute" }, 0.8)).toBe(
       "keep",
     );
-    expect(decideFileVerdict({ ...base, pulls: 0, pullRate: 0, loadMode: "copy" }, 0.8)).toBe("keep");
+    expect(decideFileVerdict({ ...bare, pulls: 0, pullRate: 0, loadMode: "copy" }, 0.8)).toBe("keep");
   });
 
   test("a script that WAS read is misfiled, or the body asks for the wrong verb", () => {
-    expect(decideFileVerdict({ ...base, pulls: 4, pullRate: 0.4, loadMode: "execute" }, 0.8)).toBe(
+    expect(decideFileVerdict({ ...bare, pulls: 4, pullRate: 0.4, loadMode: "execute" }, 0.8)).toBe(
       "misfiled",
     );
   });
 
   test("no measurement, no verdict", () => {
-    expect(decideFileVerdict({ ...base, countedRuns: 0, pulls: 0, pullRate: 0 }, 0.8)).toBe("keep");
+    expect(decideFileVerdict({ ...bare, countedRuns: 0, pulls: 0, pullRate: 0 }, 0.8)).toBe("keep");
   });
 
-  test("the threshold is a parameter, so a tighter run can demand more evidence", () => {
-    expect(decideFileVerdict({ ...base, pulls: 9, pullRate: 0.9 }, 0.95)).toBe("keep");
+  describe("with ground truth for the file", () => {
+    test("needed and reliably reached, on nearly every run, is body content arriving late", () => {
+      expect(
+        decideFileVerdict({ ...bare, ...declared(4, 4), pulls: 9, pullRate: 0.9 }, 0.8),
+      ).toBe("inline");
+    });
+
+    test("a file most of its runs did not reach is a broken pointer, whatever the raw rate", () => {
+      // The ordering that matters most. A 90% raw pull rate says other scenarios read it
+      // constantly; recall says the ones that NEEDED it mostly could not find it. Inlining
+      // here would bury a reachability defect under a copy of the content.
+      expect(
+        decideFileVerdict({ ...bare, ...declared(1, 4), pulls: 9, pullRate: 0.9 }, 0.8),
+      ).toBe("signpost");
+      expect(decideFileVerdict({ ...bare, ...declared(0, 3), pulls: 0, pullRate: 0 }, 0.8)).toBe(
+        "signpost",
+      );
+    });
+
+    test("the repair threshold is a boundary, and exactly half is met rather than missed", () => {
+      expect(decideFileVerdict({ ...bare, ...declared(2, 4), pulls: 2, pullRate: 0.2 }, 0.8)).toBe(
+        "keep",
+      );
+      expect(decideFileVerdict({ ...bare, ...declared(1, 4), pulls: 1, pullRate: 0.1 }, 0.8)).toBe(
+        "signpost",
+      );
+    });
+
+    test("a rarely-needed file its runs DID reach is kept, never pruned", () => {
+      // The case the old rule got most wrong. Perfect recall over a small denominator
+      // reads as a 20% pull rate, which used to be indistinguishable from dead weight.
+      expect(decideFileVerdict({ ...bare, ...declared(2, 2), pulls: 2, pullRate: 0.2 }, 0.8)).toBe(
+        "keep",
+      );
+    });
+
+    test("a declared file is never pruned, however low its pull rate", () => {
+      for (const rate of [0, 0.1, 0.5, 0.9]) {
+        expect(
+          decideFileVerdict({ ...bare, ...declared(3, 3), pulls: 1, pullRate: rate }, 0.8),
+        ).not.toBe("prune");
+      }
+    });
+  });
+
+  describe("with ground truth in the set but not for this file", () => {
+    test("nothing declares it and nothing read it, so deletion is earned", () => {
+      expect(decideFileVerdict({ ...undeclared, pulls: 0, pullRate: 0 }, 0.8)).toBe("prune");
+    });
+
+    test("prune does not consult signposting, because the ground truth already answered it", () => {
+      // Signposting was standing in for "is this file needed". A set that declares its
+      // needs answers that question directly, so an unsignposted file lands in the same
+      // place as a signposted one rather than deferring to a proxy.
+      expect(
+        decideFileVerdict({ ...undeclared, pulls: 0, pullRate: 0, signposted: false }, 0.8),
+      ).toBe("prune");
+    });
+
+    test("something read it, so it is not dead weight even though nothing declared it", () => {
+      expect(decideFileVerdict({ ...undeclared, pulls: 3, pullRate: 0.3 }, 0.8)).toBe("keep");
+      // Not inline either: no scenario claims to need it, so promoting it into the body of
+      // every invocation would be a cost decision made on undeclared demand.
+      expect(decideFileVerdict({ ...undeclared, pulls: 9, pullRate: 0.9 }, 0.8)).toBe("keep");
+    });
+  });
+
+  describe("with no ground truth anywhere", () => {
+    test("a signposted file nobody read is unmeasured, never prune", () => {
+      // The verdict this redesign exists for. The old rule said `prune` here and proposed
+      // deleting files whose only crime was belonging to an unannotated set.
+      expect(decideFileVerdict({ ...bare, pulls: 0, pullRate: 0 }, 0.8)).toBe("unmeasured");
+    });
+
+    test("an unsignposted file nobody read could never have loaded, so it wants a pointer", () => {
+      expect(decideFileVerdict({ ...bare, pulls: 0, pullRate: 0, signposted: false }, 0.8)).toBe(
+        "signpost",
+      );
+    });
+
+    test("the raw rate still decides inline and keep, exactly as it always did", () => {
+      expect(decideFileVerdict({ ...bare, pulls: 9, pullRate: 0.9 }, 0.8)).toBe("inline");
+      expect(decideFileVerdict({ ...bare, pulls: 8, pullRate: 0.8 }, 0.8)).toBe("inline");
+      expect(decideFileVerdict({ ...bare, pulls: 5, pullRate: 0.5 }, 0.8)).toBe("keep");
+      expect(decideFileVerdict({ ...bare, pulls: 1, pullRate: 0.1 }, 0.8)).toBe("keep");
+    });
+
+    test("the threshold is a parameter, so a tighter run can demand more evidence", () => {
+      expect(decideFileVerdict({ ...bare, pulls: 9, pullRate: 0.9 }, 0.95)).toBe("keep");
+    });
+
+    test("no evidence-free run can reach a deletion verdict at all", () => {
+      for (const [pulls, pullRate] of [[0, 0], [1, 0.1], [5, 0.5], [9, 0.9], [10, 1]] as const) {
+        expect(decideFileVerdict({ ...bare, pulls, pullRate }, 0.8)).not.toBe("prune");
+      }
+    });
   });
 });
 
@@ -662,7 +753,11 @@ describe("generateCandidates", () => {
     expect(all?.edits).toHaveLength(2);
   });
 
-  test("a signposted file nobody read becomes a deletion to test", () => {
+  test("an unannotated set proposes no deletion at all, whatever the pull rates say", () => {
+    // These files were measured without ground truth, so `references/dead.md` is
+    // `unmeasured` rather than `prune` and there is nothing to propose about it. The old
+    // rule produced `prune:references/dead.md` here, which is the deletion this redesign
+    // exists to withhold: nothing in this run can tell rarely-needed from never-reached.
     const candidates = generateCandidates({
       files,
       sections,
@@ -670,7 +765,33 @@ describe("generateCandidates", () => {
       maxCandidates: 10,
       alreadyTried: new Set(),
     });
+    expect(candidates.some((entry) => entry.id.startsWith("prune:"))).toBe(false);
+    expect(files.find((file) => file.path === "references/dead.md")?.verdict).toBe("unmeasured");
+  });
+
+  test("the same file in an annotated set that does not declare it IS a deletion to test", () => {
+    // Same layout, same runs, one difference: the set now says what it needs. That turns a
+    // zero pull rate from silence into evidence of absence, and deletion becomes proposable.
+    const annotated = computeFileStats(
+      [bundled("references/always.md"), bundled("references/dead.md")],
+      [
+        run({ scenarioId: "s1", filesRead: ["references/always.md"] }),
+        run({ scenarioId: "s1", attempt: 2, filesRead: ["references/always.md"] }),
+      ],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("s1", ["references/always.md"])],
+    );
+    const candidates = generateCandidates({
+      files: annotated,
+      sections,
+      extractions: [],
+      maxCandidates: 10,
+      alreadyTried: new Set(),
+    });
     expect(candidates.map((entry) => entry.id)).toContain("prune:references/dead.md");
+    expect(candidates.find((entry) => entry.id.startsWith("prune:"))?.rationale).toContain(
+      "No scenario in the set declares this file",
+    );
   });
 
   test("an unsignposted file produces no edit: the fix is a sentence, not a deletion", () => {
@@ -1814,6 +1935,33 @@ describe("generateDisclosureReport", () => {
     expect(html).not.toContain("ground truth declared");
   });
 
+  test("unmeasured renders as its own verdict, distinct from keep", () => {
+    // A to-do must not look like a pass. `keep` and `unmeasured` are adjacent in the table
+    // and mean opposite things about whether anyone still has work to do on the file.
+    const html = generateDisclosureReport({
+      ...base,
+      files: computeFileStats(
+        [bundled("references/dead.md"), bundled("references/sometimes.md")],
+        [run({ filesRead: ["references/sometimes.md"] }), run({ attempt: 2 })],
+      ),
+    });
+    expect(html).toContain(">unmeasured<");
+    expect(html).toContain("v-unmeasured");
+    expect(html).toContain("annotate the scenarios before deciding");
+    // The badge classes differ, which is what carries the visual distinction.
+    expect(html).toContain("v-keep");
+  });
+
+  test("an unmeasured file's empty bar is not tinted as a measured failure", () => {
+    // Its pull rate is always zero, and an amber empty bar reads as something that was
+    // measured and failed rather than something nobody measured.
+    const html = generateDisclosureReport({
+      ...base,
+      files: computeFileStats([bundled("references/dead.md")], [run()]),
+    });
+    expect(html).not.toContain('<div class="bar warn"><span style="width:0%">');
+  });
+
   test("positives with no negatives say over-fetch was not measured", () => {
     const html = generateDisclosureReport({
       ...base,
@@ -2287,15 +2435,18 @@ describe("the results envelope", () => {
     const envelope = buildDisclosureEnvelope(envelopeInput());
     expect(envelope.verdicts.map((entry) => [entry.subject, entry.verdict])).toEqual([
       ["references/always.md", "inline"],
-      ["references/never.md", "prune"],
+      // Unannotated, so the unread file is `unmeasured` rather than `prune`. The envelope
+      // is where a downstream consumer would act on a deletion, which is exactly why the
+      // vocabulary change has to reach this far rather than stopping at the report.
+      ["references/never.md", "unmeasured"],
     ]);
     // A verdict a reader has never seen before still arrives with its justification.
     expect(envelope.verdicts[0]!.reason).toContain("0.8 inline threshold");
-    expect(envelope.verdicts[1]!.reason).toContain("the body points straight at it");
+    expect(envelope.verdicts[1]!.reason).toContain("no removal decision is available");
     for (const verdict of envelope.verdicts) expect(verdict.reason.length).toBeGreaterThan(20);
   });
 
-  test("the five file verdicts each get their own reasoning, including the no-evidence case", () => {
+  test("the six file verdicts each get their own reasoning, including the no-evidence case", () => {
     const reasons = (files: readonly FileStat[]): readonly string[] =>
       buildDisclosureEnvelope(envelopeInput({ output: output({ files }) })).verdicts.map(
         (entry) => entry.reason,
@@ -2325,6 +2476,26 @@ describe("the results envelope", () => {
       [run({ filesRead: ["references/sometimes.md"] }), run({ attempt: 2 })],
     );
     expect(reasons(conditional)[0]).toContain("genuinely conditional");
+    // Signposted, unread, and nothing declared: the reason has to name the missing input
+    // rather than imply the file is unwanted.
+    const unmeasured = computeFileStats([bundled("references/dead.md")], [run()]);
+    expect(reasons(unmeasured)[0]).toContain("expects_references");
+    // Declared and pruned: the justification is the ground truth, not the signpost.
+    const pruned = computeFileStats(
+      [bundled("references/dead.md")],
+      [run({ scenarioId: "s1", filesRead: ["references/other.md"] })],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("s1", ["references/other.md"])],
+    );
+    expect(reasons(pruned)[0]).toContain("no scenario in the set declares it");
+    // Declared, and most of the runs that needed it missed it: a broken pointer.
+    const missed = computeFileStats(
+      [bundled("references/deep.md")],
+      [run({ scenarioId: "s1" }), run({ scenarioId: "s1", attempt: 2 })],
+      DEFAULT_INLINE_THRESHOLD,
+      [scenario("s1", ["references/deep.md"])],
+    );
+    expect(reasons(missed)[0]).toContain("did not reach it");
   });
 
   test("a root-level file read on some runs is conditional content, not a working script", () => {
