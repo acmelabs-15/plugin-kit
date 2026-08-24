@@ -18,17 +18,21 @@ import { rm } from "node:fs/promises";
 
 import {
   ACCEPT_EDITS_NOTICE,
+  applyScenarioOnly,
   liveReportPath,
   MEASURE_FLAGS,
   MEASUREMENT_MODEL,
   MEASUREMENT_PERMISSION_MODE,
   measureDisclosure,
   removedFlagError,
+  reportWarnings,
   warnOnInstallConflict,
   type MeasureOutput,
 } from "../measure-disclosure.ts";
 import type { MeasureParams } from "../disclosure-measure.ts";
-import type { ScenarioRun } from "../disclosure.ts";
+import { NO_GROUND_TRUTH } from "../disclosure.ts";
+import type { DisclosureScenario, ScenarioRun } from "../disclosure.ts";
+import { SubsetError, type ScenarioSubsetStamp } from "../subset.ts";
 
 const TMP = `${Bun.env["TMPDIR"] ?? "/tmp"}/measure-disclosure-${Bun.nanoseconds()}`;
 
@@ -132,7 +136,14 @@ test("a run writing no report advertises none, rather than a path that never app
  * than on a helper is the whole point, since the defect being closed was a value that
  * silently failed to reach the spawn.
  */
-async function runMeasurement(options: { readonly tierStudy?: string }): Promise<{
+interface MeasurementOptions {
+  readonly tierStudy?: string;
+  /** Defaults to one scenario. Widened for the subset cases, which need something to omit. */
+  readonly scenarios?: readonly DisclosureScenario[];
+  readonly subset?: ScenarioSubsetStamp;
+}
+
+async function runMeasurement(options: MeasurementOptions): Promise<{
   readonly output: MeasureOutput;
   readonly seen: MeasureParams | undefined;
 }> {
@@ -148,26 +159,32 @@ async function runMeasurement(options: { readonly tierStudy?: string }): Promise
   try {
     const output = await measureDisclosure({
       skillPath: dir,
-      scenarios: [{ id: "s1", prompt: "Do the thing.", expectations: ["It happened"] }],
+      scenarios: options.scenarios ?? [
+        { id: "s1", prompt: "Do the thing.", expectations: ["It happened"] },
+      ],
       runsPerScenario: 1,
       numWorkers: 1,
       timeoutSeconds: 60,
       inlineThreshold: 0.8,
       ...(options.tierStudy === undefined ? {} : { tierStudy: options.tierStudy }),
+      ...(options.subset === undefined ? {} : { subset: options.subset }),
       sweep: async (params) => {
         seen = params;
-        const run: ScenarioRun = {
-          scenarioId: "s1",
-          attempt: 1,
-          filesRead: ["references/guide.md"],
-          skillLoaded: true,
-          loadedVia: "skill",
-          contextTokens: 1000,
-          assertionsPassed: 1,
-          assertionsTotal: 1,
-          durationMs: 1000,
-        };
-        return [run];
+        // One run per scenario the sweep was actually handed, so a narrowed set produces
+        // narrowed runs rather than a fixed row that would hide the filtering.
+        return params.scenarios.map(
+          (scenario): ScenarioRun => ({
+            scenarioId: scenario.id,
+            attempt: 1,
+            filesRead: ["references/guide.md"],
+            skillLoaded: true,
+            loadedVia: "skill",
+            contextTokens: 1000,
+            assertionsPassed: 1,
+            assertionsTotal: 1,
+            durationMs: 1000,
+          }),
+        );
       },
     });
     return { output, seen };
@@ -176,15 +193,13 @@ async function runMeasurement(options: { readonly tierStudy?: string }): Promise
   }
 }
 
-async function capturedMeasureParams(options: {
-  readonly tierStudy?: string;
-}): Promise<MeasureParams | undefined> {
+async function capturedMeasureParams(
+  options: MeasurementOptions,
+): Promise<MeasureParams | undefined> {
   return (await runMeasurement(options)).seen;
 }
 
-async function measuredOutput(options: {
-  readonly tierStudy?: string;
-}): Promise<MeasureOutput> {
+async function measuredOutput(options: MeasurementOptions): Promise<MeasureOutput> {
   return (await runMeasurement(options)).output;
 }
 
@@ -262,6 +277,191 @@ describe("removed flags meet an education, not a mystery", () => {
     expect(MEASURE_FLAGS).toHaveProperty("tier-study");
     // The grader model is a different decision and stays configurable.
     expect(MEASURE_FLAGS).toHaveProperty("grader-model");
+  });
+});
+
+// `--only` runs a slice of the scenario set so a small change can be checked against the
+// scenarios it was about. Everything below guards the same thing the tier-study marker
+// guards: that a narrowed run cannot be mistaken for a measurement of record, and that a
+// run which was NOT narrowed is untouched by the existence of the flag.
+
+const THREE: readonly DisclosureScenario[] = [
+  { id: "alpha", prompt: "A.", expectations: ["a"] },
+  { id: "beta", prompt: "B.", expectations: ["b"] },
+  { id: "gamma", prompt: "C.", expectations: ["c"] },
+];
+
+describe("applyScenarioOnly", () => {
+  test("no --only hands the set straight back, as the very same array", () => {
+    const result = applyScenarioOnly({ scenarios: THREE, only: undefined });
+    // Identity, not equality: a copy would pass a deep comparison while proving nothing
+    // about whether the rows were touched on the way through.
+    expect(result.scenarios).toBe(THREE);
+    expect(result.subset).toBeNull();
+  });
+
+  test("--only selects exactly the named scenarios and stamps what it left out", () => {
+    const { scenarios, subset } = applyScenarioOnly({ scenarios: THREE, only: "gamma,alpha" });
+    // Set order, not selector order, so a subset's table reads as a sub-table of the full one.
+    expect(scenarios.map((scenario) => scenario.id)).toEqual(["alpha", "gamma"]);
+    expect(subset?.ids).toEqual(["alpha", "gamma"]);
+    expect(subset?.selected).toBe(2);
+    expect(subset?.excluded).toBe(1);
+    expect(subset?.of).toBe(3);
+    expect(subset?.not_of_record).toBe(true);
+  });
+
+  test("an unknown id is refused with the ids that exist, never swept as nothing", () => {
+    // A sweep of zero scenarios does not fail. It reports a 0% pass rate over nothing and
+    // a file table of `prune` verdicts, which is the exact shape of a wrong conclusion.
+    expect(() => applyScenarioOnly({ scenarios: THREE, only: "delta" })).toThrow(SubsetError);
+    expect(() => applyScenarioOnly({ scenarios: THREE, only: "delta" })).toThrow(
+      /no such scenario id.*alpha, beta, gamma/s,
+    );
+  });
+});
+
+describe("the subset marker", () => {
+  test("an ordinary run carries no marker at all, so results.json keeps its shape", async () => {
+    const output = await measuredOutput({});
+    // ABSENT, not false -- the same rule `tier_study` follows, and for the same reason.
+    expect(output).not.toHaveProperty("subset");
+  });
+
+  test("only the named scenarios reach the sweep, and the count reports them", async () => {
+    const { scenarios, subset } = applyScenarioOnly({ scenarios: THREE, only: "beta" });
+    const { output, seen } = await runMeasurement({ scenarios, subset: subset! });
+
+    expect(seen?.scenarios.map((scenario) => scenario.id)).toEqual(["beta"]);
+    // The count is the rows that ran, so nothing downstream reports a denominator of three.
+    expect(output.scenario_count).toBe(1);
+    expect(output.subset?.ids).toEqual(["beta"]);
+    expect(output.subset?.not_of_record).toBe(true);
+    expect(output.subset?.note).toContain("NOT A MEASUREMENT OF RECORD");
+  });
+
+  test("a subset does not disturb the fixed model or permission mode", async () => {
+    const { scenarios, subset } = applyScenarioOnly({ scenarios: THREE, only: "alpha" });
+    const seen = await capturedMeasureParams({ scenarios, subset: subset! });
+    // Narrowing is orthogonal to the two values that are hardcoded because they were
+    // being got wrong. A subset must not become a second way to vary them.
+    expect(seen?.model).toBe(MEASUREMENT_MODEL);
+    expect(seen?.permissionMode).toBe(MEASUREMENT_PERMISSION_MODE);
+  });
+
+  test("a subset and a tier study stack, each keeping its own marker", async () => {
+    const { scenarios, subset } = applyScenarioOnly({ scenarios: THREE, only: "alpha" });
+    const output = await measuredOutput({ scenarios, subset: subset!, tierStudy: "opus" });
+    // Two independent reasons the same run is not of record. Either collapsing into the
+    // other would lose a caveat a reader needs.
+    expect(output.tier_study).toBe("opus");
+    expect(output.subset?.ids).toEqual(["alpha"]);
+  });
+
+  test("the flag is advertised, and says what it costs the run", () => {
+    expect(MEASURE_FLAGS).toHaveProperty("only");
+    expect(MEASURE_FLAGS["only"]?.help).toContain("not a measurement of record");
+  });
+});
+
+describe("the report banner", () => {
+  /** A `MeasureOutput` with nothing interesting in it, for the warning assertions. */
+  function output(overrides: Partial<MeasureOutput> = {}): MeasureOutput {
+    return {
+      skill_name: "probe",
+      skill_path: "skills/probe",
+      install_state: "absent",
+      install_conflict: null,
+      token_method: "estimator:chars-over-4",
+      tokens_are_estimated: true,
+      scenario_count: 1,
+      runs_per_scenario: 1,
+      runs_without_skill: 0,
+      runs_loaded_via_file: 0,
+      body_tokens: 100,
+      context_tokens: 1000,
+      pass_rate: 1,
+      assertions_passed: 1,
+      assertions_total: 1,
+      files: [],
+      ground_truth: NO_GROUND_TRUTH,
+      ...overrides,
+    };
+  }
+
+  function subsetOf(ids: readonly string[]): ScenarioSubsetStamp {
+    const { subset } = applyScenarioOnly({ scenarios: THREE, only: ids.join(",") });
+    if (subset === null) throw new Error("expected a subset");
+    return subset;
+  }
+
+  test("an ordinary run raises nothing, so its report is what it always was", () => {
+    expect(reportWarnings(output())).toEqual([]);
+  });
+
+  test("a subset raises a qualifying warning carrying the note", () => {
+    // `qualifying`, not `invalidating`: the figures are real and the run did what it was
+    // asked. It answers a narrower question, which is a different thing from being void.
+    const warnings = reportWarnings(output({ subset: subsetOf(["alpha"]) }));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.severity).toBe("qualifying");
+    expect(warnings[0]?.text).toContain("NOT A MEASUREMENT OF RECORD");
+  });
+
+  test("a subset and a tier study each raise their own, rather than one standing in", () => {
+    const warnings = reportWarnings(
+      output({ tier_study: "opus", subset: subsetOf(["alpha", "beta"]) }),
+    );
+    expect(warnings).toHaveLength(2);
+    expect(warnings.map((warning) => warning.severity)).toEqual(["qualifying", "qualifying"]);
+    expect(warnings[0]?.text).toContain("TIER STUDY");
+    expect(warnings[1]?.text).toContain("SUBSET RUN");
+  });
+
+  test("an install conflict still outranks them as invalidating", () => {
+    // The severities are not degrees of one thing. A sweep answered by an installed copy
+    // floors every pull rate at zero, so its table is a table of nothing — while a subset's
+    // figures are real. Collapsing the two would lose that.
+    const warnings = reportWarnings(
+      output({ install_conflict: "a copy is installed", subset: subsetOf(["alpha"]) }),
+    );
+    expect(warnings.map((warning) => warning.severity)).toEqual(["invalidating", "qualifying"]);
+  });
+
+  test("the rendered report puts the banner above the metric tiles", async () => {
+    // Unmissable means ABOVE the figures, not beside them. A reader who meets a pull rate
+    // first has already formed the view the caveat exists to prevent.
+    const { generateDisclosureReport } = await import("../../report/disclosure-report.ts");
+    const stamp = subsetOf(["alpha"]);
+    const html = generateDisclosureReport(
+      {
+        skillName: "probe",
+        skillPath: "skills/probe",
+        tokenMethod: "estimator:chars-over-4",
+        estimatedTokens: true,
+        baselineBodyTokens: 100,
+        bestBodyTokens: 100,
+        baselineContextTokens: 1000,
+        bestContextTokens: 1000,
+        holdoutFraction: 0,
+        trainSize: 1,
+        holdoutSize: 0,
+        runsPerScenario: 1,
+        files: [],
+        groundTruth: NO_GROUND_TRUTH,
+        iterations: [],
+        exitReason: "measurement_only",
+        appliedTo: null,
+        notes: [],
+        warnings: reportWarnings(output({ subset: stamp })),
+      },
+      { autoRefresh: false },
+    );
+    const banner = html.indexOf("NOT A MEASUREMENT OF RECORD");
+    const tiles = html.indexOf('class="g4"');
+    expect(banner).toBeGreaterThan(-1);
+    expect(tiles).toBeGreaterThan(-1);
+    expect(banner).toBeLessThan(tiles);
   });
 });
 

@@ -171,6 +171,75 @@ describe("buildPayload", () => {
   });
 });
 
+// A subset run must not be mistakable for a run of record at a glance, and a glance reaches
+// the listing before it reaches anything else.
+
+describe("a not-of-record run in the listing", () => {
+  test("the subset marker survives into the payload the page renders from", () => {
+    const run = discovered({
+      detail: { subset: { selected: 6, of: 54, selectors: ["group:gap-cost"] } },
+    });
+    const payload = buildPayload([run], NOW, SERVED);
+    expect(payload.runs[0]?.status.detail.subset).toEqual({
+      selected: 6,
+      of: 54,
+      selectors: ["group:gap-cost"],
+    });
+  });
+
+  test("the tier-study marker survives too, closing the older half of the same gap", () => {
+    // A tier study reached results.json and the report from the day it was built and never
+    // reached the dashboard, so it has always read as a run of record in the listing.
+    const payload = buildPayload([discovered({ detail: { tierStudy: "opus" } })], NOW, SERVED);
+    expect(payload.runs[0]?.status.detail.tierStudy).toBe("opus");
+  });
+
+  test("a run can be both, and neither marker stands in for the other", () => {
+    const payload = buildPayload(
+      [
+        discovered({
+          detail: {
+            tierStudy: "opus",
+            subset: { selected: 2, of: 5, selectors: ["alpha", "beta"] },
+          },
+        }),
+      ],
+      NOW,
+      SERVED,
+    );
+    expect(payload.runs[0]?.status.detail.tierStudy).toBe("opus");
+    expect(payload.runs[0]?.status.detail.subset?.selected).toBe(2);
+  });
+
+  test("a run of record carries neither, so its row is what it always was", () => {
+    const detail = buildPayload([discovered()], NOW, SERVED).runs[0]?.status.detail;
+    expect(detail).not.toHaveProperty("subset");
+    expect(detail).not.toHaveProperty("tierStudy");
+  });
+
+  test("the template paints the chips from the fields, not from the label", async () => {
+    // Fields rather than substrings of the label: matching prose to decide how to paint a
+    // row breaks the first time somebody rewords a label, and the failure is silent.
+    const template = await Bun.file(`${import.meta.dir}/../dashboard.html`).text();
+    expect(template).toContain("detail.subset");
+    expect(template).toContain("detail.tierStudy");
+    // One class for both classes of run — they differ in what they say, not in how loud.
+    expect(template.match(/chip-not-of-record/g)?.length).toBe(2);
+    expect(template).toContain("not of record");
+  });
+
+  test("the chip has a colour of its own, rather than inheriting the muted default", async () => {
+    // `.chip` alone is --muted, and the state chips never override it. A marker that says
+    // "not a measurement of record" in the same grey as everything else is not a marker.
+    const { THEME_TOKENS, DESIGN_COMPONENTS } = await import("../theme.ts");
+    expect(DESIGN_COMPONENTS).toContain(".chip.chip-not-of-record");
+    expect(DESIGN_COMPONENTS).toContain("color:var(--warn)");
+    // And the token it names is defined, or the declaration resolves to currentColor and
+    // the rule written to emphasise would de-emphasise instead.
+    expect(THEME_TOKENS).toContain("--warn:");
+  });
+});
+
 describe("injectEmbeddedData", () => {
   // The token sits on its own line, as it does in dashboard.html. That matters: the
   // assignment it becomes is newline-terminated, which is what a reader parsing the

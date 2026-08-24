@@ -170,6 +170,11 @@ export const DESIGN_COMPONENTS = `
   .chip.nodot::before{ display:none; }
   .chip.m{ color:var(--good); } .chip.i{ color:var(--opus); } .chip.a{ color:var(--faint); }
   .chip.fable{ color:var(--fable); } .chip.opus{ color:var(--opus); } .chip.sonnet{ color:var(--sonnet); } .chip.haiku{ color:var(--haiku); }
+  /* A run that is not a measurement of record — a subset, a tier study, or both — has to
+     say so before its row is read. --warn rather than --opus: this escalates, and --opus is
+     a model-identity token the theme does not define, which would resolve to currentColor
+     and DE-emphasise. */
+  .chip.chip-not-of-record{ color:var(--warn); border-color:var(--warn); font-weight:640; }
 
   /* metrics */
   .metric{ display:flex; flex-direction:column; gap:3px; border:1px solid var(--border); border-radius:var(--r); background:var(--surface-2); padding:24px; }

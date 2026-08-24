@@ -121,6 +121,37 @@ export interface RunDetail {
    * tens of minutes re-deriving answers already on disk.
    */
   readonly resultsDir?: string;
+  /**
+   * Set when the run measured a NAMED SLICE of its set rather than all of it.
+   *
+   * Here rather than left to the `label` string, even though the label already says
+   * `SUBSET n/N`. A label is prose the dashboard prints; this is a fact the dashboard can
+   * branch on, and the difference matters because the requirement is that a subset run
+   * cannot be mistaken for a run of record AT A GLANCE. Rendering a distinct chip needs a
+   * field to test, and matching a substring of a human-readable label to decide how to
+   * paint a row is the kind of coupling that breaks the first time the label is reworded.
+   *
+   * Absent on a full run, so a run of record's status file is byte-for-byte what it was.
+   */
+  readonly subset?: {
+    readonly selected: number;
+    readonly of: number;
+    readonly selectors: readonly string[];
+  };
+  /**
+   * The model a TIER STUDY swept on, when the run was one. Absent otherwise.
+   *
+   * The second not-of-record class, and it predates the first. A tier study's figures were
+   * produced by a model that is not the detection instrument, so its pull rates describe the
+   * model as much as the layout — real numbers answering a different question, exactly like a
+   * subset's. It reached `results.json` and the report from the day it was built and never
+   * reached the dashboard, so a tier study has always read as a run of record in the listing.
+   *
+   * A separate field rather than a shared `notOfRecord` blob because the two carry different
+   * facts — counts and selectors here, a model name there — and a renderer that had to
+   * destructure a union to draw a chip would be harder to read than two `if`s.
+   */
+  readonly tierStudy?: string;
 }
 
 /**
@@ -355,6 +386,8 @@ function parseDetail(value: unknown): RunDetail {
   const artifactPaths = Array.isArray(rawPaths)
     ? rawPaths.filter((entry): entry is string => typeof entry === "string")
     : undefined;
+  const subset = parseSubset(record["subset"]);
+  const tierStudy = str("tierStudy");
 
   return {
     ...(iteration === undefined ? {} : { iteration }),
@@ -367,6 +400,32 @@ function parseDetail(value: unknown): RunDetail {
     ...(artifactPaths === undefined ? {} : { artifactPaths }),
     ...(externalUrl === undefined ? {} : { externalUrl }),
     ...(persistedResultsDir === undefined ? {} : { resultsDir: persistedResultsDir }),
+    ...(subset === undefined ? {} : { subset }),
+    ...(tierStudy === undefined ? {} : { tierStudy }),
+  };
+}
+
+/**
+ * Read the subset marker, or drop it whole.
+ *
+ * All-or-nothing rather than field-by-field, and that asymmetry with the fields above is
+ * deliberate: a half-parsed `subset` would paint the chip that says "not a measurement of
+ * record" beside counts that are missing or wrong. Better no chip than a chip whose numbers
+ * a reader cannot trust — the whole point of the marker is that it is believed.
+ */
+function parseSubset(value: unknown): RunDetail["subset"] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const selected = record["selected"];
+  const of = record["of"];
+  const rawSelectors = record["selectors"];
+  if (typeof selected !== "number" || !Number.isFinite(selected)) return undefined;
+  if (typeof of !== "number" || !Number.isFinite(of)) return undefined;
+  if (!Array.isArray(rawSelectors)) return undefined;
+  return {
+    selected,
+    of,
+    selectors: rawSelectors.filter((entry): entry is string => typeof entry === "string"),
   };
 }
 

@@ -146,6 +146,54 @@ describe("parseRunStatus", () => {
   test("degrades a malformed detail to an empty one instead of failing the whole status", () => {
     expect(parseRunStatus({ ...status(), detail: "nonsense" })?.detail).toEqual({});
   });
+
+  // A subset run measured a named slice rather than the whole set, and the dashboard has to
+  // be able to say so. It is a FIELD rather than a substring of the label because the row is
+  // painted from it — matching prose to decide how to render is coupling that breaks the
+  // first time somebody rewords a label.
+
+  test("keeps the subset marker, so a narrow run can be labelled as one", () => {
+    const parsed = parseRunStatus({
+      ...status(),
+      detail: { subset: { selected: 6, of: 54, selectors: ["group:gap-cost"] } },
+    });
+    expect(parsed?.detail.subset).toEqual({
+      selected: 6,
+      of: 54,
+      selectors: ["group:gap-cost"],
+    });
+  });
+
+  test("keeps the tier-study marker, the second not-of-record class", () => {
+    // Older than the subset marker and invisible for its whole life: it reached
+    // `results.json` and the report and stopped there, so a tier study has always read as a
+    // measurement of record in the dashboard listing.
+    expect(parseRunStatus({ ...status(), detail: { tierStudy: "opus" } })?.detail.tierStudy).toBe(
+      "opus",
+    );
+  });
+
+  test("a run of record carries neither marker, so its status file is what it always was", () => {
+    const detail = parseRunStatus(status())?.detail;
+    expect(detail).not.toHaveProperty("subset");
+    expect(detail).not.toHaveProperty("tierStudy");
+  });
+
+  test("a half-written marker is dropped whole rather than rendered with holes", () => {
+    // All-or-nothing on purpose, unlike the sibling fields. A half-parsed marker would paint
+    // the chip that says "not a measurement of record" beside counts that are wrong, and the
+    // entire value of the chip is that its numbers are believed.
+    for (const broken of [
+      { selected: 6, selectors: [] },
+      { of: 54, selectors: [] },
+      { selected: 6, of: 54 },
+      { selected: "6", of: 54, selectors: [] },
+      "nonsense",
+    ]) {
+      const parsed = parseRunStatus({ ...status(), detail: { subset: broken } });
+      expect(parsed?.detail).not.toHaveProperty("subset");
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

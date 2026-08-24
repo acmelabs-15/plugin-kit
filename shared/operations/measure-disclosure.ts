@@ -49,8 +49,19 @@ import {
 } from "./disclosure-measure.ts";
 import { availableParallelism } from "node:os";
 
-import { generateDisclosureReport } from "../report/disclosure-report.ts";
+import {
+  generateDisclosureReport,
+  type DisclosureWarning,
+} from "../report/disclosure-report.ts";
 import { detectInstallState, installConflict, type InstallState } from "../envelope.ts";
+import {
+  parseSelectors,
+  selectRowsById,
+  SubsetError,
+  subsetProgressDetail,
+  subsetSummaryLine,
+  type ScenarioSubsetStamp,
+} from "./subset.ts";
 import type { Spec } from "../cli.ts";
 import { readTargetDefinition } from "./measure-triggering.ts";
 import { flagBoolean, flagNumber, flagString, parseCli, requireFlag } from "./measure-triggering.ts";
@@ -97,6 +108,16 @@ export interface MeasureDisclosureParams {
    * no field to put it in, which is the whole design.
    */
   readonly tierStudy?: string | undefined;
+  /**
+   * Which slice of the scenario set `scenarios` already is, when `--only` narrowed it.
+   *
+   * Purpose-named at this boundary and not only at the CLI, for the same reason
+   * {@link MeasureDisclosureParams.tierStudy} is: a caller that simply wants "fewer
+   * scenarios" has no field to put that in, so a narrowed run cannot be made without
+   * saying it is one. {@link selectRowsById} hands back the rows and this stamp as one
+   * value, which is what keeps the two from being separated on the way here.
+   */
+  readonly subset?: ScenarioSubsetStamp | undefined;
   /** Grades the assertions. Deliberately not the measurement model; see `DEFAULT_GRADER_MODEL`. */
   readonly graderModel?: string | undefined;
   readonly logDir?: string | undefined;
@@ -175,6 +196,44 @@ export interface MeasureOutput {
    * is not the detection instrument.
    */
   readonly tier_study?: string;
+  /**
+   * Which slice of the scenario set ran, when `--only` narrowed it. Absent otherwise.
+   *
+   * Absent rather than null on a full sweep, exactly as `tier_study` is, and for the same
+   * reason: a measurement of record keeps the shape it always had and no consumer has to
+   * learn a key to keep working. Present, it means every pull rate above is over a
+   * hand-picked set of scenarios — a file needed by two of the three scenarios that ran
+   * shows a pull rate a full sweep would never have produced.
+   */
+  readonly subset?: ScenarioSubsetStamp;
+}
+
+/**
+ * Narrow a scenario set to the ids `--only` named, or hand it back whole.
+ *
+ * Exported and pure so the resolution is reachable from the suite: everything downstream
+ * of it spawns `claude`, and a selection rule that can only be exercised by spending an
+ * hour of API time is a selection rule with no coverage.
+ *
+ * An unknown id is a hard error listing the ids that exist rather than an empty sweep. A
+ * measurement over zero scenarios does not fail — it reports a 0% pass rate over nothing
+ * and a file table of `prune` verdicts, which is indistinguishable from a layout nobody
+ * reads and is the exact shape of a wrong conclusion.
+ */
+export function applyScenarioOnly(params: {
+  readonly scenarios: readonly DisclosureScenario[];
+  readonly only: string | undefined;
+}): {
+  readonly scenarios: readonly DisclosureScenario[];
+  readonly subset: ScenarioSubsetStamp | null;
+} {
+  if (params.only === undefined) return { scenarios: params.scenarios, subset: null };
+  const { rows, stamp } = selectRowsById({
+    rows: params.scenarios,
+    selectors: parseSelectors(params.only),
+    unit: "scenario",
+  });
+  return { scenarios: rows, subset: stamp };
 }
 
 /**
@@ -331,7 +390,47 @@ export async function measureDisclosure(
     files: layout.files,
     ground_truth: layout.groundTruth,
     ...(params.tierStudy === undefined ? {} : { tier_study: params.tierStudy }),
+    ...(params.subset === undefined ? {} : { subset: params.subset }),
   };
+}
+
+/**
+ * The caveats only this caller knows, for the banner the report renders above everything.
+ *
+ * Extracted and exported so the judgement is reachable from the suite. Every other input
+ * `generateDisclosureReport` receives is derived by the renderer from the split score it is
+ * handed; these three are decisions THIS entry point makes about how its figures should be
+ * read, and a decision reachable only by spending an hour of API time is a decision with no
+ * coverage — which is exactly how the install conflict came to be computed and never shown.
+ *
+ * The severities are not degrees of one thing. `invalidating` says the table below is a
+ * table of nothing: a sweep answered by an installed copy floors every pull rate at zero.
+ * `qualifying` says the figures are real and the run did what it set out to do — they simply
+ * answer a narrower question than a measurement of record answers. A tier study and a subset
+ * are both the second kind, for different reasons, and neither collapses into the other.
+ */
+export function reportWarnings(output: MeasureOutput): readonly DisclosureWarning[] {
+  const warnings: DisclosureWarning[] = [];
+  if (output.install_conflict !== null) {
+    warnings.push({ severity: "invalidating", text: output.install_conflict });
+  }
+  if (output.tier_study !== undefined) {
+    warnings.push({
+      severity: "qualifying",
+      text:
+        `TIER STUDY: this sweep ran on ${output.tier_study}, not the ${MEASUREMENT_MODEL} ` +
+        `detection instrument, so it is not a signposting measurement of record. A stronger ` +
+        `tier reaches the right file in spite of a bad pointer, so the pull rates below ` +
+        `describe the model as much as the layout.`,
+    });
+  }
+  if (output.subset !== undefined) {
+    // The pull rate is the figure a hand-picked scenario mix distorts most, because the
+    // scenario set IS the denominator: a file two of the three scenarios that ran happen to
+    // need shows a rate a full sweep would never have produced.
+    warnings.push({ severity: "qualifying", text: output.subset.note });
+  }
+  return warnings;
 }
 
 const USAGE =
@@ -346,6 +445,10 @@ const USAGE =
   "reaches the right file in spite of a bad pointer and hides the signposting defect. To\n" +
   "sweep another tier deliberately, use --tier-study, which marks the run as a study rather\n" +
   "than a measurement of record.\n\n" +
+  "--only <id>[,<id>...] runs a named slice of the scenario set instead of all of it, so a\n" +
+  "small change can be checked against the scenarios it was about without paying for the\n" +
+  "rest. A subset run is STAMPED not-of-record in results.json and said out loud: its pull\n" +
+  "rates are over a hand-picked set and must never be quoted against a full sweep.\n\n" +
   "To restructure the layout as well, use optimize-disclosure.ts.";
 
 /** The flag spec, exported so the defaults are reachable from the suite. */
@@ -360,6 +463,12 @@ export const MEASURE_FLAGS: Spec = {
     help:
       `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, for an over-fetch study or a ` +
       "tier comparison. Marks the run as a tier study, not a measurement of record",
+  },
+  only: {
+    kind: "string",
+    help:
+      "Run only these scenario ids (comma-separated), for iterating on a slice. Marks the " +
+      "run as a SUBSET, not a measurement of record",
   },
   "grader-model": {
     kind: "string",
@@ -498,6 +607,17 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Narrowed before anything is sized against it: the progress total, the report's train
+  // size and the sweep itself all have to agree about which scenarios exist. An unknown id
+  // exits(2) with the listing rather than sweeping nothing.
+  let subset: ScenarioSubsetStamp | null;
+  try {
+    ({ scenarios, subset } = applyScenarioOnly({ scenarios, only: flagString(flags, "only") }));
+  } catch (error) {
+    console.error(`Error: ${error instanceof SubsetError ? error.message : String(error)}`);
+    process.exit(2);
+  }
+
   setGraderBare(flagBoolean(flags, "grader-bare"));
 
   const resultsDir = flagString(flags, "results-dir");
@@ -514,6 +634,15 @@ async function main(): Promise<void> {
         `signposting measurement of record — a stronger tier reaches the right file in spite ` +
         `of a bad pointer, so its pull rates describe the model rather than the layout. Use it ` +
         `for over-fetch study or tier comparison only.`,
+    );
+  }
+
+  // Beside the tier-study line and for the same reason: after `ProgressReporter.start` is
+  // after the repaint, which is nowhere. The long form goes here, where nothing has been
+  // measured yet and no figures compete with it; one line goes beside the results later.
+  if (subset !== null) {
+    console.error(
+      `\n${subsetSummaryLine(subset)}\nScenarios: ${subset.ids.join(", ")}.\n${subset.note}\n`,
     );
   }
 
@@ -538,15 +667,24 @@ async function main(): Promise<void> {
   const reporter = ProgressReporter.start({
     kind: "disclosure-loop",
     label:
-      tierStudy === undefined
+      (tierStudy === undefined
         ? `${baseName(skillPath)} — disclosure measurement`
-        : `${baseName(skillPath)} — tier study on ${tierStudy}`,
+        : `${baseName(skillPath)} — tier study on ${tierStudy}`) +
+      (subset === null ? "" : ` — SUBSET ${subset.selected}/${subset.of}`),
     total: scenarios.length * runsPerScenario,
     subject: baseName(skillPath),
     detail: {
       phase: "measurement",
       ...(resultsDir === undefined ? {} : { resultsDir }),
       ...(dashboardReport === undefined ? {} : { reportPath: dashboardReport }),
+      // Fields the dashboard can branch on rather than prose in the label. The bar's
+      // `total` above is already the subset's, so the live page counts against what runs.
+      ...(subset === null ? {} : { subset: subsetProgressDetail(subset) }),
+      // The older of the two not-of-record classes, and the one that has been invisible in
+      // the listing since it was built: it reached `results.json` and the report and stopped
+      // there, so a tier study has always looked like a measurement of record on the
+      // dashboard. Same field mechanism, same chip, one line.
+      ...(tierStudy === undefined ? {} : { tierStudy }),
     },
   });
 
@@ -560,6 +698,7 @@ async function main(): Promise<void> {
       timeoutSeconds: flagNumber(flags, "timeout"),
       inlineThreshold: flagNumber(flags, "inline-threshold"),
       tierStudy,
+      ...(subset === null ? {} : { subset }),
       graderModel: flagString(flags, "grader-model") ?? DEFAULT_GRADER_MODEL,
       logDir: resultsDir === undefined ? undefined : `${resultsDir}/logs`,
       onProgress: (settled) => reporter.report(settled),
@@ -579,6 +718,11 @@ async function main(): Promise<void> {
     const truth = formatGroundTruthLine(output.ground_truth);
     if (truth !== null) console.error(truth);
   }
+
+  // Unconditional, because `--verbose` is off by default and the caveat is not optional.
+  // A pull rate is the figure a hand-picked scenario mix distorts most -- the scenario set
+  // IS the denominator -- so this belongs against every reading of the table above.
+  if (subset !== null) console.error(`\n${subsetSummaryLine(subset)}\n`);
 
   const json = JSON.stringify(output, null, 2);
   console.log(json);
@@ -608,9 +752,12 @@ async function main(): Promise<void> {
           {
             iteration: 1,
             label:
-              output.tier_study === undefined
+              (output.tier_study === undefined
                 ? "measured (as authored)"
-                : `tier study on ${output.tier_study} (as authored)`,
+                : `tier study on ${output.tier_study} (as authored)`) +
+              (output.subset === undefined
+                ? ""
+                : ` — subset, ${output.subset.selected}/${output.subset.of} scenarios`),
             candidateId: null,
             rationale: `${output.files.length} bundled file(s), ${output.body_tokens} body tokens`,
             bodyTokens: output.body_tokens,
@@ -643,32 +790,9 @@ async function main(): Promise<void> {
         exitReason: "measurement_only",
         appliedTo: null,
         notes: [],
-        // The install conflict is the only warning this caller has to carry: the renderer
-        // derives the rest from the split score it is handed. Passed as `invalidating`
-        // because it is — a sweep answered by an installed copy floors every pull rate at
-        // zero, so the file table below it is a table of nothing.
-        // A tier study joins the install conflict as the second thing this caller alone
-        // knows. `qualifying` rather than `invalidating`: the figures are real and the run
-        // did what it set out to do — they simply do not answer the question a measurement
-        // of record answers, and the reader has to meet that before the file table.
-        warnings: [
-          ...(output.install_conflict === null
-            ? []
-            : [{ severity: "invalidating" as const, text: output.install_conflict }]),
-          ...(output.tier_study === undefined
-            ? []
-            : [
-                {
-                  severity: "qualifying" as const,
-                  text:
-                    `TIER STUDY: this sweep ran on ${output.tier_study}, not the ` +
-                    `${MEASUREMENT_MODEL} detection instrument, so it is not a signposting ` +
-                    `measurement of record. A stronger tier reaches the right file in spite ` +
-                    `of a bad pointer, so the pull rates below describe the model as much as ` +
-                    `the layout.`,
-                },
-              ]),
-        ],
+        // The three caveats this caller alone knows; the renderer derives the rest from the
+        // split score it is handed. See `reportWarnings` for why they carry two severities.
+        warnings: reportWarnings(output),
       },
       { autoRefresh: false },
     );

@@ -35,6 +35,17 @@ import { evalSetFindings } from "../schemas/eval-set.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { ProgressReporter, type QueryProgress } from "../util/progress.ts";
 import { runStreamingLines } from "../util/subprocess.ts";
+import {
+  parseGroupSidecar,
+  parseSelectors,
+  selectRowsByIndex,
+  subsetCap,
+  SubsetError,
+  subsetProgressDetail,
+  subsetSummaryLine,
+  type EvalSubsetStamp,
+  type GroupIndex,
+} from "./subset.ts";
 
 /**
  * Which kind of artifact is under test.
@@ -112,6 +123,89 @@ export interface EvalOutput {
   readonly description: string;
   readonly results: readonly QueryResult[];
   readonly summary: EvalSummary;
+  /**
+   * Which slice of the eval set ran, when `--only` narrowed it. Absent otherwise.
+   *
+   * Absent rather than null on a full sweep, for the reason `tier_study` is absent on a
+   * measurement of record: a consumer written before subsets existed reads a full run
+   * byte-for-byte as it always did, and nobody has to learn a key to keep working.
+   * Present, it means the rates above are over a hand-picked denominator and cannot be
+   * quoted against a full-set run.
+   */
+  readonly subset?: EvalSubsetStamp;
+}
+
+/**
+ * Attach the subset stamp to a sweep's output, or hand the output back untouched.
+ *
+ * A named function with one call site, and it earns that: the untouched branch is the
+ * behaviour every existing caller depends on, and "a full run's JSON does not change
+ * shape" is a claim that has to be checkable without spawning `claude`. Returning the
+ * SAME OBJECT rather than a copy is what makes it checkable by identity.
+ */
+export function withEvalSubset(
+  output: EvalOutput,
+  subset: EvalSubsetStamp | null,
+): EvalOutput {
+  return subset === null ? output : { ...output, subset };
+}
+
+/**
+ * Resolve `--only` and `--groups` into the rows that will actually run.
+ *
+ * At the CLI rather than inside {@link measureTriggering}, and that is a deliberate
+ * division. Three things downstream have to agree about which rows exist -- the progress
+ * page, which seeds a zero row per query and would otherwise show forty-eight rows that
+ * never settle; `plannedAttempts`, which is what the envelope's unspent-attempt cap is
+ * measured against; and `evalSetHash`, which is computed over the rows that RAN. That last
+ * one is the safeguard worth spelling out: `evalSetHash` is a comparability key, so hashing
+ * the narrowed set makes a subset run mechanically incomparable to a full run and to any
+ * other subset. The stamp says so in words; the hash makes the tooling refuse.
+ *
+ * `measureTriggering` itself is therefore untouched by this feature, which is the point:
+ * `optimize-description.ts` calls it on every iteration of its loop, and a subset flag has
+ * no business changing the function that loop runs on.
+ */
+export async function applyEvalOnly(params: {
+  readonly evalSet: readonly EvalItem[];
+  readonly only: string | undefined;
+  readonly groupsPath: string | undefined;
+}): Promise<{
+  readonly evalSet: readonly EvalItem[];
+  readonly subset: EvalSubsetStamp | null;
+}> {
+  if (params.only === undefined) {
+    // A sidecar with nothing to resolve is a flag that silently does nothing, which reads
+    // as "the tool ignored me" -- the same reason `parseArgs` rejects an unknown flag
+    // rather than dropping it.
+    if (params.groupsPath !== undefined) {
+      throw new SubsetError(
+        "--groups was given without --only, so it would select nothing. --groups exists to " +
+          "resolve `group:<name>` selectors: pass --only group:<name> to use it, or drop it.",
+      );
+    }
+    return { evalSet: params.evalSet, subset: null };
+  }
+
+  const selectors = parseSelectors(params.only);
+  let groups: GroupIndex | null = null;
+  if (params.groupsPath !== undefined) {
+    let raw: unknown;
+    try {
+      raw = await Bun.file(params.groupsPath).json();
+    } catch (error) {
+      // Named rather than rethrown bare: a missing path and a trailing comma both arrive
+      // here, and neither message says which flag was being read.
+      throw new SubsetError(
+        `--groups ${params.groupsPath}: could not be read as JSON ` +
+          `(${error instanceof Error ? error.message : String(error)}).`,
+      );
+    }
+    groups = parseGroupSidecar(raw, params.groupsPath, params.evalSet.length);
+  }
+
+  const { rows, stamp } = selectRowsByIndex({ rows: params.evalSet, selectors, groups });
+  return { evalSet: rows, subset: stamp };
 }
 
 export interface MeasureTriggeringParams {
@@ -1448,10 +1542,52 @@ export function pyBool(value: boolean): string {
   return value ? "True" : "False";
 }
 
+/**
+ * The two flags that narrow a sweep, declared here rather than in {@link SHARED_EVAL_FLAGS}.
+ *
+ * `optimize-description.ts` spreads the shared spec too, and a subset has no meaning there:
+ * that loop measures candidate descriptions against each other, so narrowing its eval set
+ * would silently change what every iteration is selected on. Putting these in the shared
+ * spec would have made `--only` parse cleanly and do nothing at all in the optimizer, which
+ * is the failure mode `parseArgs` refuses unknown flags to avoid.
+ */
+export const SUBSET_FLAGS: Spec = {
+  only: {
+    kind: "string",
+    help:
+      "Run only these rows: a comma-separated list of row indices and group:<name> " +
+      "selectors. Marks the run a SUBSET, not a measurement of record",
+  },
+  groups: {
+    kind: "string",
+    help:
+      "JSON sidecar with an `items` array of {index, group}, resolving group:<name> " +
+      "selectors for --only",
+  },
+};
+
+/**
+ * The full announcement, said once before the sweep starts.
+ *
+ * The long form goes HERE rather than beside the results, because this is where an operator
+ * has time to read it: nothing has been measured yet, so no numbers are competing for
+ * attention. What lands beside the numbers afterwards is `subsetSummaryLine`, one line,
+ * because a caveat next to a pass rate has about a quarter of a second to work.
+ *
+ * Both are said, and the repetition is not an oversight. `ProgressReporter` repaints stderr
+ * for the length of the run, so a line printed before it started has scrolled away by the
+ * time the table appears -- exactly the reasoning `measure-disclosure.ts` gives for printing
+ * its install conflict twice.
+ */
+export function announceSubset(stamp: EvalSubsetStamp): string {
+  return `${subsetSummaryLine(stamp)}\nRows: ${stamp.indices.join(", ")}.\n${stamp.note}`;
+}
+
 async function main(): Promise<void> {
   const { flags } = parseCli(
     {
       ...SHARED_EVAL_FLAGS,
+      ...SUBSET_FLAGS,
       model: { kind: "string", help: "Model to use for claude -p (default: user's configured)" },
     },
     "Usage: bun shared/operations/measure-triggering.ts --eval-set <path> --target-path <path> [options]\n\n" +
@@ -1465,7 +1601,15 @@ async function main(): Promise<void> {
       "(2/2 rather than 2/3); results carry early_stopped so you can tell.\n" +
       "Pass --no-early-stop when the RATE is the number you are reading — comparing\n" +
       "descriptions or models against each other, or publishing a measurements table —\n" +
-      "since those need every rate over the same denominator.",
+      "since those need every rate over the same denominator.\n\n" +
+      "--only runs a named slice instead of the whole set, so a small edit can be checked\n" +
+      "against the rows it was about without paying for the rest. A selector is a row index\n" +
+      "or group:<name>, resolved through the --groups sidecar:\n" +
+      "  --only 3,7                       rows 3 and 7\n" +
+      "  --only group:gap-cost --groups evals/set.groups.json\n" +
+      "A subset run is STAMPED not-of-record in results.json and in the envelope, and its\n" +
+      "evalSetHash is taken over the rows that ran — so the tooling refuses to compare it\n" +
+      "with a full sweep rather than quietly reporting a change of denominator as a result.",
   );
   const evalSetPath = requireFlag(flags, "eval-set");
   const targetType = requireTargetType(flags);
@@ -1478,7 +1622,25 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const evalSet = parseEvalSet(await Bun.file(evalSetPath).json(), evalSetPath);
+  const fullEvalSet = parseEvalSet(await Bun.file(evalSetPath).json(), evalSetPath);
+
+  // Resolved here, before anything is sized against it. A selector naming nothing exits
+  // rather than sweeping an empty set: 0/0 renders as a finished measurement.
+  let evalSet: readonly EvalItem[];
+  let subset: EvalSubsetStamp | null;
+  try {
+    ({ evalSet, subset } = await applyEvalOnly({
+      evalSet: fullEvalSet,
+      only: flagString(flags, "only"),
+      groupsPath: flagString(flags, "groups"),
+    }));
+  } catch (error) {
+    // exit(2) rather than a stack trace, matching every other malformed-input path here.
+    // The listing of what exists IS the error, and a trace would bury it.
+    console.error(`Error: ${error instanceof SubsetError ? error.message : String(error)}`);
+    process.exit(2);
+  }
+
   const { name, description: originalDescription } = await readTargetDefinition(
     targetPath,
     targetType,
@@ -1491,6 +1653,11 @@ async function main(): Promise<void> {
   // so the CLI owns the status rather than `measureTriggering` -- which is also called
   // per-iteration by `optimize-description.ts`, where the run being reported is the whole loop.
   const runsPerQuery = flagNumber(flags, "runs-per-query");
+
+  // Before `ProgressReporter.start`, which repaints stderr for the length of the sweep.
+  // A line printed after it is a line nobody reads.
+  if (subset !== null) console.error(`\n${announceSubset(subset)}\n`);
+
   await ensureDashboard();
   // Every query starts as a zero row, so the page shows the sweep's full shape from the
   // first poll rather than growing a table as results arrive. A sweep with nothing
@@ -1509,10 +1676,20 @@ async function main(): Promise<void> {
 
   const reporter = ProgressReporter.start({
     kind: "eval-sweep",
-    label: `${name} — ${evalSet.length} queries × ${runsPerQuery}`,
+    label:
+      subset === null
+        ? `${name} — ${evalSet.length} queries × ${runsPerQuery}`
+        : `${name} — SUBSET ${evalSet.length}/${subset.of} queries × ${runsPerQuery}`,
     total: evalSet.length * runsPerQuery,
     subject: name,
-    detail: { phase: "evaluating", queries: [...tallies.values()] },
+    detail: {
+      phase: "evaluating",
+      queries: [...tallies.values()],
+      // A FIELD, not a substring of the label above, so the dashboard can paint a distinct
+      // chip rather than pattern-match prose. `queries` is already the narrowed set, so the
+      // live page's rows and its bar both count against the subset.
+      ...(subset === null ? {} : { subset: subsetProgressDetail(subset) }),
+    },
   });
 
   const numWorkers = flagNumber(flags, "num-workers");
@@ -1561,7 +1738,13 @@ async function main(): Promise<void> {
   await reporter.finish("done");
 
   if (verbose) {
+    // `output.results` is the narrowed set, so this listing has one line per row that RAN
+    // and no gaps -- a full-set listing with rows missing would invite a reader to wonder
+    // which ones failed to report. The denominator on the line below is the subset's too.
     console.error(`Results: ${output.summary.passed}/${output.summary.total} passed`);
+    // Immediately under the count it qualifies, before the rows. A caveat below a table is
+    // a caveat read after the reader has already formed a view.
+    if (subset !== null) console.error(subsetSummaryLine(subset));
     for (const result of output.results) {
       const status = result.pass ? "PASS" : "FAIL";
       const rate = `${result.triggers}/${result.runs}`;
@@ -1571,7 +1754,12 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(JSON.stringify(output, null, 2));
+  // Unconditional, because `--verbose` is off by default and the caveat is not optional.
+  // One line here rather than the paragraph: the long form was already said at the top.
+  if (subset !== null) console.error(`\n${subsetSummaryLine(subset)}\n`);
+
+  const stamped = withEvalSubset(output, subset);
+  console.log(JSON.stringify(stamped, null, 2));
 
   const envelopePath = flagString(flags, "envelope");
   if (envelopePath !== undefined) {
@@ -1605,7 +1793,7 @@ async function main(): Promise<void> {
     await writeEnvelope(
       envelopePath,
       buildTriggeringEnvelope({
-        output,
+        output: stamped,
         tally: tally.snapshot(),
         plannedAttempts: evalSet.length * runsPerQuery,
         artifact: targetType,
@@ -1613,11 +1801,20 @@ async function main(): Promise<void> {
         workers: numWorkers,
         runsPer: runsPerQuery,
         timeoutSeconds,
+        // Over the rows that RAN, not over the file. `evalSetHash` is a comparability key,
+        // so a subset hashes differently from the full set and from every other subset --
+        // which makes `compareRuns` refuse a delta that would otherwise be a change of
+        // denominator reported as a change of result. The stamp says it; this enforces it.
         evalSetHash: hashJsonValue(evalSet),
         targetSha: await hashArtifact(targetPath),
         installState: sighting.state,
         triggerThreshold,
-        caps: [sighting.cap, conflict, unpinned].filter((cap): cap is string => cap !== null),
+        caps: [
+          sighting.cap,
+          conflict,
+          unpinned,
+          subset === null ? null : subsetCap(subset),
+        ].filter((cap): cap is string => cap !== null),
       }),
     );
     console.error(`Envelope written to: ${envelopePath}`);

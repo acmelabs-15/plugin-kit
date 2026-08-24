@@ -106,6 +106,60 @@ describe("renderRunPage", () => {
     expect(payload.status.commandLine).toContain("measure-triggering.ts");
   });
 
+  // A subset run measured a named slice rather than the whole set. Its page has to say so
+  // above every figure on it, because a reader who meets a rate first has already formed the
+  // view the caveat exists to prevent.
+
+  test("carries the subset marker, so the page can say the run is not of record", async () => {
+    const payload = parsePayload(
+      await renderRunPage(
+        discovered({ detail: { subset: { selected: 6, of: 54, selectors: ["group:gap-cost"] } } }),
+        NOW,
+        5,
+      ),
+    );
+    expect(payload.status.detail.subset).toEqual({
+      selected: 6,
+      of: 54,
+      selectors: ["group:gap-cost"],
+    });
+  });
+
+  test("a full run's page carries no marker, so nothing renders", async () => {
+    const payload = parsePayload(await renderRunPage(discovered(), NOW, 5));
+    expect(payload.status.detail).not.toHaveProperty("subset");
+  });
+
+  test("carries the tier-study marker, the older half of the same gap", async () => {
+    const payload = parsePayload(
+      await renderRunPage(discovered({ detail: { tierStudy: "opus" } }), NOW, 5),
+    );
+    expect(payload.status.detail.tierStudy).toBe("opus");
+  });
+
+  test("the template renders the marker ABOVE the progress card", async () => {
+    // Asserting on the template rather than on executed script, which this suite does not
+    // run. What is guarded is that the branch exists and that it is appended to the root
+    // BEFORE the progress section -- deleting either is the regression that would leave a
+    // subset run looking like a measurement of record.
+    const template = await Bun.file(`${import.meta.dir}/../run-page.html`).text();
+    const branch = template.indexOf("detail.subset");
+    const tierBranch = template.indexOf("detail.tierStudy");
+    const progress = template.indexOf('section("01');
+    expect(branch).toBeGreaterThan(-1);
+    expect(tierBranch).toBeGreaterThan(-1);
+    expect(progress).toBeGreaterThan(-1);
+    // BOTH not-of-record banners precede the first figure on the page.
+    expect(branch).toBeLessThan(progress);
+    expect(tierBranch).toBeLessThan(progress);
+    expect(template).toContain("not of record");
+    // The sentence that does the work, as one greppable fragment. Split mid-phrase it would
+    // still render correctly and silently stop being findable by anyone checking.
+    expect(template).toContain(
+      "Do not quote these figures against a full-set baseline or against another subset",
+    );
+  });
+
   test("a failed run's page carries the error", async () => {
     const failed = discovered({ state: "failed", error: "spawn failed" });
     expect(parsePayload(await renderRunPage(failed, NOW, 5)).status.error).toBe("spawn failed");

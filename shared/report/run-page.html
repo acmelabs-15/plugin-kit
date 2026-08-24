@@ -314,6 +314,38 @@
       // figures, so a paragraph saying the same thing in words was the redundant half. The
       // other two sections keep their descriptions -- they explain how to READ data rather
       // than restating it.
+      // ABOVE the progress card, and therefore above every figure on the page. A run that is
+      // not a measurement of record has to say so before its numbers are read — a reader who
+      // scrolls past a rate first has already formed the view the caveat exists to prevent.
+      const tierStudy = status.detail && status.detail.tierStudy;
+      if (tierStudy) {
+        const note = el("div", "note warn");
+        note.appendChild(el("div", "nb", "tier study · " + tierStudy + " · not of record"));
+        note.appendChild(el("div", "",
+          "This run swept on " + tierStudy + " rather than the fixed measurement model. " +
+          "A stronger tier reaches the right file in spite of a bad pointer, so the rates " +
+          "below describe the model as much as the artifact under test. " +
+          "Use it for tier comparison or over-fetch study, never as a signposting result."));
+        root.appendChild(note);
+      }
+
+      const subset = status.detail && status.detail.subset;
+      if (subset) {
+        const note = el("div", "note warn");
+        note.appendChild(el("div", "nb",
+          "subset run \u00b7 " + subset.selected + " of " + subset.of + " rows \u00b7 not of record"));
+        // Split on phrase boundaries, never mid-sentence: these fragments are what somebody
+        // greps for when they want to know whether the page still says this.
+        note.appendChild(el("div", "",
+          "This run measured a named slice rather than the whole set" +
+          (subset.selectors && subset.selectors.length > 0
+            ? " (--only " + subset.selectors.join(", ") + ")" : "") +
+          ". Every rate below is over a different denominator from a full-set run. " +
+          "Do not quote these figures against a full-set baseline or against another subset: " +
+          "a difference in which rows ran would read as a difference in result."));
+        root.appendChild(note);
+      }
+
       const progress = section("01 \u00b7 status", "Progress", "");
       progress.appendChild(renderProgress(data));
       root.appendChild(progress);

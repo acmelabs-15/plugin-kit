@@ -1,0 +1,13 @@
+{
+  "note": "Fixture group sidecar for the --only tests. Shaped like a real annotation file: prose keys sit beside the mapping, and the parser must ignore them rather than object. Rows 1 and 4 are deliberately unannotated — a sidecar describes the rows it has an opinion about, not a partition of the set.",
+  "groups": {
+    "gap-cost": "Queries about what an option costs. Two rows.",
+    "bounding-negative": "Queries that should NOT trigger, bounding the description's edge. Two rows."
+  },
+  "items": [
+    { "index": 0, "group": "gap-cost", "verdict": "strong" },
+    { "index": 2, "group": "gap-cost" },
+    { "index": 3, "group": "bounding-negative" },
+    { "index": 5, "group": "bounding-negative" }
+  ]
+}

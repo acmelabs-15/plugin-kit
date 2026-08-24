@@ -207,3 +207,20 @@ That cost is why `--max-iterations` defaults to 3 where the description loop def
 **Deriving ground truth is a separate budget on top of all of this**, and it is the larger one — 138 runs on the measured skill, against 70 for a defaults-sized optimization loop. Spend it once per skill rather than once per run: an annotation, however it was arrived at, is a property of the scenario set and survives every later sweep. A set that already carries `expects_references` costs nothing extra at all.
 
 Scenarios that write files need `acceptEdits`. `measure-disclosure.ts` always uses it and has no flag — scenarios do the skill's real work, the real work writes files, and a run that cannot write stops short of what is being measured. `optimize-disclosure.ts` still takes `--permission-mode` and leaves it off by default, because applying a permission mode to someone's machine is their call, not a default that script makes quietly.
+
+### Iterating on a slice
+
+Every run above is a whole scenario set, and a scenario run does the skill's real work rather than answering a routing question — which is why this budget is the one that hurts. While you are moving a pointer by hand and want to know whether the two scenarios that edit was about now reach the file, `measure-disclosure.ts` takes `--only`:
+
+```bash
+bun ../operations/measure-disclosure.ts \
+  --skill-path skills/<name> \
+  --scenarios evals/disclosure/<name>.json \
+  --only 2,4
+```
+
+Selectors are scenario ids, comma-separated, resolved in set order. Every set shipped in this repository numbers its scenarios `1` upward, so the ids are usually digits — but they are ids rather than positions, and a set that names its scenarios takes those names instead. An unknown id is a hard error listing the ids that exist rather than an empty sweep: a measurement over zero scenarios does not fail, it reports a 0% pass rate over nothing and a file table of `prune` verdicts, which is indistinguishable from a layout nobody reads.
+
+**A slice iterates; it never records**, and a pull rate is the figure a hand-picked set distorts most, because the scenario set IS the denominator. A file that two of the three scenarios you selected happen to need shows a rate no full sweep would ever have produced. The run says so on every surface: `results.json` gains a `subset` block naming what ran and what was excluded, the terminal states it before and after, the report carries a qualifying banner above the metric tiles, and the dashboard row carries a not-of-record chip beside the one a tier study now carries.
+
+Both markers are the same kind of claim and neither is `invalidating`: the figures are real and the run did what it was asked, they simply answer a narrower question than a measurement of record answers. A run can carry both. Re-run the full set before quoting anything, and never read a slice's rate against a full sweep's — the difference would be a change of denominator reported as a change of result.

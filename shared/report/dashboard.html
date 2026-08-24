@@ -93,6 +93,23 @@
       left.appendChild(el("div", "card-title", status.label || status.runId));
       left.appendChild(el("div", "eyebrow", status.kind));
       head.appendChild(left);
+      // Not-of-record chips BEFORE the state chip, so the first thing read about such a run
+      // is that its figures do not stand. The requirement is that it cannot be mistaken for
+      // a run of record at a glance, and a glance reaches the chips before the label.
+      //
+      // TWO classes, and a run can be both: a subset ran a named slice, a tier study swept
+      // on a model that is not the detection instrument. Neither invalidates its figures —
+      // they are real numbers answering a narrower question than a full sweep answers.
+      var subset = status.detail && status.detail.subset;
+      var tierStudy = status.detail && status.detail.tierStudy;
+      if (subset) {
+        head.appendChild(el("span", "chip chip-not-of-record nodot",
+          "subset " + subset.selected + "/" + subset.of + " — not of record"));
+      }
+      if (tierStudy) {
+        head.appendChild(el("span", "chip chip-not-of-record nodot",
+          "tier study: " + tierStudy + " — not of record"));
+      }
       head.appendChild(el("span", "chip chip-" + state,
         state === "stale" ? "no longer reporting" : state));
       card.appendChild(head);
@@ -111,6 +128,11 @@
       const parts = [];
       if (status.detail && status.detail.phase) parts.push(status.detail.phase);
       if (status.total > 0) parts.push(status.settled + "/" + status.total);
+      // The selectors, so a reader can tell two subsets of one set apart without opening
+      // either. The counts are already on the chip; this says WHICH rows.
+      if (subset && subset.selectors && subset.selectors.length > 0) {
+        parts.push("only " + subset.selectors.join(", "));
+      }
       if (status.detail && typeof status.detail.iteration === "number") {
         const max = status.detail.maxIterations;
         parts.push("iteration " + status.detail.iteration + (max ? "/" + max : ""));

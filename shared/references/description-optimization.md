@@ -164,6 +164,50 @@ the per-query rates in `results.json` become rates over attempts actually run, a
 attempt-level pool, so set `--num-workers` at or above the query count when you can;
 below it, a slow query can extend the tail.
 
+### Iterating on a slice
+
+The loop above always runs the whole eval set, and that is right for the loop —
+it selects between candidates, and a selection made on a hand-picked slice is a
+selection made on whichever rows you happened to pick. But while you are editing
+a description by hand and want to know whether the six rows that edit was about
+moved, paying for the other forty-eight is what makes an edit expensive, and an
+expensive edit is one nobody makes twice.
+
+For that, run the measurement entry point on a named slice instead:
+
+```bash
+# by row index, as the rows are ordered in the eval set file
+bun ../operations/measure-triggering.ts \
+  --eval-set evals/trigger.json --target-path <path> --only 3,7,12
+
+# by group, resolved through an annotation sidecar
+bun ../operations/measure-triggering.ts \
+  --eval-set evals/trigger.json --target-path <path> \
+  --groups evals/trigger.groups.json --only group:gap-cost,group:gap-evidence
+```
+
+A sidecar is a JSON file with an `items` array of `{index, group}` rows joining
+to the eval set by position — kept beside the set rather than inside it because
+the eval-set schema warns once per unrecognized key per row, and fifty annotated
+rows would print fifty benign warnings and bury a real one. Selectors compose,
+resolve to rows in set order, and deduplicate. An unknown index or group is a
+hard error listing what exists, never an empty run: a sweep of zero rows reports
+0/0, which reads as a finished measurement.
+
+**A slice iterates; it never records.** The run stamps itself: `results.json`
+gains a `subset` block naming what ran and what was excluded, the terminal says
+so before and after the sweep, and the dashboard row carries a not-of-record
+chip. Those figures are real — the rows that ran, ran properly — but they are
+over a different denominator from a full sweep, so quoting one against the other
+reports a difference in *which rows ran* as a difference in *result*.
+
+That rule is enforced rather than merely stated, which is worth knowing before
+you try to work around it. `run.evalSetHash` in the envelope is computed over
+the rows that ran rather than over the file, and `evalSetHash` is a
+comparability key — so `compareRuns` refuses a delta between a subset and a full
+sweep, and between two subsets that selected differently. Re-run the full set
+before quoting anything.
+
 ### Target types
 
 | `--target-type` | What counts as a trigger |
