@@ -205,6 +205,10 @@ Owner chose, verbatim: "Adopt the table (Recommended)". The locked semantics for
 
 Execution: the verdict implementation resumes with the engineer agent that built the reporting substrate and knows every surface; the doctrine and operator references rewrite in parallel under a separate dispatch, both grounded in the reference-disclosure analysis note's findings and the sourced compaction mechanism. First recall sweep of record supplied the motivating example — a file verdicted keep on 15% raw pulls at 0 of 2 recall.
 
+## Event — 2026-08-24: owner ruling — the objective is recall toward 100%, with three remedy levers
+
+Owner statement of the disclosure objective, refining the earlier reachability ruling: progressively-loaded reference content should load as close to 100% of the time it is supposed to. Recall toward 1.0 on the should-reach set is the target the tooling optimizes toward, under the standing body-budget constraint. When recall falls short, the remedy set is three levers, and the operator guidance must name all three: repair or reposition the pointer; recompose the references themselves — merge, split, adjust — when the content boundary does not match how need presents; and evaluate the scenarios — a scenario that never triggers loading raises the question of whether it is the right scenario, so the corpus is itself an object of evaluation and scenario rewrite is a legitimate remedy, with ablation re-establishing a rewritten scenario's ground truth. Relayed to the in-flight reference rewrite; the verdict implementation is unaffected.
+
 ## Observations
 
 ### Landed today
