@@ -179,6 +179,12 @@ The candidate fault class recorded earlier today does not survive its own per-ru
 
 What survives as a genuine, smaller point: `assertions_total` does not say it is a counted-runs figure. A results file carrying both the counted and the all-runs totals — or naming the excluded assertion count — would have made this misreading impossible. Improvement candidate, not a defect.
 
+## Event — 2026-08-24: owner ruling on worker counts, and what the default actually derives
+
+Owner ruling, stated twice and standing: callers do not pass `--num-workers` to `measure-disclosure.ts` — the tool calculates the optimal amount on its own. Verified from source rather than from the ledger summary: `disclosure-measure.ts:92` derives `max(4, min(24, availableParallelism() * 2))` per process, 20 on a 10-core box, with no awareness of sibling instances.
+
+Consequence and improvement candidate: the default is optimal for exactly one running instance. A multi-arm launch at defaults stacks arms times twenty children — six arms would be 120 on 10 cores, inside the measured fivefold-slowdown zone from the worker-curve data. The fix belongs here rather than in callers' flags: make the derivation instance-aware (divide the machine budget across live sweep instances, discoverable from the status directory the dashboard already globs), so the ruling and the thrashing evidence stop needing each other reconciled per launch. Until it lands, concurrent A/B arms — which are run concurrently so API drift hits both equally — are the one case the default does not cover.
+
 ## Observations
 
 ### Landed today
