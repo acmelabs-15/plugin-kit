@@ -64,6 +64,33 @@ export const NAME_MAX = 64;
 export const BODY_LINES_MAX = 500;
 export const BODY_TOKENS_MAX = 5000;
 
+/**
+ * Length past which a bundled reference file carries a table of contents.
+ *
+ * A reference is read by a model that arrived looking for one thing. Past about
+ * a hundred lines it cannot see the whole file at once, and a map at the top is
+ * what turns "read this file" into "jump to this section" -- which is the whole
+ * economics of deferral.
+ */
+export const REFERENCE_TOC_LINES_MIN = 100;
+
+/**
+ * How far below the heading a table-of-contents bullet may sit and still count.
+ *
+ * Wide enough for the blank line that always follows a heading and an
+ * introductory sentence some files put there; narrow enough that an unrelated
+ * link further down the file cannot satisfy the check by accident.
+ */
+const TOC_BULLET_WINDOW = 5;
+
+/** The standard form, case-insensitively: the standard itself writes it title-case. */
+const TOC_HEADING_PATTERN = /^##\s+table of contents\s*$/i;
+/** A flat anchor-link bullet. Indentation is allowed; nesting is not the check's business. */
+const TOC_BULLET_PATTERN = /^\s*[-*]\s+\[[^\]]+\]\(#[^)]+\)/;
+/** An H2 and not a deeper heading: `###` fails because its third character is not space. */
+const H2_PATTERN = /^##\s+\S/;
+const FENCE_PATTERN = /^\s*(```|~~~)/;
+
 /** The standard's description ceiling. Beyond this a skill is not portable. */
 export const DESCRIPTION_MAX = 1024;
 /** Claude Code truncates its skill listing here, so beyond it the skill breaks. */
@@ -350,6 +377,135 @@ async function checkBodySize(content: string, out: Collector): Promise<void> {
   }
 }
 
+/**
+ * Bundled markdown whose CONTENT a model reads, which is what a map helps with.
+ *
+ * `references/` and `examples/` plus root-level markdown, and never `SKILL.md`:
+ * the body has its own size targets above and is not a file anyone navigates to.
+ * Anything nested under another directory is out by construction, which is also
+ * what keeps a vendored `node_modules/**\/README.md` from being warned about.
+ */
+function isReadModeMarkdown(relPath: string): boolean {
+  if (!relPath.endsWith(".md") || relPath === "SKILL.md") return false;
+  if (relPath.startsWith("references/") || relPath.startsWith("examples/")) return true;
+  return !relPath.includes("/");
+}
+
+/**
+ * A file that is a specimen in its entirety, rather than a document with a map.
+ *
+ * The heuristic is the opening line after any frontmatter: a wrapper document
+ * starts with an H1, and a whole-specimen file starts with frontmatter or with
+ * raw specimen content instead. Exempt because injecting a table of contents
+ * into one would ALTER THE ARTIFACT -- the file is the thing being shown, and a
+ * map bolted onto the top of it is no longer the thing being shown.
+ */
+function isWholeSpecimen(content: string): boolean {
+  return !content.replace(FRONTMATTER_PATTERN, "").trimStart().startsWith("# ");
+}
+
+/**
+ * The file's lines, with everything inside a fenced code block blanked out.
+ *
+ * Not optional politeness. These are reference documents ABOUT writing markdown,
+ * so they are full of fenced samples containing `## Something` -- seven such
+ * lines across four shipped files at the time this was written. Reading a heading
+ * out of a sample would find a table of contents that is not there, or worse,
+ * find a "first H2" that is a quoted example and report a position defect
+ * against a file whose real first H2 is exactly where the standard wants it.
+ *
+ * Blanked rather than dropped so that every surviving index still refers to the
+ * line it does in the file, which is what lets the two scans below be compared.
+ */
+function linesOutsideFences(content: string): readonly string[] {
+  let fenced = false;
+  return content.split("\n").map((line) => {
+    if (FENCE_PATTERN.test(line)) {
+      fenced = !fenced;
+      return "";
+    }
+    return fenced ? "" : line;
+  });
+}
+
+/**
+ * Where the standard block starts, or -1 when there is not one.
+ *
+ * A heading alone is not a table of contents -- a `## Table of Contents`
+ * followed by "coming soon" is a promise, not a map -- so at least one anchor
+ * bullet has to follow it within the window.
+ */
+function tableOfContentsIndex(lines: readonly string[]): number {
+  for (const [index, line] of lines.entries()) {
+    if (!TOC_HEADING_PATTERN.test(line.trim())) continue;
+    const window = lines.slice(index + 1, index + 1 + TOC_BULLET_WINDOW);
+    if (window.some((entry) => TOC_BULLET_PATTERN.test(entry))) return index;
+  }
+  return -1;
+}
+
+/**
+ * Warn when a long reference file carries no table of contents.
+ *
+ * PRESENCE AND POSITION, NOT QUALITY, and the line is deliberate. This checks
+ * that the block is there and that it comes first, then stops. It does not count
+ * bullets against headings, does not resolve a slug against the heading it
+ * claims to point at, and does not judge the ORDER OF THE BULLETS -- every one
+ * of those turns a cheap lint into a formatter with an opinion, and the failure
+ * mode of a heuristic that guesses at quality is a wall of false positives that
+ * teaches authors to ignore the warnings that matter.
+ *
+ * Position is checkable in the way those are not: "first H2 in the file" is a
+ * fact about the document, decided without knowing what any section says.
+ *
+ * A CAP ON THE NUMBER OF REFERENCE FILES DOES NOT BELONG HERE, and this is the
+ * place a future author would reach for one. It was refuted: file count is not
+ * the cost, since a reference is paid for only when it is read, and a skill with
+ * twelve tight references is cheaper at runtime than one with three sprawling
+ * ones. Count nothing; check each file on its own.
+ *
+ * Warn tier, never fatal: a reference without a map still loads and still works.
+ */
+async function checkReferenceTableOfContents(skillDir: string, out: Collector): Promise<void> {
+  const root = resolvePath(skillDir);
+  const paths: string[] = [];
+  for await (const entry of new Bun.Glob("**/*.md").scan({ cwd: root, onlyFiles: true })) {
+    const relPath = entry.split("\\").join("/");
+    if (isReadModeMarkdown(relPath)) paths.push(relPath);
+  }
+  // Sorted so two runs over the same skill report in the same order. `scan`
+  // makes no ordering promise, and a warning list that reshuffles between runs
+  // is one nobody can diff.
+  for (const relPath of paths.sort()) {
+    const content = await Bun.file(`${root}/${relPath}`).text();
+    const lines = content.split("\n").length;
+    if (lines <= REFERENCE_TOC_LINES_MIN) continue;
+    if (isWholeSpecimen(content)) continue;
+
+    const scannable = linesOutsideFences(content);
+    const tocIndex = tableOfContentsIndex(scannable);
+    if (tocIndex === -1) {
+      out.warnings.push(
+        `reference file ${relPath} (${lines} lines) has no table of contents — the standard ` +
+          "form is a `## Table of Contents` heading with flat anchor-link bullets; see " +
+          "shared/references/progressive-disclosure.md",
+      );
+      continue;
+    }
+    // Only reached when a real block exists, so the two findings never both fire
+    // on one file: a file with no map has no position to be wrong about, and
+    // saying so twice would read as two defects where there is one.
+    const firstH2 = scannable.findIndex((line) => H2_PATTERN.test(line));
+    if (firstH2 !== -1 && firstH2 < tocIndex) {
+      out.warnings.push(
+        `reference file ${relPath} (${lines} lines): table of contents is not the first H2 — ` +
+          "the standard places it after the H1 and orientation prose, before any content " +
+          "section; see shared/references/progressive-disclosure.md",
+      );
+    }
+  }
+}
+
 async function checkDanglingReferences(
   content: string,
   skillDir: string,
@@ -424,6 +580,7 @@ export async function validateSkill(
   checkCompatibility(parsed, out);
   checkDirectoryName(name, skillDir, out);
   await checkBodySize(content, out);
+  await checkReferenceTableOfContents(skillDir, out);
   await checkDanglingReferences(content, skillDir, out);
 
   return { valid: out.errors.length === 0, errors: out.errors, warnings: out.warnings };

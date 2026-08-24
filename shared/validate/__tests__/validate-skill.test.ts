@@ -8,6 +8,7 @@ import {
   DESCRIPTION_HARD_MAX,
   DESCRIPTION_MAX,
   NAME_MAX,
+  REFERENCE_TOC_LINES_MIN,
   baseName,
   extractReferences,
   formatResult,
@@ -721,5 +722,254 @@ describe("body size (warnings, never fatal)", () => {
     const fat = ["name: demo-skill", `description: ${"Produces a report. ".repeat(50)}`];
     const result = await validateSkill(await makeSkill({ frontmatter: fat, body: padded(20) }));
     expect(result.warnings.filter((w) => w.includes("target"))).toEqual([]);
+  });
+});
+
+describe("reference table of contents (warning, presence not quality)", () => {
+  /** `n` lines of reference prose under an H1, so the file reads as a document. */
+  function reference(n: number, opening: readonly string[] = []): string {
+    return [
+      "# Reference",
+      "",
+      ...opening,
+      ...Array.from({ length: n }, (_, i) => `Line ${i + 1} of reference prose.`),
+    ].join("\n");
+  }
+
+  const TOC = ["## Table of Contents", "", "- [First section](#first-section)", ""];
+
+  /** Only this rule's warnings, so a token-count skip cannot mask the assertion. */
+  function tocWarnings(warnings: readonly string[]): readonly string[] {
+    return warnings.filter((warning) => warning.includes("table of contents"));
+  }
+
+  test("warns on a long reference with no table of contents, naming file and count", async () => {
+    const result = await validateSkill(
+      await makeSkill({
+        frontmatter: VALID,
+        files: { "references/long.md": reference(REFERENCE_TOC_LINES_MIN + 20) },
+      }),
+    );
+    const warning = tocWarnings(result.warnings)[0];
+    expect(warning).toBeDefined();
+    expect(warning).toContain("references/long.md");
+    expect(warning).toContain(`${REFERENCE_TOC_LINES_MIN + 22} lines`);
+    expect(warning).toContain("## Table of Contents");
+    expect(warning).toContain("progressive-disclosure.md");
+  });
+
+  test("a long reference carrying the standard block says nothing", async () => {
+    const result = await validateSkill(
+      await makeSkill({
+        frontmatter: VALID,
+        files: { "references/long.md": reference(REFERENCE_TOC_LINES_MIN + 20, TOC) },
+      }),
+    );
+    expect(tocWarnings(result.warnings)).toEqual([]);
+  });
+
+  test("a short reference needs no map, however it is written", async () => {
+    const result = await validateSkill(
+      await makeSkill({
+        frontmatter: VALID,
+        files: { "references/short.md": reference(10) },
+      }),
+    );
+    expect(tocWarnings(result.warnings)).toEqual([]);
+  });
+
+  test("a whole-specimen file is exempt: a map would alter the artifact", async () => {
+    // Opens with frontmatter rather than an H1-plus-wrapper, so the file IS the
+    // specimen. Injecting a table of contents would change the thing on display.
+    const specimen = [
+      "---",
+      "name: specimen-skill",
+      "description: A complete skill shown as a specimen.",
+      "---",
+      "",
+      ...Array.from({ length: REFERENCE_TOC_LINES_MIN + 20 }, (_, i) => `Body line ${i + 1}.`),
+    ].join("\n");
+    const result = await validateSkill(
+      await makeSkill({ frontmatter: VALID, files: { "examples/whole-skill.md": specimen } }),
+    );
+    expect(tocWarnings(result.warnings)).toEqual([]);
+  });
+
+  test("a long file of raw specimen content with no H1 is exempt too", async () => {
+    const raw = Array.from(
+      { length: REFERENCE_TOC_LINES_MIN + 20 },
+      (_, i) => `output row ${i + 1}`,
+    ).join("\n");
+    const result = await validateSkill(
+      await makeSkill({ frontmatter: VALID, files: { "examples/transcript.md": raw } }),
+    );
+    expect(tocWarnings(result.warnings)).toEqual([]);
+  });
+
+  test("the warning never makes a skill invalid", async () => {
+    const result = await validateSkill(
+      await makeSkill({
+        frontmatter: VALID,
+        files: { "references/long.md": reference(REFERENCE_TOC_LINES_MIN + 20) },
+      }),
+    );
+    expect(tocWarnings(result.warnings)).toHaveLength(1);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  test("root-level markdown is covered, and SKILL.md never is", async () => {
+    const result = await validateSkill(
+      await makeSkill({
+        frontmatter: VALID,
+        // A body over the threshold would be warned about by this rule if
+        // SKILL.md were in scope; it has its own size targets instead.
+        body: Array.from({ length: REFERENCE_TOC_LINES_MIN + 20 }, (_, i) => `Body ${i}.`).join(
+          "\n",
+        ),
+        files: { "NOTES.md": reference(REFERENCE_TOC_LINES_MIN + 20) },
+      }),
+    );
+    const warnings = tocWarnings(result.warnings);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("NOTES.md");
+    expect(warnings[0]).not.toContain("SKILL.md");
+  });
+
+  test("presence is the whole check: one bullet satisfies it, however incomplete", async () => {
+    // Deliberate. Counting bullets against headings or resolving slugs turns a
+    // cheap lint into a formatter with an opinion, and its false positives are
+    // what teach authors to ignore warnings.
+    const manyHeadings = [
+      "# Reference",
+      "",
+      ...TOC,
+      ...Array.from({ length: 12 }, (_, i) => `## Section ${i + 1}\n\nProse.\n`),
+      ...Array.from({ length: REFERENCE_TOC_LINES_MIN }, (_, i) => `Filler ${i + 1}.`),
+    ].join("\n");
+    const result = await validateSkill(
+      await makeSkill({ frontmatter: VALID, files: { "references/many.md": manyHeadings } }),
+    );
+    expect(tocWarnings(result.warnings)).toEqual([]);
+  });
+
+  test("a heading with no bullet under it is not a table of contents", async () => {
+    const headingOnly = reference(REFERENCE_TOC_LINES_MIN + 20, [
+      "## Table of Contents",
+      "",
+      "Coming soon.",
+      "",
+    ]);
+    const result = await validateSkill(
+      await makeSkill({ frontmatter: VALID, files: { "references/stub.md": headingOnly } }),
+    );
+    expect(tocWarnings(result.warnings)).toHaveLength(1);
+  });
+
+  describe("position: the block must be the first H2", () => {
+    test("a table of contents behind a content section warns about position", async () => {
+      const late = reference(REFERENCE_TOC_LINES_MIN + 20, [
+        "## Overview",
+        "",
+        "Some content section that got in first.",
+        "",
+        ...TOC,
+      ]);
+      const result = await validateSkill(
+        await makeSkill({ frontmatter: VALID, files: { "references/late.md": late } }),
+      );
+      const warnings = tocWarnings(result.warnings);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("is not the first H2");
+      expect(warnings[0]).toContain("references/late.md");
+    });
+
+    test("a table of contents as the first H2 passes", async () => {
+      const result = await validateSkill(
+        await makeSkill({
+          frontmatter: VALID,
+          files: {
+            "references/ordered.md": reference(REFERENCE_TOC_LINES_MIN + 20, [
+              ...TOC,
+              "## Overview",
+              "",
+              "Content after the map, which is where content belongs.",
+              "",
+            ]),
+          },
+        }),
+      );
+      expect(tocWarnings(result.warnings)).toEqual([]);
+    });
+
+    test("orientation prose before the block is fine — only an H2 may not precede it", async () => {
+      const result = await validateSkill(
+        await makeSkill({
+          frontmatter: VALID,
+          files: {
+            "references/prose.md": reference(REFERENCE_TOC_LINES_MIN + 20, [
+              "One paragraph of orientation prose that says what this file is for.",
+              "",
+              ...TOC,
+            ]),
+          },
+        }),
+      );
+      expect(tocWarnings(result.warnings)).toEqual([]);
+    });
+
+    test("a missing block reports absence only, never absence and position both", async () => {
+      const result = await validateSkill(
+        await makeSkill({
+          frontmatter: VALID,
+          files: {
+            "references/none.md": reference(REFERENCE_TOC_LINES_MIN + 20, [
+              "## Overview",
+              "",
+              "A content section and no map at all.",
+              "",
+            ]),
+          },
+        }),
+      );
+      const warnings = tocWarnings(result.warnings);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("has no table of contents");
+      expect(warnings[0]).not.toContain("first H2");
+    });
+
+    test("an H2 inside a code fence is a sample, not the file's first H2", async () => {
+      // These are documents ABOUT writing markdown, so fenced samples containing
+      // `## Something` are ordinary. Reading one as a heading reports a position
+      // defect against a file whose real first H2 is exactly where it belongs.
+      const withSample = reference(REFERENCE_TOC_LINES_MIN + 20, [
+        "```markdown",
+        "## Sample section from another document",
+        "```",
+        "",
+        ...TOC,
+      ]);
+      const result = await validateSkill(
+        await makeSkill({ frontmatter: VALID, files: { "references/sample.md": withSample } }),
+      );
+      expect(tocWarnings(result.warnings)).toEqual([]);
+    });
+
+    test("a table of contents quoted inside a fence does not satisfy the check", async () => {
+      // The same guard in the other direction: a file showing the standard form
+      // as an example has not adopted it.
+      const quoted = reference(REFERENCE_TOC_LINES_MIN + 20, [
+        "```markdown",
+        ...TOC,
+        "```",
+        "",
+      ]);
+      const result = await validateSkill(
+        await makeSkill({ frontmatter: VALID, files: { "references/quoted.md": quoted } }),
+      );
+      const warnings = tocWarnings(result.warnings);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("has no table of contents");
+    });
   });
 });
