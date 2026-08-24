@@ -90,9 +90,9 @@ and stay that way.
 The harness isolates each run from the machine, so a `/morning` installed at user
 scope was not reachable by the model that answered that query. Every sweep copies
 the target into a throwaway project root under a unique alias —
-`measure-triggering.ts:277-279` and `:351-352` — and runs `claude` there with
-`--setting-sources project` and `--strict-mcp-config` (`:709-710`, `:713`), cwd set
-to that root (`:719`).
+`shared/operations/measure-triggering.ts:278-280` and `:352-354` — and runs `claude`
+there with `--setting-sources project` and `--strict-mcp-config` (`:710`, `:714`),
+cwd set to that root (`:720`). Line numbers in this section are as of `35455b0`.
 
 Measured 2026-08-23 rather than inferred. A probe composed the same argv against a
 temp root holding one uniquely-named skill:
@@ -109,12 +109,13 @@ tool calls isolated, and reached for a plugin skill and issued a `Read` with the
 flags removed.
 
 The evidence the record cites is machine-scoped, and both halves of it are the same
-observation. `check-overlap.ts:166` scans `${HOME}/.claude/skills` and tags what it
-finds `origin: "user"`; that is where `command-creator-inventory.md:57` gets
-`` `morning` (user) ``, and it is also what "`check-overlap.ts` reports the same
-pair" means. Neither speaks to what loaded during the run. The harness states the
-distinction itself at `measure-triggering.ts:1563-1565`: what `detectInstallState`
-reports "is the MACHINE's state, not the run's."
+observation. `shared/tools/check-overlap.ts:166` scans `${HOME}/.claude/skills` and
+tags what it finds `origin: "user"`; that is where
+`evals/trigger/command-creator-inventory.md:57` gets `` `morning` (user) ``, and it
+is also what "`check-overlap.ts` reports the same pair" means. Neither speaks to what
+loaded during the run. The harness states the distinction itself at
+`measure-triggering.ts:1580-1581`: what `detectInstallState` reports "is the
+MACHINE's state, not the run's."
 
 There was no run-scoped alternative to consult. No run in this corpus wrote an
 envelope, so no `installState` was recorded for any of them, and a machine-scoped

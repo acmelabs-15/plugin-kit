@@ -666,33 +666,162 @@ async function readBenchmark(benchmarkPath: string | null): Promise<unknown> {
 // Port reclamation and browser launch
 // ---------------------------------------------------------------------------
 
-/** Terminate any process listening on the given port. */
-async function reclaimPort(port: number): Promise<void> {
-  let stdout: string;
-  try {
+/**
+ * The script name a process must be running to be one of ours.
+ *
+ * The same identifier the documented shutdown already uses -- the skill body says to stop
+ * a viewer with `pkill -f generate-review.ts` -- so this guard recognises exactly the
+ * processes the rest of the toolchain calls its own.
+ */
+const VIEWER_SCRIPT = "generate-review.ts";
+
+/**
+ * Basenames of the runtimes that can be running it.
+ *
+ * Required IN ADDITION to the script name, and this is the half that does the work. An
+ * editor with the file open has `generate-review.ts` in its command line too, and a guard
+ * satisfied by the script name alone would authorise killing it.
+ *
+ * Bun only, deliberately. Nothing in this repository is launched by another runtime, so
+ * accepting one would widen what may be killed in exchange for nothing.
+ */
+const JS_RUNTIME_PATTERN = /^bunx?[\d.]*$/;
+
+/**
+ * How a process holding the port is signalled, and how it is identified first.
+ *
+ * Injectable because the DECISION is the part that matters and the decision cannot be
+ * exercised through the real one: a test that proved a foreign process is spared would
+ * have to produce a foreign process and then be wrong about it. Same argument
+ * `operations/disclosure.ts` makes for its own split -- a judgement reachable only by
+ * spawning something is a judgement with no test coverage.
+ */
+export interface PortReclaimer {
+  /** PIDs listening on the port, or empty when that cannot be determined. */
+  readonly listHolders: (port: number) => Promise<readonly number[]>;
+  /** The process's full command line, or undefined when it cannot be read. */
+  readonly describe: (pid: number) => Promise<string | undefined>;
+  readonly terminate: (pid: number) => void;
+}
+
+/** PIDs from `lsof -ti` output, deduplicated -- one process can hold several sockets. */
+export function parsePortHolders(stdout: string): readonly number[] {
+  const pids = new Set<number>();
+  for (const line of stdout.trim().split("\n")) {
+    const pid = Number.parseInt(line.trim(), 10);
+    // `pid > 0` is load-bearing rather than defensive: `process.kill(0, ...)` signals
+    // every process in the caller's own process group, and `Number.isInteger(0)` is true.
+    if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) continue;
+    pids.add(pid);
+  }
+  return [...pids];
+}
+
+/**
+ * Whether a command line is one of this toolchain's eval viewers.
+ *
+ * Deliberately unwilling to guess. Anything it cannot positively identify is reported as
+ * foreign and left running, so a viewer launched through an unrecognised wrapper costs a
+ * fallback to an ephemeral port -- which is visible, printed, and harmless. The reverse
+ * mistake terminates somebody's database.
+ */
+export function isOwnViewerProcess(command: string): boolean {
+  const argv = command.trim().split(/\s+/).filter((token) => token !== "");
+  const executable = argv[0];
+  if (executable === undefined) return false;
+  if (!JS_RUNTIME_PATTERN.test(executable.split("/").at(-1) ?? "")) return false;
+  return argv
+    .slice(1)
+    .some((arg) => arg === VIEWER_SCRIPT || arg.endsWith(`/${VIEWER_SCRIPT}`));
+}
+
+const SYSTEM_RECLAIMER: PortReclaimer = {
+  listHolders: async (port) => {
     const proc = Bun.spawn(["lsof", "-ti", `:${port}`], {
       stdout: "pipe",
       stderr: "ignore",
       timeout: 5_000,
     });
-    stdout = await new Response(proc.stdout).text();
+    const stdout = await new Response(proc.stdout).text();
     await proc.exited;
+    return parsePortHolders(stdout);
+  },
+  describe: async (pid) => {
+    try {
+      const proc = Bun.spawn(["ps", "-p", String(pid), "-o", "command="], {
+        stdout: "pipe",
+        stderr: "ignore",
+        timeout: 5_000,
+      });
+      const stdout = (await new Response(proc.stdout).text()).trim();
+      await proc.exited;
+      return stdout === "" ? undefined : stdout;
+    } catch {
+      return undefined;
+    }
+  },
+  terminate: (pid) => {
+    process.kill(pid, "SIGTERM");
+  },
+};
+
+/**
+ * Terminate any of OUR eval viewers listening on the given port, and nothing else.
+ *
+ * It used to SIGTERM every PID `lsof` returned. Port 3117 is not reserved, so whatever
+ * held it died -- a dev server, a database, an unrelated editor process -- and the tool
+ * that killed it said nothing about having done so.
+ *
+ * A foreign holder is now named and left alone. The caller's `Bun.serve` then fails to
+ * bind and falls back to an ephemeral port, which it already did; what was missing was
+ * any statement of why.
+ */
+export async function reclaimPort(
+  port: number,
+  reclaimer: PortReclaimer = SYSTEM_RECLAIMER,
+): Promise<void> {
+  let holders: readonly number[];
+  try {
+    holders = await reclaimer.listHolders(port);
   } catch {
     console.error("Note: lsof not found, cannot check if port is in use");
     return;
   }
+  if (holders.length === 0) return;
 
-  if (stdout.trim() === "") return;
-  for (const line of stdout.trim().split("\n")) {
-    const pid = Number.parseInt(line.trim(), 10);
-    if (!Number.isInteger(pid)) continue;
+  let terminated = 0;
+  let spared = 0;
+  for (const pid of holders) {
+    const command = await reclaimer.describe(pid);
+    if (command === undefined) {
+      console.error(
+        `Note: port ${port} is held by PID ${pid}, whose command line could not be read. ` +
+          `Leaving it alone.`,
+      );
+      spared += 1;
+      continue;
+    }
+    if (!isOwnViewerProcess(command)) {
+      console.error(
+        `Note: port ${port} is held by PID ${pid} (${command}), which is not an eval ` +
+          `viewer. Leaving it alone.`,
+      );
+      spared += 1;
+      continue;
+    }
     try {
-      process.kill(pid, "SIGTERM");
+      reclaimer.terminate(pid);
+      terminated += 1;
     } catch {
       // Process already gone.
     }
   }
-  await Bun.sleep(500);
+
+  if (spared > 0) {
+    console.error(`Note: serving on an ephemeral port instead, since ${port} is still held.`);
+  }
+  // Only when something was actually signalled. There is nothing to settle otherwise.
+  if (terminated > 0) await Bun.sleep(500);
 }
 
 // ---------------------------------------------------------------------------
