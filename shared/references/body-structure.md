@@ -29,7 +29,7 @@ The six proposed rules and what happened to them:
 
 | # | Proposed rule | Verdict | Basis |
 |:--|:--|:--|:--|
-| 1 | A numbered workflow is the spine of the body | **survives** | Vercel's evaluation: invocation 44% to 95% |
+| 1 | A numbered workflow is the spine of the body | **survives, unmeasured** | Shipped practice. Its measured citation was withdrawn 2026-08-24 — the run measured another mechanism |
 | 2 | Every reference is pointed to from inside the step whose work needs it | **refuted** | Controlled run here, 40 attempts per arm: reach *halved* |
 | 3 | One level of nesting, never two | **survives** | Published mechanism: nested references get previewed, not read whole |
 | 4 | At most three references per skill | **refuted** | Category error — the source figure counts whole skills, not bundled files |
@@ -37,6 +37,8 @@ The six proposed rules and what happened to them:
 | 6 | A table of contents on references past 100 lines | **survives** | Published guidance plus the partial-read mechanism |
 
 Rule 2 agreed with an external measured result *and* with a filesystem-level proximity principle from another vendor. Rule 4 appeared to rest on a published number. Convergence did not save either one. That is why the labels are not decoration, and why the four survivors below are written as candidates rather than as settled standard.
+
+**Rule 1 is a third failure and it failed in a third way.** Nothing refuted the shape; its citation turned out to be measuring another mechanism entirely, so the rule lost its evidence while keeping its plausibility. The lesson is narrower than the other two and easier to miss: check what a number *measured*, not merely that a number exists and points the right way.
 
 ---
 
@@ -46,7 +48,9 @@ Four rules survived. Three of them are **candidate-to-validate** — defensible,
 
 **1. A numbered workflow is the spine of the body.** Consecutively numbered headings or a numbered top-level list, each step naming an action rather than a topic. The distinguishing property: the reader is told to *be at a position*, not offered material that might be relevant.
 
-*MEASURED, external.* Vercel's agents-md evaluation moved invocation from 44% to 95% and pass rate from 53% to 79% by giving an explicit ordered workflow instruction instead of making the capability conditionally available. That is the strongest external evidence for any shape in this file, and it is about the difference between "this is available if relevant" and "at this step, do this". It is also about instruction form in general rather than about a skill body specifically — **candidate-to-validate**.
+*SHIPPED-PRACTICE. Its measured support was withdrawn on 2026-08-24 and the shape now carries none.* This entry cited Vercel's agents-md evaluation — invocation 44% to 95%, pass rate 53% to 79% — as the strongest external evidence for any shape in this file. Read in primary text, that manipulation was not a numbered workflow and was not inside the skill at all: "**We tried adding explicit instructions to AGENTS.md telling the agent to use the skill**", the instruction quoted as "Before writing code, first explore the project structure, then invoke the nextjs-doc skill for documentation." That is host-prompt forced invocation authored in always-loaded passive context, which is a different mechanism from how a body is shaped internally. Two figures were imprecise as well: the post reports 56% never-invoked rather than a 44% invocation rate, which was a complement computed here, and its upper figure is "95%+", a floor rather than a value. The evidence is sound and it belongs to passive-context steering — `progressive-disclosure.md` carries it there, alongside the second team that shipped the same architecture.
+
+What survives is the shape itself, on the same footing as rules 3, 5 and 6: defensible, widely shipped, and never measured on this repository's artifacts — **candidate-to-validate**. Do not re-import the 44%-to-95% figure as evidence for a body shape.
 
 Scope it to the body. A reference file that is a catalog, a rule set or a schema is not a workflow, and numbering it changes nothing.
 

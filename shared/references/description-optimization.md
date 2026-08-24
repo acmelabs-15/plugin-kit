@@ -240,6 +240,34 @@ A description that is manually invoked only (`disable-model-invocation: true`)
 has no description in context to optimize, so the loop does not apply. That is a
 complete answer rather than a gap.
 
+**Power the comparison on the tier that will route, and read a strong-tier null
+as the predicted result rather than as a refutation.** Instruction Stacking
+Collapse (arXiv 2608.02639) stacked verifier-checked instructions over three
+current production tiers and measured a rewrite remedy that "recovers up to +11
+points of follow rate for weaker models, which are also the models most often
+deployed at scale, while leaving stronger models, which already internalise the
+same structure, essentially unchanged" — with cluster-robust tests and
+same-baseline controls attributing the gain to the rewrite rather than to token
+count, reordering or measurement headroom (measured, external). Anthropic's own
+tool-search testing reproduces the grading on a different remedy entirely: "Opus
+4 improved from 49% to 74%, and Opus 4.5 improved from 79.5% to 88.1% with Tool
+Search Tool enabled" — 25 points to the weaker model against 8.6 to the stronger
+(internal testing, not externally reproducible). A candidate measured only on the
+strong tier has measured almost nothing, and a null there is what a
+capability-graded remedy is expected to produce.
+
+**The cross-tier sweep is the identification instrument, and it wants one metric
+per tier rather than one question per tier.** Anthropic prescribes the test —
+"Test your Skill with all the models you plan to use it with" — but publishes it
+as three different qualitative questions, one per model, and three impressions
+cannot be subtracted (guidance, unquantified). Community tooling goes the other
+way and makes the matrix the default output shape rather than a feature to
+assemble: promptfoo takes `providers` as a list, and "Running promptfoo eval over
+this config will result in a matrix view that you can use to evaluate GPT vs
+Gemini" (shipped practice). This loop already has the shape the published
+protocol lacks — the same trigger rate, both tiers, subtractable — so diff the
+tiers rather than forming an impression of each.
+
 ## Step 4: Apply the result
 
 Take `best_description`, update the frontmatter, show the user before and after,

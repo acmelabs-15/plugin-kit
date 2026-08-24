@@ -47,6 +47,10 @@ So a routing defect is invisible on the strong model, because eager reading open
 
 The inverse holds for over-fetch: only the strong tier produces enough of it to study. If that is the question, run the strong tier deliberately and say so, rather than reading it off a sweep aimed at recall.
 
+**Published work says the same thing about remedies, which is what makes a strong-tier null uninformative rather than reassuring.** Instruction Stacking Collapse (arXiv 2608.02639) measured a rewrite remedy across three current production tiers and found its benefit capability-graded — "up to +11 points of follow rate for weaker models… while leaving stronger models, which already internalise the same structure, essentially unchanged" — with controls excluding token count, reordering and headroom (measured, external). Anthropic's tool-search testing reproduces the grading on a different remedy: 49% to 74% for the weaker model against 79.5% to 88.1% for the stronger (internal testing, not externally reproducible). So when you re-measure after a signposting repair, the comparison has to be powered on the weak tier, and a null on the strong tier is the predicted result rather than evidence the repair failed. `description-writing.md` carries the same rule for the routing surface, where the sign of a phrasing change is itself model-dependent.
+
+Two tiers measured on **one** metric is also what makes this a detection instrument rather than three impressions. Anthropic prescribes cross-tier testing — "Test your Skill with all the models you plan to use it with" — but publishes it as a different qualitative question per model, which cannot be subtracted (guidance, unquantified); community tooling makes the matrix the default output shape instead, promptfoo taking `providers` as a list so that "Running promptfoo eval over this config will result in a matrix view" (shipped practice). Recall by tier, on the same scenario set, is already the subtractable form.
+
 ---
 
 ## What one run measures
