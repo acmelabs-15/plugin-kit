@@ -237,6 +237,10 @@ Two write-path defect instances caught by mandated read-back during authoring, b
 
 Follow-up work items this creates: tables of contents for the 13 over-length references here and the measured skill's layout reference; then the skill-creator guidance update encoding the taxonomy; then lint signatures wired toward outcome measurement.
 
+## Event — 2026-08-24: merged to main, pushed, branch retired — the standing risk is closed
+
+Owner ruling executed: the work does not live on a branch. `restructure-shared-layer` fast-forwarded into `main` (161 files, +13,213 / −2,309 — the shared-layer restructure, the four collector fixes, the Skill grant, the recall layer, the recall-aware verdicts, both rewritten references, and analyses 002 through 005), `main` pushed to origin at `6a4cecd`, and the staging branch deleted locally and on the remote. Every commit this session and its predecessors produced now exists on the published mainline. The exposure that opened at the branch's first publication — work existing on one machine, then on one unmerged branch — is fully closed.
+
 ## Observations
 
 ### Landed today
