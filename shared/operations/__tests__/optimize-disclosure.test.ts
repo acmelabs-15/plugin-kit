@@ -901,9 +901,34 @@ describe("createRunCollector", () => {
     return collector.observation();
   }
 
-  const readTool = (filePath: string) => ({
+  const readTool = (filePath: string, id = "") => ({
     type: "assistant",
-    message: { content: [{ type: "tool_use", name: "Read", input: { file_path: filePath } }] },
+    message: { content: [{ type: "tool_use", name: "Read", id, input: { file_path: filePath } }] },
+  });
+
+  const skillTool = (id: string, skill = "demo-tab12cd") => ({
+    type: "assistant",
+    message: { content: [{ type: "tool_use", name: "Skill", id, input: { skill } }] },
+  });
+
+  /**
+   * A tool result, shaped as the live stream shapes one.
+   *
+   * `is_error` is OMITTED on success rather than set to `false`, which is what real
+   * transcripts do and what makes `=== false` the wrong test to write.
+   */
+  const toolResult = (id: string, isError?: boolean) => ({
+    type: "user",
+    message: {
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: id,
+          content: "…",
+          ...(isError === undefined ? {} : { is_error: isError }),
+        },
+      ],
+    },
   });
 
   test("a Read inside the skill directory is a pull, recorded relative to the skill", () => {
@@ -921,19 +946,59 @@ describe("createRunCollector", () => {
   });
 
   test("reading SKILL.md is the body loading, not a pull against the body", () => {
-    const observed = feed([readTool(`${skillDir}/SKILL.md`)]);
+    const observed = feed([readTool(`${skillDir}/SKILL.md`, "t1"), toolResult("t1")]);
     expect(observed.skillLoaded).toBe(true);
     expect(observed.filesRead).toEqual([]);
   });
 
-  test("the Skill tool naming this installation counts as the body loading", () => {
-    const observed = feed([
-      {
-        type: "assistant",
-        message: { content: [{ type: "tool_use", name: "Skill", input: { skill: "demo-tab12cd" } }] },
-      },
-    ]);
+  test("the Skill tool naming this installation loads the body once it returns", () => {
+    const observed = feed([skillTool("t1"), toolResult("t1")]);
     expect(observed.skillLoaded).toBe(true);
+    expect(observed.skillRequested).toBe(true);
+  });
+
+  // The defect these four guard: a tool-use event is a REQUEST. Recorded as a load, a
+  // run whose every Skill call was refused was indistinguishable from one that loaded
+  // cleanly -- and since `skillLoaded` gates `runsWithoutSkill`, the guardrail in
+  // optimize-disclosure that refuses a layout whose runs never loaded could not fire.
+  // Taken from a real transcript: two Skill calls, both `is_error: true`, the model
+  // improvised the whole answer, and the run recorded as loaded.
+  test("a Skill call that comes back an error is an attempt, not a load", () => {
+    const observed = feed([skillTool("t1"), toolResult("t1", true)]);
+    expect(observed.skillRequested).toBe(true);
+    expect(observed.skillLoaded).toBe(false);
+  });
+
+  test("a Skill call with no result at all is an attempt, not a load", () => {
+    const observed = feed([skillTool("t1")]);
+    expect(observed.skillRequested).toBe(true);
+    expect(observed.skillLoaded).toBe(false);
+  });
+
+  test("a failed read of SKILL.md is an attempt, not a load", () => {
+    const observed = feed([readTool(`${skillDir}/SKILL.md`, "t1"), toolResult("t1", true)]);
+    expect(observed.skillRequested).toBe(true);
+    expect(observed.skillLoaded).toBe(false);
+    expect(observed.filesRead).toEqual([]);
+  });
+
+  // Success omits the flag entirely. Testing `=== false` would call every real success
+  // a failure, which is the same shape of mistake as the defect above.
+  test("a result carrying no is_error flag is a success", () => {
+    const observed = feed([skillTool("t1"), toolResult("t1", undefined)]);
+    expect(observed.skillLoaded).toBe(true);
+  });
+
+  test("a result for some other tool does not load the skill", () => {
+    const observed = feed([skillTool("t1"), toolResult("unrelated-id")]);
+    expect(observed.skillLoaded).toBe(false);
+    expect(observed.skillRequested).toBe(true);
+  });
+
+  test("a run that never reaches for the skill records neither signal", () => {
+    const observed = feed([readTool("/etc/hosts", "t1"), toolResult("t1")]);
+    expect(observed.skillRequested).toBe(false);
+    expect(observed.skillLoaded).toBe(false);
   });
 
   // A regression guard for the defect that made every disclosure measurement wrong:

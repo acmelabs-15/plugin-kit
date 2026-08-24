@@ -1242,7 +1242,19 @@ export function sumUsage(usage: unknown): number {
 /** What one run's stream told us. */
 export interface RunObservation {
   readonly filesRead: readonly string[];
+  /**
+   * Whether the body actually reached context: a load that was attempted AND came
+   * back without an error. See `skillRequested` for the attempt on its own.
+   */
   readonly skillLoaded: boolean;
+  /**
+   * Whether a load was attempted at all, successful or not.
+   *
+   * Kept separate because the two failures need different fixes and look identical
+   * without it: a run that never reached for the skill is a routing problem, and a
+   * run that reached for it and was refused is an environment problem.
+   */
+  readonly skillRequested: boolean;
   readonly contextTokens: number;
   /** Tool names in call order, for the grader's trace and for diagnosing a stuck run. */
   readonly toolCalls: readonly string[];
@@ -1327,6 +1339,9 @@ export function createRunCollector(params: {
   const filesWritten: string[] = [];
   const toolCalls: string[] = [];
   let skillLoaded = false;
+  let skillRequested = false;
+  /** Tool-use ids of load attempts still waiting on their result. */
+  const awaitingLoadResult = new Set<string>();
   let contextTokens = 0;
   let finalText = "";
   let resultSubtype = "";
@@ -1342,7 +1357,25 @@ export function createRunCollector(params: {
     return rel.split("\\").join("/");
   };
 
-  const record = (toolName: string, input: Record<string, unknown>): void => {
+  /**
+   * Note a load attempt and wait for its result before believing it.
+   *
+   * A tool-use event is a REQUEST. The body enters context only when the result comes
+   * back clean, so a run whose every `Skill` call was refused had the skill reach it
+   * exactly as often as a run that never called it -- never. Recorded on the request,
+   * `skillLoaded` cannot tell those apart, and it gates `runsWithoutSkill`, which in
+   * turn gates the guardrail in `optimize-disclosure` that refuses to trust a layout
+   * whose runs did not load. That guardrail could not fire.
+   *
+   * A synthetic event with no id cannot be correlated with a result, so it stays an
+   * attempt. Every real transcript carries one.
+   */
+  const requestLoad = (toolUseId: string): void => {
+    skillRequested = true;
+    if (toolUseId !== "") awaitingLoadResult.add(toolUseId);
+  };
+
+  const record = (toolName: string, input: Record<string, unknown>, toolUseId: string): void => {
     toolCalls.push(toolName);
     const filePath = typeof input["file_path"] === "string" ? input["file_path"] : "";
     if (toolName === "Skill") {
@@ -1350,7 +1383,7 @@ export function createRunCollector(params: {
       // installed alias appearing anywhere in the argument, because the field name has
       // varied between `skill` and `name` across versions.
       const argument = JSON.stringify(input);
-      if (argument.includes(skillDir.split("/").pop() ?? "")) skillLoaded = true;
+      if (argument.includes(skillDir.split("/").pop() ?? "")) requestLoad(toolUseId);
       return;
     }
     if (toolName === "Write" || toolName === "Edit" || toolName === "NotebookEdit") {
@@ -1367,9 +1400,16 @@ export function createRunCollector(params: {
     // than through the Skill tool -- so it counts as loaded and not as a pull. Counting
     // it as a pull would give the body a pull rate and put it in the file table.
     if (rel === "SKILL.md") {
-      skillLoaded = true;
+      requestLoad(toolUseId);
       return;
     }
+    // A pull is recorded on the REQUEST, deliberately, and is not gated on the result
+    // the way a load is. The question a pull answers is whether the body's pointer sent
+    // the model to this file -- reaching for it is the evidence, and a read that failed
+    // on a permission or a race says nothing about whether the file earns its place. A
+    // retry that succeeds does not double-count, because pulls are deduplicated per run.
+    // `skillLoaded` is the opposite case: it asks whether content ARRIVED, so nothing
+    // short of a clean result will do.
     filesRead.push(rel);
   };
 
@@ -1390,7 +1430,27 @@ export function createRunCollector(params: {
           const item = asRecord(raw);
           if (item["type"] !== "tool_use") continue;
           const name = typeof item["name"] === "string" ? item["name"] : "";
-          record(name, asRecord(item["input"]));
+          const id = typeof item["id"] === "string" ? item["id"] : "";
+          record(name, asRecord(item["input"]), id);
+        }
+        return undefined;
+      }
+
+      // Tool results arrive as `user` events. Only load attempts are looked up here;
+      // everything else was already settled on the request.
+      if (record_["type"] === "user") {
+        const content = asRecord(record_["message"])["content"];
+        if (!Array.isArray(content)) return undefined;
+        for (const raw of content) {
+          const item = asRecord(raw);
+          if (item["type"] !== "tool_result") continue;
+          const id = typeof item["tool_use_id"] === "string" ? item["tool_use_id"] : "";
+          if (!awaitingLoadResult.delete(id)) continue;
+          // `is_error` is ABSENT on success rather than `false`, so the test is
+          // `!== true`. Measured across six real transcripts: 12 successful results
+          // carried no flag at all, and `=== false` would have called every one of
+          // them a failure -- the same shape of mistake as the defect being fixed.
+          if (item["is_error"] !== true) skillLoaded = true;
         }
         return undefined;
       }
@@ -1407,6 +1467,7 @@ export function createRunCollector(params: {
     observation: (): RunObservation => ({
       filesRead: [...new Set(filesRead)],
       skillLoaded,
+      skillRequested,
       contextTokens,
       toolCalls,
       filesWritten: [...new Set(filesWritten)],
