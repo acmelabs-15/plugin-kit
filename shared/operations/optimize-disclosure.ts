@@ -1625,28 +1625,35 @@ async function main(): Promise<void> {
   }
   if (appliedTo !== null) console.error(`Selected layout written to: ${appliedTo}`);
 
+  // Every scenario run installs its own aliased copy of the layout into a throwaway project
+  // root and runs with `--setting-sources project`, so the run is designed to keep the machine
+  // out of the measurement. What `detectInstallState` records is the MACHINE's state anyway,
+  // and for THIS operation that is the most consequential thing it can report: content served
+  // to the model through the skill system never produces a `Read`, so a sweep that reached an
+  // installed copy instead of the layout under test scores every bundled file at a pull rate
+  // of zero. The output is a clean-looking table of `prune` and `signpost` verdicts, and it is
+  // a measurement of nothing.
+  //
+  // Detected OUTSIDE the envelope block, and deliberately. Two of the three places this is
+  // reported are envelope fields and can only live there, but the stderr line is not: gating
+  // it meant a run with neither `--envelope` nor `--results-dir` measured nothing and said
+  // nothing, which is worse than an ungated tool because a reader believes this one has a
+  // guard.
+  const sighting = await detectInstallState({
+    artifact: "skill",
+    name: output.skill_name,
+    sourcePath: skillPath,
+  });
+  const conflict = installConflict({
+    operation: "optimize-disclosure",
+    needs: "absent",
+    found: sighting.state,
+  });
+
   const envelopePath =
     flagString(flags, "envelope") ??
     (resultsDir === undefined ? undefined : `${resultsDir}/${ENVELOPE_FILENAME}`);
   if (envelopePath !== undefined) {
-    // Every scenario run installs its own aliased copy of the layout into a throwaway
-    // project root and runs with `--setting-sources project`, so the run is designed to
-    // keep the machine out of the measurement. What `detectInstallState` records is the
-    // MACHINE's state anyway, and for THIS operation that is the most consequential field
-    // in the block: content served to the model through the skill system never produces a
-    // `Read`, so a sweep that reached an installed copy instead of the layout under test
-    // scores every bundled file at a pull rate of zero. The output is a clean-looking
-    // table of `prune` and `signpost` verdicts, and it is a measurement of nothing.
-    const sighting = await detectInstallState({
-      artifact: "skill",
-      name: output.skill_name,
-      sourcePath: skillPath,
-    });
-    const conflict = installConflict({
-      operation: "optimize-disclosure",
-      needs: "absent",
-      found: sighting.state,
-    });
     // A run that did not pin `--model` was answered by whatever the operator had
     // configured, and this script cannot find out what that was. Recording `null` and
     // saying so is the only honest option; inventing a name would make two runs on
@@ -1685,11 +1692,13 @@ async function main(): Promise<void> {
       }),
     );
     console.error(`Envelope written to: ${envelopePath}`);
-    // Third of the three places the conflict appears, and the only one an operator sees
-    // without opening a file. A sweep against an installed copy produces a report that
-    // looks fine, so the moment to say so is now rather than when someone acts on it.
-    if (conflict !== null) console.error(`\nWARNING: ${conflict}`);
   }
+
+  // Third of the three places the conflict appears, and the only one an operator sees without
+  // opening a file -- which is why it is the one that fires whether or not an envelope was
+  // asked for. A sweep against an installed copy produces a report that looks fine, so the
+  // moment to say so is now rather than when someone acts on it.
+  if (conflict !== null) console.error(`\nWARNING: ${conflict}`);
 
   // Named rather than silently left behind. Every candidate layout the loop measured is
   // still in there, which is what you want when a rejection needs explaining and is
