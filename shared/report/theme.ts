@@ -286,6 +286,27 @@ export const DESIGN_OVERRIDES = `
    * numerics, so it never met this.
    */
   .metric .mv{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /*
+   * .note.warn: --opus -> --warn.
+   *
+   * The source tints its warning callout with a model-identity colour and defines --opus in its
+   * own token block. Our token port carries the semantic colours only, so the reference is
+   * dangling: var(--opus) is invalid at computed-value time, so each declaration falls back to
+   * unset -- border-left-color to currentColor, and the label's colour to the inherited one --
+   * both of which are --muted here. A .note.warn therefore renders LESS prominent than the
+   * plain .note whose accent border it meant to override, which is the opposite of what a
+   * warning variant is for.
+   *
+   * --warn rather than a restored --opus, and this override stands even if the model tokens are
+   * ported later. What the consumers of this class say -- "no delta drawn", "no longer
+   * reporting", "before you confirm", "discount these figures" -- is a warning about how far to
+   * trust the page, and colouring that by model identity reads as a label for which model ran.
+   *
+   * No backticks in this comment, deliberately: it lives inside a template literal, and one
+   * would end the string. The other overrides above avoid them for the same reason.
+   */
+  .note.warn{ border-left-color:var(--warn); } .note.warn .nb{ color:var(--warn); }
 `;
 
 /**

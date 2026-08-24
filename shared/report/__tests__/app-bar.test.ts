@@ -349,6 +349,30 @@ describe("overrides are separate from the port and say why they exist", () => {
     expect(DESIGN_COMPONENTS).toContain("table.tbl th,table.tbl td{ text-align:left; padding:8px 12px;");
   });
 
+  test("the warning callout is tinted by severity, not by model identity", () => {
+    // `--opus`, `--fable`, `--sonnet` and `--haiku` are referenced by the port and defined
+    // nowhere, because the token port carries the semantic colours only. A dangling `var()` is
+    // invalid at computed-value time, so the source's rule leaves a `.note.warn` rendering in
+    // the muted body colour -- less prominent than the plain `.note` it overrides.
+    expect(DESIGN_OVERRIDES).toContain(
+      ".note.warn{ border-left-color:var(--warn); } .note.warn .nb{ color:var(--warn); }",
+    );
+    // Both halves matter: the label is what a reader looks at first.
+    expect(DESIGN_OVERRIDES).toContain(".note.warn .nb{ color:var(--warn); }");
+    // And the port itself is untouched, which is what makes the override legible as a decision
+    // rather than a transcription error.
+    expect(DESIGN_COMPONENTS).toContain(
+      ".note.warn{ border-left-color:var(--opus); } .note.warn .nb{ color:var(--opus); }",
+    );
+    // Two rules of equal specificity now target the same selector, so the fix holds only on
+    // order. Asserted on the injected page rather than on the exports, because the order that
+    // decides it is the injection's, not either block's.
+    const injected = appBarHtml(options());
+    expect(injected.indexOf(".note.warn{ border-left-color:var(--warn)")).toBeGreaterThan(
+      injected.indexOf(".note.warn{ border-left-color:var(--opus)"),
+    );
+  });
+
   test("the override layer re-aligns section heads to the top", () => {
     // Requested directly. Our eyebrow+h2 stack pairs against a four-line description, and
     // bottom-aligning that pushes the heading away from the eyebrow it belongs to.

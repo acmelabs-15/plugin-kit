@@ -1332,6 +1332,7 @@ describe("generateDisclosureReport", () => {
       ...base,
       warnings: [{ severity: "qualifying" as const, text: "One run per scenario." }],
     });
+    expect(thin).toContain('class="note warn"');
     expect(thin).toContain("read these figures with care");
     expect(thin).toContain("discount them");
     expect(thin).not.toContain("did not measure what it set out to");
@@ -1361,7 +1362,9 @@ describe("generateDisclosureReport", () => {
       ],
     });
     expect(mixed).toContain('class="note invalidated"');
-    expect(mixed).not.toContain('class="note qualified"');
+    // The qualifying tone is the shared `.note.warn`, so its absence here is what proves the
+    // block escalated rather than rendering two callouts at two severities.
+    expect(mixed).not.toContain('class="note warn"');
     // Both keep their own instruction. Escalating the block must not silently restate a
     // qualifying condition as a fatal one.
     expect(mixed).toContain("discount them");

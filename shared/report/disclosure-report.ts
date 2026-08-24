@@ -128,10 +128,13 @@ export interface DisclosureReportOptions {
  *
  * Four rules, each earning its place: a bar built from the shared surface tokens, a
  * verdict pill that reuses `.chip` and only recolours it, a right-aligned numeric
- * cell the shared `.tbl` does not define for this column count, and two tones for the
- * warning callout. The callout is the shared `.note` recoloured — the theme's own
- * `.note.warn` tints with `--opus`, a model-identity colour, which would read as a label
- * about which model ran rather than about how far to trust the page.
+ * cell the shared `.tbl` does not define for this column count, and one tone for a warning
+ * severe enough to void the page.
+ *
+ * Only the fatal tone is local. A qualifying warning uses the shared `.note.warn`, whose
+ * treatment is what a local rule would have duplicated exactly — and a byte-identical copy of
+ * a shared component is how the two stop agreeing the first time either is retuned. The theme
+ * has no `--bad` variant of `.note`, so the fatal tone has nowhere else to live.
  */
 const REPORT_CSS = `
   .wrap{ max-width:1080px; }
@@ -150,7 +153,6 @@ const REPORT_CSS = `
   tr.accepted td:first-child{ box-shadow:inset 2px 0 0 var(--good); }
   .why{ color:var(--muted); font-size:12px; line-height:1.55; }
   .note.invalidated{ border-left-color:var(--bad); } .note.invalidated .nb{ color:var(--bad); }
-  .note.qualified{ border-left-color:var(--warn); } .note.qualified .nb{ color:var(--warn); }
 `;
 
 function bar(fraction: number, tone: "" | "good" | "warn" | "bad" = ""): string {
@@ -245,7 +247,7 @@ function warningBlock(warnings: readonly DisclosureWarning[]): string {
       fixing a problem this run is not in a position to have found.`
     : `Nothing invalidated the measurement, but the conditions below mean parts of it rest on
       less evidence than the numbers suggest.`;
-  return `    <div class="note ${invalidated ? "invalidated" : "qualified"}">
+  return `    <div class="note ${invalidated ? "invalidated" : "warn"}">
       <div class="nb">${headline}</div>
       <div>${summary}</div>
       <ul class="why">${rows}
