@@ -344,6 +344,6 @@ Suite 1,582 pass / 0 fail on the combined tree; main pushed. Remaining from the 
 - leads_to [[ANALYSIS-003: Measurement Fault Classes]]
 - required_by [[ANALYSIS-004: What Makes a Bundled Reference Get Read]]
 - required_by [[ANALYSIS-006: Weak-Model Routing for Progressive Disclosure]]
-- relates_to [[ANALYSIS-007: What Makes a Bundled Reference Get Read, Readable Edition]]
+- relates_to [[ANALYSIS-007: Do Reference Files Get Read, and How to Tell]]
 - relates_to [[ANALYSIS-008: Structural Genres of Skill Content, Readable Edition]]
 - relates_to [[ANALYSIS-009: Weak-Model Routing for Progressive Disclosure, Readable Edition]]
