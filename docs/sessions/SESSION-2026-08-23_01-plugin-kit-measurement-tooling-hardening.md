@@ -229,6 +229,14 @@ The deliverable the disclosure research was for is complete, landed as two commi
 
 The doctrine, the operator guidance, and the code now agree about what a verdict means and what evidence it requires. Remaining from the queue: outcomes measurement (runs on sonnet per the recovered coverage ruling), the upstream comment, the mainline merge and push.
 
+## Event — 2026-08-24: ANALYSIS-005 lands, and two new write-path defect instances with it
+
+The structural-genres survey is durable at `0584df2` — fourteen genres of skill-body and reference content, every count by grep across four corpora, each genre carrying a deterministic detection signature a lint rule could be written from, and an honest effect column: presence countable for all fourteen, effect measured for exactly two, one of them this repository's own placement refutation. The counted headlines: anti-rationalization tables are a single-vendor house genre (22 of 24 against 0 of 20, absent under alternate wording too); Anthropic publishes the table-of-contents rule and complies nowhere its bundles are large (48 of claude-api's 66 references over 100 lines, zero ToCs); and this repository complies 0 of 15 with 13 over the line — an actionable gap now that the compaction mechanism makes the rule mechanical. The house pointer form is stated as unvalidated, measured at 33-75% recall despite full conformance.
+
+Two write-path defect instances caught by mandated read-back during authoring, both silent: `write_note` emitted a duplicate frontmatter block, prepending its own minimal block and leaving status and tags in the non-authoritative second one — the known duplicate-frontmatter forbidden pattern, now traced to the write path itself rather than to authoring error. And a detection-signature regex containing a doubled open bracket was parsed as a phantom wikilink relation, surfacing only as an unresolved count of one; notes documenting regexes must dodge that sequence, and the unresolved-relations count is the only detector.
+
+Follow-up work items this creates: tables of contents for the 13 over-length references here and the measured skill's layout reference; then the skill-creator guidance update encoding the taxonomy; then lint signatures wired toward outcome measurement.
+
 ## Observations
 
 ### Landed today
