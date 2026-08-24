@@ -244,3 +244,4 @@ The consequence for this harness is a ceiling rather than a bug: a disclosure sw
 - caused_by [[SESSION-2026-08-23_01: Plugin Kit Measurement Tooling Hardening]]
 - pairs_with [[ANALYSIS-001: Python to Bun Port Fidelity]]
 - extended_by [[ANALYSIS-004: What Makes a Bundled Reference Get Read]]
+- required_by [[ANALYSIS-005: Structural Genres of Skill Content]]
