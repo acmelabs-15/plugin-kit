@@ -43,6 +43,7 @@ import {
   summarizeLayout,
 } from "./disclosure-measure.ts";
 import { generateDisclosureReport } from "../report/disclosure-report.ts";
+import { detectInstallState, installConflict, type InstallState } from "../envelope.ts";
 import type { Spec } from "../cli.ts";
 import { readTargetDefinition } from "./measure-triggering.ts";
 import { flagBoolean, flagNumber, flagString, parseCli, requireFlag } from "./measure-triggering.ts";
@@ -75,6 +76,16 @@ export interface MeasureDisclosureParams {
 export interface MeasureOutput {
   readonly skill_name: string;
   readonly skill_path: string;
+  /** What the machine's installed set looked like. `unknown` means the sweep ran blind. */
+  readonly install_state: InstallState;
+  /**
+   * Why every figure below is void, or null when there is nothing wrong.
+   *
+   * Near the top of the shape rather than beside the numbers it invalidates, and carried in
+   * the JSON as well as printed to stderr: a terminal gets closed and `results.json` is what
+   * a report is built from later, so the sentence has to survive in the file too.
+   */
+  readonly install_conflict: string | null;
   readonly token_method: TokenMethod;
   readonly tokens_are_estimated: boolean;
   readonly scenario_count: number;
@@ -90,6 +101,41 @@ export interface MeasureOutput {
 }
 
 /**
+ * Look for a copy of this skill installed on the machine, and say so when there is one.
+ *
+ * The sweep needs the skill NOT to be installed. Content served to the model through the
+ * skill system never produces a `Read`, so a sweep that reached an installed copy instead of
+ * the directory under test scores every bundled file at a pull rate of zero -- and the output
+ * is a clean-looking table of `prune` verdicts that measures nothing. `optimize-disclosure.ts`
+ * has said so since it gained an envelope. This entry point is the one the documentation
+ * sends people to FIRST, as the cheaper half, and it said nothing at all.
+ *
+ * It PRINTS rather than handing a line back for the caller to print, so that the loudness has
+ * one home and one test: `measureDisclosure` spends real API time and is unreachable from the
+ * suite, and a warning nothing can prove fires is the defect this closes.
+ */
+export async function warnOnInstallConflict(params: {
+  readonly skillPath: string;
+  readonly skillName: string;
+  /** Where to sweep. Defaults to the process's directory, as every other call site does. */
+  readonly projectDir?: string;
+}): Promise<{ readonly state: InstallState; readonly conflict: string | null }> {
+  const sighting = await detectInstallState({
+    artifact: "skill",
+    name: params.skillName,
+    sourcePath: params.skillPath,
+    projectDir: params.projectDir,
+  });
+  const conflict = installConflict({
+    operation: "measure-disclosure",
+    needs: "absent",
+    found: sighting.state,
+  });
+  if (conflict !== null) console.error(`\nWARNING: ${conflict}`);
+  return { state: sighting.state, conflict };
+}
+
+/**
  * Run every scenario against the skill as it stands, once per `runsPerScenario`.
  *
  * One pool over the whole scenario set. There is no train/held-out split here and that is
@@ -102,6 +148,10 @@ export async function measureDisclosure(
 ): Promise<MeasureOutput> {
   const counter = await loadTokenCounter();
   const { name: skillName } = await readTargetDefinition(params.skillPath, "skill");
+
+  // Before the sweep, not after it. A conflict floors every pull rate at zero, so an operator
+  // told at second zero can stop; the run that motivated this said nothing and spent 144.
+  const install = await warnOnInstallConflict({ skillPath: params.skillPath, skillName });
 
   if (params.scenarios.every((scenario) => scenario.expectations.length === 0)) {
     console.error(
@@ -149,9 +199,16 @@ export async function measureDisclosure(
     );
   }
 
+  // Said a second time on purpose. `ProgressReporter` repaints stderr for the length of the
+  // sweep, so the line printed before it started is long gone by now -- and this is the copy
+  // that lands beside the table it invalidates, where the person reading the verdicts is.
+  if (install.conflict !== null) console.error(`\nWARNING: ${install.conflict}`);
+
   return {
     skill_name: skillName,
     skill_path: params.skillPath,
+    install_state: install.state,
+    install_conflict: install.conflict,
     token_method: counter.method,
     tokens_are_estimated: counter.estimated,
     scenario_count: params.scenarios.length,
