@@ -19,6 +19,7 @@
  */
 
 import { rm } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 
 import { mapWithConcurrency } from "../util/pool.ts";
 import {
@@ -70,8 +71,25 @@ export const DEFAULT_RUNS_PER_SCENARIO = 2;
  * corrupts rather than merely slows a measurement, since a rate-limited run is recorded
  * as a failed run. Lower it if you see failures cluster; the number is a default, not a
  * property of the workload.
+ *
+ * MEASURED 2026-08-24, and the reasoning above holds only up to a point. It is true that
+ * a worker spends most of its slot blocked, but there IS a machine ceiling and it is not
+ * far away. On a 10-core box, the same 54-run sweep:
+ *
+ *   12 workers   15.8s per run   43-49% CPU idle -- capacity going unused
+ *   24 workers    8.1s per run   the best measured, about a 1.9x throughput gain
+ *   48 workers   43.6s per run   0.6% CPU idle, load average 143 -- thrashing
+ *
+ * So the curve has a peak rather than a plateau, and overshooting it costs far more than
+ * undershooting: 48 was roughly five times SLOWER than 24, not merely no better. A fixed
+ * 12 left half the machine idle; a fixed 24 would be a number that happens to suit one
+ * laptop.
+ *
+ * Hence twice the core count: floored so a small machine still overlaps its waiting, and
+ * capped at the highest value actually measured good. Extrapolating past 24 is precisely
+ * what produced the 48-worker result, so the cap stays at the evidence.
  */
-export const DEFAULT_NUM_WORKERS = 12;
+export const DEFAULT_NUM_WORKERS = Math.max(4, Math.min(24, availableParallelism() * 2));
 
 /**
  * Per-run wall clock, in seconds.
