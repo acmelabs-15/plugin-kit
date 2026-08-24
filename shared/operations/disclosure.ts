@@ -1246,6 +1246,23 @@ export interface DisclosureScenario {
   readonly id: string;
   readonly prompt: string;
   readonly expectations: readonly string[];
+  /**
+   * Skill-relative paths this scenario SHOULD send the model to, if any.
+   *
+   * The ground truth a pull rate alone cannot supply. A rate answers "how often was this
+   * opened", never "how often was it opened when it should have been", and those differ
+   * by the scenario mix: a reference only three scenarios need shows a low rate however
+   * good its pointer is, which is indistinguishable from a pointer nobody follows.
+   *
+   * An EMPTY list is a real and load-bearing value, not a missing one. A scenario that
+   * should reach nothing is the negative case, and without those a layout that pulled
+   * every file on every run would score perfectly -- which is the token-wasting failure
+   * the body budget exists to prevent.
+   *
+   * Optional overall, because a set that declares none simply has no recall to report and
+   * the pull rates stand alone, exactly as before.
+   */
+  readonly expectsReferences?: readonly string[] | undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -1302,6 +1319,17 @@ export function parseScenarioSet(raw: unknown, source: string): readonly Disclos
       expectations: Array.isArray(expectations)
         ? expectations.filter((item): item is string => typeof item === "string")
         : [],
+      // Absent and empty mean different things here and the distinction is deliberate:
+      // absent is "this set declares no ground truth", empty is "this scenario should
+      // reach nothing". Collapsing them would silently turn every unannotated scenario
+      // into a negative case and make recall look perfect.
+      ...(Array.isArray(row["expects_references"])
+        ? {
+            expectsReferences: row["expects_references"].filter(
+              (item): item is string => typeof item === "string",
+            ),
+          }
+        : {}),
     };
   });
 }

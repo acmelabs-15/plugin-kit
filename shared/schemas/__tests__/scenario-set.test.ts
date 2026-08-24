@@ -178,6 +178,7 @@ describe("the sets this repository ships", () => {
       "eval_name",
       "expectations",
       "expected_output",
+      "expects_references",
       "files",
       "id",
       "prompt",

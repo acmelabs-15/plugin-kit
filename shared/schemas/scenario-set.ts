@@ -43,6 +43,7 @@ export const SCENARIO_KEYS: ReadonlySet<string> = new Set([
   "assertions",
   "expected_output",
   "files",
+  "expects_references",
 ]);
 
 /** Every key the object form may carry at the top level. */

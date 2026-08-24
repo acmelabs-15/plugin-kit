@@ -35,6 +35,7 @@ The evals for a skill. Located at `evals/evals.json` inside the skill directory.
 - `evals[].prompt` — the task to execute
 - `evals[].expected_output` — human-readable description of success
 - `evals[].files` — optional input file paths, relative to the skill root
+- `evals[].expects_references` — optional, skill-relative paths this scenario SHOULD send the model to. Read by `optimize-disclosure.ts` to report RECALL: of the scenarios that ought to have reached a reference, how many did. A pull rate alone cannot answer that, because a reference only three scenarios need shows a low rate however good its pointer is, which is indistinguishable in the data from a pointer nobody follows. An **empty array is meaningful** and is the negative case — this scenario should reach nothing — without which a layout that pulled every file on every run would score perfectly. Omit the key entirely to declare no ground truth for that scenario
 - `evals[].expectations` — verifiable statements; added after the first runs are in flight, not when the file is created
 
 ---
