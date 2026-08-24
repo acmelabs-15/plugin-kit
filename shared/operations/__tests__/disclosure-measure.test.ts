@@ -28,6 +28,7 @@ function run(overrides: Partial<ScenarioRun> = {}): ScenarioRun {
     attempt: 1,
     filesRead: [],
     skillLoaded: true,
+    loadedVia: "skill",
     contextTokens: 1000,
     assertionsPassed: 2,
     assertionsTotal: 2,
@@ -55,6 +56,7 @@ function score(overrides: Partial<SplitScore> = {}): SplitScore {
     passRate: 1,
     meanContextTokens: 10_000,
     runsWithoutSkill: 0,
+    runsLoadedViaFile: 0,
   loadRate: 1,
     ...overrides,
   };

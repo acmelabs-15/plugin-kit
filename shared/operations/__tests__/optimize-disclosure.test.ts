@@ -91,6 +91,7 @@ function run(overrides: Partial<ScenarioRun> = {}): ScenarioRun {
     attempt: 1,
     filesRead: [],
     skillLoaded: true,
+    loadedVia: "skill",
     contextTokens: 1000,
     assertionsPassed: 2,
     assertionsTotal: 2,
@@ -118,6 +119,7 @@ function score(overrides: Partial<SplitScore> = {}): SplitScore {
     passRate: 1,
     meanContextTokens: 10_000,
     runsWithoutSkill: 0,
+    runsLoadedViaFile: 0,
     loadRate: 1,
     ...overrides,
   };
@@ -1071,6 +1073,46 @@ describe("createRunCollector", () => {
     const observed = feed([skillTool("t1"), toolResult("unrelated-id")]);
     expect(observed.skillLoaded).toBe(false);
     expect(observed.skillRequested).toBe(true);
+  });
+
+  // The distinction that a single boolean hid. Both paths leave the body in context,
+  // but a model that read SKILL.md itself is already inside the skill directory when it
+  // chooses what to read next, so its pulls describe different behaviour.
+  test("a body injected by the Skill tool is recorded as loaded via skill", () => {
+    const observed = feed([skillTool("t1"), toolResult("t1")]);
+    expect(observed.loadedVia).toBe("skill");
+  });
+
+  test("a body the model read for itself is recorded as loaded via file", () => {
+    const observed = feed([readTool(`${skillDir}/SKILL.md`, "t1"), toolResult("t1")]);
+    expect(observed.loadedVia).toBe("file");
+  });
+
+  test("a refused Skill call followed by a read is via file, which is the fallback regime", () => {
+    const observed = feed([
+      skillTool("t1"),
+      toolResult("t1", true),
+      readTool(`${skillDir}/SKILL.md`, "t2"),
+      toolResult("t2"),
+    ]);
+    expect(observed.skillLoaded).toBe(true);
+    expect(observed.loadedVia).toBe("file");
+  });
+
+  test("an injected body stays via skill even if SKILL.md is read afterwards", () => {
+    const observed = feed([
+      skillTool("t1"),
+      toolResult("t1"),
+      readTool(`${skillDir}/SKILL.md`, "t2"),
+      toolResult("t2"),
+    ]);
+    expect(observed.loadedVia).toBe("skill");
+  });
+
+  test("a run that never loaded records no path at all", () => {
+    const observed = feed([skillTool("t1"), toolResult("t1", true)]);
+    expect(observed.skillLoaded).toBe(false);
+    expect(observed.loadedVia).toBeNull();
   });
 
   test("a run that never reaches for the skill records neither signal", () => {

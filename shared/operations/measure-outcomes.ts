@@ -95,7 +95,7 @@ import {
 import type { Spec } from "../cli.ts";
 import { mapWithConcurrency } from "../util/pool.ts";
 import { calculateStats, type Stats } from "../util/stats.ts";
-import { runIsolatedHelper, runStreamingLines } from "../util/subprocess.ts";
+import { runIsolatedHelper, runStreamingLines, SKILL_EXECUTION_GRANT } from "../util/subprocess.ts";
 import {
   flagNumber,
   flagString,
@@ -923,6 +923,12 @@ export function createClaudeExecutor(params: {
         "--setting-sources",
         "project",
         "--strict-mcp-config",
+        // On BOTH arms deliberately. The control installs no artifact, so the grant is
+        // inert there, and giving both arms identical flags keeps the artifact's presence
+        // the only difference between them. Without it the treatment arm never loads the
+        // skill and collapses into the control, so the delta this operation exists to
+        // measure would read as zero for every artifact. See the constant.
+        ...SKILL_EXECUTION_GRANT,
       ];
       if (request.model !== undefined && request.model !== "") cmd.push("--model", request.model);
       if (params.permissionMode !== undefined && params.permissionMode !== "") {

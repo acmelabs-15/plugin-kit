@@ -53,6 +53,39 @@ export function claudeEnv(source: EnvSource = Bun.env): Record<string, string> {
   return merged;
 }
 
+/**
+ * Flags every spawned run needs when it must actually EXECUTE a skill.
+ *
+ * Without this the skill NEVER loads, and the run measures something else entirely
+ * while looking healthy. The mechanism, read from the shipped binary at 2.1.241:
+ * the Skill tool's permission ladder is deny rules, then allow rules, then an
+ * auto-allow predicate, then a fallthrough returning `behavior: "ask"` whose message
+ * is the string `Execute skill: <name>`. That string is the PERMISSION PROMPT LABEL,
+ * not an error. The binary's own SDK schema doc for `permission_denied` says of the
+ * headless case: "Without one (bare -p / SDK query() with no canUseTool), 'ask'
+ * decisions are terminal, so this event also covers those implicit denials." So in
+ * `-p` the ask cannot be answered, resolves as a denial, and comes back to the model
+ * as a tool error carrying the prompt's own text.
+ *
+ * Measured on one skill: 0 of 4 runs loaded without this, 4 of 4 with it, and only
+ * the granted runs carry the real success payload `Launching skill:`.
+ *
+ * Two properties worth knowing before changing this:
+ *
+ *   - `--allowedTools` is ADDITIVE, not a restriction. Checked, because the opposite
+ *     would floor every pull rate at zero: granted runs still made 3, 3, 0 and 2
+ *     reference reads, so `Read` survives.
+ *   - A project `settings.json` carrying `permissions.allow: ["Skill"]` does NOT
+ *     work, measured 0 of 4, even under `--setting-sources project`. Only the flag
+ *     does. Do not "simplify" this into the settings file.
+ *
+ * What made it invisible: a strong model often reads SKILL.md itself after the
+ * refusal, which looks like a load and is not one. Measured, same prompt: opus fell
+ * back 3 of 4, sonnet 0 of 4. So the failure's visibility depended on which model
+ * was under test, which is why it read as an intermittent 30% rather than as total.
+ */
+export const SKILL_EXECUTION_GRANT: readonly string[] = ["--allowedTools", "Skill"];
+
 export interface CommandOptions {
   /** Hard deadline in milliseconds. Enforced by SIGKILL, not by Bun's soft `timeout`. */
   readonly timeoutMs: number;

@@ -344,6 +344,8 @@ export interface ScenarioRun {
   readonly filesRead: readonly string[];
   /** Whether the body reached context at all. A run where it did not measures nothing. */
   readonly skillLoaded: boolean;
+  /** Which path put the body there. See {@link SkillLoadPath} for why it matters. */
+  readonly loadedVia: SkillLoadPath;
   /** Everything the `result` event's usage block reported, summed. */
   readonly contextTokens: number;
   readonly assertionsPassed: number;
@@ -489,6 +491,13 @@ export interface SplitScore {
   /** How many runs never loaded the skill, which is a health signal rather than a score. */
   readonly runsWithoutSkill: number;
   /**
+   * How many loaded by the model reading SKILL.md rather than by the skill system.
+   *
+   * A health signal, not a score, and a sharper one than `runsWithoutSkill`: these runs
+   * look completely healthy in every other figure while describing different behaviour.
+   */
+  readonly runsLoadedViaFile: number;
+  /**
    * Error-free runs that loaded the body, over error-free runs. 1 when there were none.
    *
    * Its own figure because it is its own failure. A layout that stops the skill loading
@@ -538,6 +547,7 @@ export function scoreRuns(runs: readonly ScenarioRun[]): SplitScore {
     passRate: assertionsTotal === 0 ? 1 : assertionsPassed / assertionsTotal,
     meanContextTokens: measured.length === 0 ? 0 : contextTokens / measured.length,
     runsWithoutSkill: errorFree.length - measured.length,
+    runsLoadedViaFile: measured.filter((run) => run.loadedVia === "file").length,
     loadRate: errorFree.length === 0 ? 1 : measured.length / errorFree.length,
   };
 }
@@ -1325,6 +1335,22 @@ export function sumUsage(usage: unknown): number {
 }
 
 /** What one run's stream told us. */
+/**
+ * How the body reached context, when it did.
+ *
+ * `skill` is the intended path: the Skill tool executed and the body was injected.
+ * `file` is a fallback: the Skill tool did not deliver, and the model went and read
+ * SKILL.md itself. Both leave the body in context, which is why one boolean hid a
+ * total failure of the skill system for as long as it did.
+ *
+ * They are NOT equivalent measurements. A model that read the file is already inside
+ * the skill directory when it decides what to read next, so its reference pulls
+ * describe a rummaging model rather than one following a pointer from an injected
+ * body. A sweep loading mostly by `file` is measuring the wrong regime and should say
+ * so rather than report a healthy-looking table.
+ */
+export type SkillLoadPath = "skill" | "file" | null;
+
 export interface RunObservation {
   readonly filesRead: readonly string[];
   /**
@@ -1332,6 +1358,8 @@ export interface RunObservation {
    * back without an error. See `skillRequested` for the attempt on its own.
    */
   readonly skillLoaded: boolean;
+  /** Which path put the body in context, or null if nothing did. */
+  readonly loadedVia: SkillLoadPath;
   /**
    * Whether a load was attempted at all, successful or not.
    *
@@ -1425,8 +1453,9 @@ export function createRunCollector(params: {
   const toolCalls: string[] = [];
   let skillLoaded = false;
   let skillRequested = false;
-  /** Tool-use ids of load attempts still waiting on their result. */
-  const awaitingLoadResult = new Set<string>();
+  let loadedVia: SkillLoadPath = null;
+  /** Tool-use ids of load attempts still awaiting a result, and which path each is. */
+  const awaitingLoadResult = new Map<string, Exclude<SkillLoadPath, null>>();
   let contextTokens = 0;
   let finalText = "";
   let resultSubtype = "";
@@ -1455,9 +1484,9 @@ export function createRunCollector(params: {
    * A synthetic event with no id cannot be correlated with a result, so it stays an
    * attempt. Every real transcript carries one.
    */
-  const requestLoad = (toolUseId: string): void => {
+  const requestLoad = (toolUseId: string, via: Exclude<SkillLoadPath, null>): void => {
     skillRequested = true;
-    if (toolUseId !== "") awaitingLoadResult.add(toolUseId);
+    if (toolUseId !== "") awaitingLoadResult.set(toolUseId, via);
   };
 
   const record = (toolName: string, input: Record<string, unknown>, toolUseId: string): void => {
@@ -1468,7 +1497,7 @@ export function createRunCollector(params: {
       // installed alias appearing anywhere in the argument, because the field name has
       // varied between `skill` and `name` across versions.
       const argument = JSON.stringify(input);
-      if (argument.includes(skillDir.split("/").pop() ?? "")) requestLoad(toolUseId);
+      if (argument.includes(skillDir.split("/").pop() ?? "")) requestLoad(toolUseId, "skill");
       return;
     }
     if (toolName === "Write" || toolName === "Edit" || toolName === "NotebookEdit") {
@@ -1485,7 +1514,7 @@ export function createRunCollector(params: {
     // than through the Skill tool -- so it counts as loaded and not as a pull. Counting
     // it as a pull would give the body a pull rate and put it in the file table.
     if (rel === "SKILL.md") {
-      requestLoad(toolUseId);
+      requestLoad(toolUseId, "file");
       return;
     }
     // A pull is recorded on the REQUEST, deliberately, and is not gated on the result
@@ -1530,12 +1559,19 @@ export function createRunCollector(params: {
           const item = asRecord(raw);
           if (item["type"] !== "tool_result") continue;
           const id = typeof item["tool_use_id"] === "string" ? item["tool_use_id"] : "";
-          if (!awaitingLoadResult.delete(id)) continue;
+          const via = awaitingLoadResult.get(id);
+          if (via === undefined) continue;
+          awaitingLoadResult.delete(id);
           // `is_error` is ABSENT on success rather than `false`, so the test is
           // `!== true`. Measured across six real transcripts: 12 successful results
           // carried no flag at all, and `=== false` would have called every one of
           // them a failure -- the same shape of mistake as the defect being fixed.
-          if (item["is_error"] !== true) skillLoaded = true;
+          if (item["is_error"] !== true) {
+            skillLoaded = true;
+            // First successful path wins: a run that was injected and later also read
+            // SKILL.md for its own reasons was still injected.
+            loadedVia ??= via;
+          }
         }
         return undefined;
       }
@@ -1552,6 +1588,7 @@ export function createRunCollector(params: {
     observation: (): RunObservation => ({
       filesRead: [...new Set(filesRead)],
       skillLoaded,
+      loadedVia,
       skillRequested,
       contextTokens,
       toolCalls,

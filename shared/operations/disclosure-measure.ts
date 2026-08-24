@@ -21,7 +21,12 @@
 import { rm } from "node:fs/promises";
 
 import { mapWithConcurrency } from "../util/pool.ts";
-import { runIsolatedHelper, runStreamingLines, type CommandOutcome } from "../util/subprocess.ts";
+import {
+  runIsolatedHelper,
+  runStreamingLines,
+  SKILL_EXECUTION_GRANT,
+  type CommandOutcome,
+} from "../util/subprocess.ts";
 import {
   computeFileStats,
   createRunCollector,
@@ -217,6 +222,9 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
       "--setting-sources",
       "project",
       "--strict-mcp-config",
+      // Without this the skill never loads and every pull rate is a measurement of a
+      // model rummaging for the file rather than being handed it. See the constant.
+      ...SKILL_EXECUTION_GRANT,
     ];
     if (params.model !== undefined && params.model !== "") cmd.push("--model", params.model);
     // Left off unless asked for. A scenario that only reads and reports needs nothing; one
@@ -274,6 +282,7 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
       attempt: params.attempt,
       filesRead: observation.filesRead,
       skillLoaded: observation.skillLoaded,
+      loadedVia: observation.loadedVia,
       contextTokens: observation.contextTokens,
       assertionsPassed: grading.passed,
       assertionsTotal: grading.total,
@@ -298,6 +307,7 @@ function failedRun(params: ScenarioRunParams, error: string): ScenarioRun {
     attempt: params.attempt,
     filesRead: [],
     skillLoaded: false,
+    loadedVia: null,
     contextTokens: 0,
     assertionsPassed: 0,
     assertionsTotal: 0,
