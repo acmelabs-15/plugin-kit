@@ -165,6 +165,14 @@ Work driven from the downstream `ask-user-question` project, whose session note 
 
 **ANALYSIS-004 was authored from this work** and is the durable home for the research. Its sharpest finding bears directly on this repository's own history: a raw pull rate cannot separate a rarely-needed reference from a needed-and-missed one, so any keep-or-prune verdict already issued on one should be re-derived. The collector fixes corrected which reads were counted, never what they were divided by. ANALYSIS-003 Finding 11 records exactly such verdicts.
 
+## Event — 2026-08-24: the destination ruling, and a candidate fault class from an interrupted sweep
+
+Recorded from the downstream ask-user-question session on resume, because both items are this repository's rather than the plugin's.
+
+**Owner ruling on destination.** Every change this work produces lands in the real plugin-kit codebase — `restructure-shared-layer` is a staging area, not a destination, and merging it to `main` is part of the work. Measured at ruling time: 14 commits ahead of `origin/restructure-shared-layer`, 57 commits on the branch not on `main`, and `restructure-shared-layer..main` is 0, so the merge is a fast-forward. It stays queued behind the authoring-guidance rewrite because more commits are coming.
+
+**Candidate fault-class instance, mechanism not yet established.** A stage-1 ablation sweep pair (two concurrent `measure-disclosure` arms, 27 scenarios twice each) was interrupted, and both arms still left complete-looking `results.json` files — `install_state` populated, per-file tables, plausible pass rates. The only tell was cross-arm: `assertions_total` 262 against 259 over the identical scenario set, meaning at least three assertions were never graded. Nothing in either file marks itself partial. This is the note's thesis shape again — a confident answer instead of an error — and suggests `measure-disclosure` should either refuse to write final results while runs are ungraded or stamp the file with expected-versus-graded run counts so a consumer can tell. Not yet investigated in source; recorded so the instance is not lost. The interrupted pair is quarantined under `~/auq-results/ablation-*-interrupted` for forensics.
+
 ## Observations
 
 ### Landed today
