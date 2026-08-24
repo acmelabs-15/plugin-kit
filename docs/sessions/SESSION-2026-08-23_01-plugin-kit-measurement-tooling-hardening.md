@@ -14,7 +14,7 @@ tags:
 # SESSION-2026-08-23_01: Plugin Kit Measurement Tooling Hardening
 
 **Scope**: Changes made TO plugin-kit on 2026-08-23 — control-byte escaping so `grep` can see three files, first publication of the `restructure-shared-layer` branch, and a set of in-flight patches hardening the measurement tooling against silent-void measurements and unisolated grader runs.
-**State**: One commit landed plus a branch publication. Five patches in flight and uncommitted; recorded here as in-progress, not as done. Expect appends.
+**State** (2026-08-24 close): everything lives on a published `main` — the staging branch is merged fast-forward, pushed, and deleted along with the stale `restructure` branch. Landed this cycle: the four disclosure-collector fixes with regression tests; the Skill-tool grant; recall and over-fetch reported beside every pull rate; recall-aware verdicts with the new `unmeasured` verdict; the doctrine and operator references rewritten on evidence with a five-way label legend; the locked table-of-contents standard specified, rolled out across 25 files, and enforced by a warn-tier presence-and-position rule; three informational genre detectors that cannot touch the verdict; the body-structure genre catalog for authors; and the habit flags (`--model`, `--permission-mode`) removed from measure-disclosure in favour of hardcoded sonnet plus acceptEdits and a purpose-named `--tier-study`. ANALYSIS-003/004/005 carry the fault classes, the reference research (18 findings), and the genre taxonomy — 005 corrected itself twice, both dated. Suite 1,612 passing. Open improvement candidates: instance-aware worker default, fail-fast on a broken grant, eval-child cross-session isolation, the counted-runs stamp on results, and the two creator skills using exclusively the refuted in-step pointer form.
 **Companion record**: the build that consumes these standards is tracked separately in the `ask-user-question` Brain project's 2026-08-23 session ledger. That project records work done to the new plugin; this note records work done to plugin-kit. Named in prose only, because Brain wikilinks cannot resolve across projects.
 
 ## Tasks
@@ -23,13 +23,10 @@ Canonical task registry for this session. T-NN is the stable session-note ID. Ag
 
 ### Active (in_progress)
 
+_Empty. All five hardening patches landed and were verified on `main` (confirmed against the tree 2026-08-24); the 2026-08-24 event stream below records the work that followed._
+
 | T-ID | Group | Subject | Agent | Files | Effort | Created |
 |:--|:--|:--|:--|:--|:--|:--|
-| T-03 | Tooling hardening | Grader isolation: one wrapper applying `--setting-sources project`, `--strict-mcp-config` and a per-call empty temp cwd | — | four helper call sites | — | Event 04 |
-| T-04 | Tooling hardening | Install-state guard for `measure-disclosure.ts`, plus the envelope-gated warning holes in `optimize-disclosure` | — | `shared/operations/measure-disclosure.ts`, `shared/operations/optimize-disclosure.ts` | — | Event 05 |
-| T-05 | Tooling hardening | Schemas for eval sets and scenario sets | — | new schema modules | — | Event 06 |
-| T-06 | Tooling hardening | Scope `reclaimPort` to this toolchain's own processes | — | `shared/report/generate-review.ts:670-696` | — | Event 07 |
-| T-07 | Record integrity | Dated erratum on the `/morning` false-fire misattribution | — | `evals/MEASUREMENT-CAVEATS.md` | — | Event 08 |
 
 ### Backlog (pending)
 
@@ -50,10 +47,15 @@ _Empty._
 ### Archive (completed + deleted)
 
 <details>
-<summary>2 archived tasks</summary>
+<summary>7 archived tasks</summary>
 
 | T-ID | Status | Group | Subject | Agent | Files | Effort | Created | Resolved |
 |:--|:--|:--|:--|:--|:--|:--|:--|:--|
+| T-03 | completed | Tooling hardening | Grader isolation wrapper | — | four helper call sites | — | Event 04 | landed pre-resume, verified 2026-08-24 |
+| T-04 | completed | Tooling hardening | Install-state guard + warning holes | — | `measure-disclosure.ts`, `optimize-disclosure.ts` | — | Event 05 | landed pre-resume, verified 2026-08-24 |
+| T-05 | completed | Tooling hardening | Schemas for eval and scenario sets | — | `shared/schemas/` | — | Event 06 | landed pre-resume, verified 2026-08-24 |
+| T-06 | completed | Tooling hardening | Scope `reclaimPort` to own processes | — | `shared/report/` | — | Event 07 | landed pre-resume, verified 2026-08-24 |
+| T-07 | completed | Record integrity | `/morning` erratum | — | `evals/MEASUREMENT-CAVEATS.md` | — | Event 08 | landed pre-resume, verified 2026-08-24 |
 | T-01 | completed | Grep visibility | Escape raw control bytes in three files | — | three files incl. `shared/operations/synthesize-scenarios.ts` | — | Event 02 | Event 02 |
 | T-02 | completed | Git hygiene | Publish `restructure-shared-layer` to `origin` | — | — | — | Event 03 | Event 03 |
 
