@@ -153,6 +153,11 @@ const REPORT_CSS = `
   tr.accepted td:first-child{ box-shadow:inset 2px 0 0 var(--good); }
   .why{ color:var(--muted); font-size:12px; line-height:1.55; }
   .note.invalidated{ border-left-color:var(--bad); } .note.invalidated .nb{ color:var(--bad); }
+  /* The metric row and the note explaining it are separate thoughts, and the shared .g4
+     grid carries no bottom margin, so they render flush. 18px is slightly wider than the
+     14px inter-card gap, so the note reads as following the row rather than as a fifth
+     card in it. */
+  .g4 + .note{ margin-top:18px; }
 `;
 
 function bar(fraction: number, tone: "" | "good" | "warn" | "bad" = ""): string {
