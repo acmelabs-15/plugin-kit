@@ -27,8 +27,16 @@
        That comment is the reason this is --warn now. It shipped pointing at a token defined
        nowhere, so both declarations resolved to unset: the dashed border measured rgb(234,234,234)
        and the text rgb(0,0,0), i.e. an ordinary paragraph in a barely-visible box. The rule
-       stated an intent its own colour defeated. */
-    .unwritten{ border:1px dashed var(--warn); background:transparent; border-radius:var(--r);
+       stated an intent its own colour defeated.
+       The token was only half of it. This is emitted two ways -- as a bare div where a run
+       reported no headline figures, and as an li into the findings slot -- and in the second
+       case `.findings li` above wins at (0,1,1) against a bare class's (0,1,0), so the empty
+       state rendered solid grey there whatever colour this rule named. Measured side by side in
+       the DOM: div.unwritten rgb(245,166,35) dashed, li.unwritten rgb(0,0,0) solid. Both
+       selectors are listed here rather than duplicated into a second rule, so the two forms
+       cannot drift apart. */
+    .unwritten,
+    .findings li.unwritten{ border:1px dashed var(--warn); background:transparent; border-radius:var(--r);
       padding:18px 16px; font-size:13px; color:var(--warn); line-height:1.7; }
     .tblwrap{ overflow-x:auto; }
     .delta.up{ color:var(--good); } .delta.down{ color:var(--bad); }
