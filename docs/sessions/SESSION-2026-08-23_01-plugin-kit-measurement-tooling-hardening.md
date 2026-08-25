@@ -311,6 +311,14 @@ Suite 1,582 pass / 0 fail on the combined tree; main pushed. Remaining from the 
 - The batch's own catches: 008's live re-check of the ToC rollout mis-read a mid-file ToC as absent and a moved file as vanished — corrected whole-file with the lesson stated (a detector answers the question its signature encodes, never the question the reader assumed; head-scoped is right as the Genre 14 lint rule and wrong as a census); 009 renamed constraint to demand to resolve a live vocabulary collision and titled itself to avoid promising a fix its own Finding 9 refutes; 008 kept Genres over Shapes because Genre N is the cross-note citation key; one cross-project fact was repaired at landing by the orchestrator (the AUQ ToC change was bracketed by a pre-registered recall measurement — the set offers replication, not a first measurement)
 - Session-note edges repointed to the three new titles; originals remain the notes of record, byte-identical throughout
 
+## Event — 2026-08-24: round three standardizes the three rebuilt notes to one shape
+
+- Timestamp: 2026-08-24 17:04 PDT, measured. Orchestrated from the companion session; the notes land here
+- Owner commissioned a standardization pass: which sections become standard, in what order, with what templates, plus the ToC-versus-arrangement question — analysis before briefs. The standard designed from the recognizability test, the compaction-head and F-pattern rules, and the house-locked ToC precedent: orientation line, Summary, Recommendations, Table of Contents (numbered, no links, glossed, agent anchor lines), How to read the findings, the body in uniform marker shapes with examples at first point of need, Method, conditional Corrections, Open questions, Glossary, Observations, Relations
+- Landed in place on unchanged permalinks at 46ca466, ab09a4b/3ee561e, 9503995 — all three notes now carry the identical section architecture, one label-token grammar, glossed numbered ToCs, and measured sentence statistics (007 median 16, 008 median 14, 009 mean 15.2 from 21.8). Each pass caught something real: 007 exposed the fence-blind link parsing (a quoted pointer minted a phantom edge — ruled fidelity-over-tidiness, artifact documented, Relations authoritative); 008 found the second variant (fragment anchors mint a SELF-edge), fixed a specimen heading collision, and restored a dropped figure its own token diff caught; 009 restored a round-2 compression loss and disclosed the one reconstructed character in a fence
+- The receipt-unreliability picture completed: across the batch every edit-receipt counter was wrong at least once, in both directions, on both observation and relation counts — read-back is the only truth, now stated as the practical rule
+- The three originals byte-identical through all three rounds, SHA and diff proven at every landing
+
 ## Observations
 
 ### Landed today
