@@ -13,41 +13,27 @@ tags:
 
 # ANALYSIS-009: Why Weaker Models Miss Skills, and What Helps
 
-This note explains why a weaker model fails to load the right skill, and what the published and shipped record says helps. It is the readable edition of ANALYSIS-006, which stays the note of record; content parity with it was checked on 2026-08-24.
+The readable rebuild of ANALYSIS-006: Weak-Model Routing for Progressive Disclosure, content-parity as of 2026-08-24. The original remains the note of record. One calibration governs every result below: a remedy that helps weaker models often does nothing for stronger ones, so no effect on a strong model is the predicted outcome rather than proof the remedy failed.
 
-## What this note found
+## Summary
 
-The most useful single result is a calibration. A remedy that helps weaker models often does nothing for stronger ones. So a null result on the strong tier is what the evidence predicts, not a refutation. Reading it as a refutation throws away working remedies.
+Weaker models miss skills for two separate reasons, and neither is fixed by writing a more forceful pointer.
 
-The ten results below are the whole note in short form. Each names the findings that carry it.
+Three dated corrections apply — see Corrections.
 
-**Vendors now put a number on how many tools a model may choose among, and none on how many files it may read.** Anthropic says tool selection degrades past 30 to 50 available tools. Gemini caps the active set at 10 to 20. OpenAI advises fewer than 20 at the start of a turn. ANALYSIS-004 found no vendor capping the reference files a skill may bundle. The record is coherent once you separate the two: vendors bound what a model must choose among, and decline to bound what it may later read. See Finding 1.
+1. Three vendors now cap how many tools a model may choose among, and no vendor caps how many files it may later read (Finding 1).
+2. Published measurement confirms the gap this repository found: longer candidate lists hurt weaker models and barely move the strongest (Finding 2).
+3. Weak models fail in both directions, and knowing a model is weak does not tell you which direction to expect (Finding 3).
+4. A remedy's benefit is graded by the model receiving it, recovering up to 11 points for weaker models and nearly nothing for stronger ones (Findings 6, 7).
+5. A description rewritten by a strong model can make a weaker model choose worse, so tune it on the model that will do the choosing (Findings 8, 9).
+6. Asking one step for too many things at once breaks all of them, which explains a pointer that scored zero of twenty here (Finding 4).
+7. Model strength does not predict which model follows several instructions at once, so strength is one variable among several (Finding 5).
+8. The most-cited third-party prior art in this ecosystem says nothing about model strength, confirmed by grep (Finding 14).
+9. A test whose answer the model already knows cannot detect a failure to load a skill, and this set has never been audited for that (Finding 19).
+10. A task-to-file list in an always-loaded file beat a skill left to fire on its own, 100 percent against 53 (Findings 21, 24).
+11. The most forceful wording performed worst, losing to an instruction that sequenced the work and named the skill second (Finding 22).
 
-**Published measurement confirms the tier gap this repository measured, in the same direction.** Tool-selection accuracy falls as the candidate list grows, most sharply between five and ten items. The strongest model in the set barely moves across the same growth. List length is a weak-model problem specifically. See Finding 2.
-
-**Weak models fail in both directions, and the direction is not predictable from the tier.** One benchmarked model called a tool on almost every query. Two others almost never called one. Many sat near coin-flip accuracy. Weakness predicts that routing will be unreliable; it does not predict which way. See Finding 3.
-
-**The benefit of a routing remedy is graded by the capability of the model receiving it.** A training-free prompt rewrite recovered up to 11 points of instruction-following for weaker production models and left stronger ones essentially unchanged. Named controls rule out extra tokens, reordering and measurement headroom. Anthropic's own tool search numbers reproduce the shape: Opus 4 went from 49 to 74 percent, Opus 4.5 from 79.5 to 88.1. See Findings 6 and 7.
-
-**A description polished by the strongest model can make a weaker model route worse.** One benchmark had two capable models rewrite tool descriptions, then measured eight downstream models. A Llama2-70b rewrite gained 7.83 percent for Llama2-13b. A GPT-4 rewrite sharply degraded the ChatGLM and Llama2 families. There is no portable phrasing rule for weak models. There is a portable method: optimise on the tier that will route, not merely measure on it. See Findings 8 and 9.
-
-**A second cause sits underneath the first, and it is not about routing at all.** Reliable instruction-following breaks down past five or six simultaneous demands. Each demand individually decays gently while the chance of satisfying all of them collapses. A pointer inside a workflow step is one more simultaneous demand. That is the best published explanation for an imperative in-step pointer scoring 0 of 20 here. See Finding 4.
-
-**The same literature refuses to let the scale story stay simple.** One paper reports ranking inversions against scaling expectations, with a nominally weaker model handling multiple demands more reliably than a stronger sibling. It also records a model jumping from rank ten to rank two on a larger token budget alone. Model tier is one variable among several. See Finding 5.
-
-**The most-cited third-party prior art in this ecosystem says nothing about model tiers.** Grepping Addy Osmani's README, blog post and lesson for eight tier-related terms returns zero matches in all three. His stated reason for progressive disclosure is token cost and attention dilution, not model capability. His pack is not evidence on this question. See Finding 14.
-
-**A test whose answer the model already knows cannot detect a routing failure.** Two independent sources converge: a disclosure mechanism has failed when the model falls back to its training instead of the supplied content. A scenario the model can pass unaided passes whether or not the skill fired. This repository has never audited its should-fire set for that defect. See Finding 19.
-
-**One external citation this repository relies on is misattributed, and the correction removes a rule's last measured support.** ANALYSIS-005 credits "a numbered workflow is the spine of the body" to Vercel's 44-to-95 percent result. The primary text shows that change was an instruction added to AGENTS.md, outside the skill entirely. Vercel's other cited claim, passive context at 100 percent against skills at 53 to 79, is accurate. Vercel also measured that the most forceful wording was the worst one. See Findings 21 and 22.
-
-## What these look like in practice
-
-Three concrete artifacts from the record. Every string below is quoted from a source this note verified.
-
-### The gap that prompted this note
-
-This repository measures its skills on two model tiers and gets two different artifacts back.
+**Result 2 rests on this repository's own two-tier measurements.** The two model tiers fail in opposite directions:
 
 | What was measured | Weak tier (sonnet) | Strong tier |
 |---|---|---|
@@ -55,15 +41,9 @@ This repository measures its skills on two model tiers and gets two different ar
 | Reference files read, per file | 33 to 100 percent | all of them |
 | Files read that were not needed | none, across eight negative runs | reads everything, so it over-fetches |
 
-Three details sharpen the table. 15 of the 19 misses fire on the strong tier over identical hook text. 8 of the misses sit on near-verbatim hook vocabulary, which makes the hook a measured-weak lever rather than an untested one. Moving a pointer into a workflow step halved reach at 40 runs per arm, and an imperative pointer inside a step scored 0 of 20 on a route where the file was never read.
+Three details sharpen that table. 15 of the 19 misses fire on the strong tier over identical hook text. 8 of the misses sit on near-verbatim hook vocabulary, which makes the hook a measured-weak lever rather than an untested one. Moving a pointer into a workflow step halved reach at 40 runs per arm, and an imperative pointer inside a step scored 0 of 20 on a route where the file was never read.
 
-ANALYSIS-004 drew the operational conclusion. The two tiers fail in opposite directions, so the weak tier is the only instrument that can detect a signposting defect. What it could not establish was why, and what to do. This note answers those.
-
-### A routing map, as it sits in an always-loaded file
-
-A skill asks the model to make a judgment call. The model reads the skill's own description, reads the request, and decides whether the two match. A routing map asks for nothing of the kind. The instruction is already in front of the model on every turn, and the model only matches a task to a line and opens the file named on it. A standing lookup instruction beats a judgment call.
-
-TanStack installs one into the agent's own config file:
+**Result 10 is an architecture, and this is its shape.** A skill asks the model to make a judgment call: it reads the skill's own description, reads the request, and decides whether the two match. The list below asks for nothing of the kind. It is already in front of the model on every turn, so the model only matches a task to a line and opens the file named on it. A standing lookup instruction beats a judgment call. TanStack installs one into the agent's own config file:
 
 ```text
 # Skill mappings — when working in these areas, load the linked skill file into context.
@@ -72,85 +52,76 @@ intent-skills:
     ➞      node_modules/@tanstack/ai/skills/ai-core/SKILL.md
 ```
 
-The block name, the header comment, the `task:` key and this task-and-path pair are all recorded verbatim in the source. The key naming the path is not recorded, so the arrow stands in for it.
+Fidelity: the header comment, the block name, the `task:` key and the task-and-path pair are verbatim. Lines around them are trimmed and an over-long line may wrap. The source does not record the key that names the path, so the arrow marks the one join this block reconstructs, and it is the only mark here that is not the source's.
 
-Vercel measured this architecture at 100 percent against 53 for a skill left to fire on its own. TanStack ships it as the install path for a library, and reached it independently. Finding 24 carries both.
+## Recommendations
 
-### Two rival wordings for the same instruction
+1. **Optimise the description on the model that will do the choosing, not merely measure on it** (Findings 8, 9). ANALYSIS-004 established the weak tier as the detection instrument; the rewriter result makes it the optimisation target too, because editing a description is an intervention with a direction and that direction has been observed negative. Cost: every description edit now needs a measured run on the weak tier before it ships.
+2. **Spend triggering effort on the description** (Finding 12). One vendor states the two-surface split outright and another implies it, and this repository confirmed it from the other side by measuring that body genre does not move triggering. The vendor floor is 3 to 4 sentences covering what it does, when to use it and when not to. Limit: this fixes triggering only, and a skill that fires and then behaves wrongly is a body problem this does not touch.
+3. **Attack description overlap between sibling skills, mechanically** (Finding 10). Two vendors name overlapping and vague descriptions as the confusion mechanism, one benchmark had to merge 390 tools into 198 before ground truth was definable, and 8 of 19 misses here sit on near-verbatim hook vocabulary. Limit: clustering produces a candidate list rather than a verdict, so a human still decides which pairs are genuinely the same.
+4. **When a step's pointer is missed, take demands out of the step** (Finding 4). Per-demand pass rate decays gently while the conjunction collapses multiplicatively, so strengthening one demand optimises the term that was not the problem. Cost: something the step currently asks for has to move elsewhere or go, and that is a content decision nobody can make mechanically.
+5. **Read no effect on a strong model as the predicted result** (Findings 6, 7). Capability grading is measured with controls on current production tiers and reproduced independently in vendor internal testing. Cost: this cuts both ways, because a strong-tier arm can then no longer confirm a remedy either, so the weak tier has to carry the statistical power on its own.
+6. **Read the tool-count numbers as a bound on choosing, not on reading** (Finding 1, and Open questions). The numbers are real and they describe a different surface: vendors bound what a model must choose among and decline to bound what it may later read, which is consistent with ANALYSIS-004's depth-not-count principle. Limit: this leaves the skill-count question genuinely open rather than answered.
+7. **Write the tier guidance knowing the escape hatch is missing** (Finding 11). Every vendor ships a forced-invocation control for tools and none exists for skills, so guidance authored here compensates for that absence exactly as ANALYSIS-004's reference-following guidance compensates for the absence of declarative attachment. Cost: the guidance has to say it is compensating, which reads longer and less confident than a plain rule.
+8. **Spend on pointer placement only after separating position from demand count** (Finding 5). Four accounts now disagree about where a pointer should sit and one says position is not the variable at all. Cost: that separation needs a two-factor experiment, which is more expensive than the placement A/B it replaces.
+9. **Audit the should-fire set for scenarios the model can already pass** (Finding 19). Two independent sources make reversion to training the observable that separates a working mechanism from a broken one, and the existing ablation harness produces the audit for free. Cost: some fraction of the 39 scenarios will turn out to measure nothing, which lowers the denominator and makes past numbers look worse than they read today.
+10. **Correct ANALYSIS-005's lineage rule 1, where the next author will find it** (Finding 21). Its verdict of SURVIVES rests on a Vercel result that measured an instruction added to AGENTS.md rather than a numbered workflow inside a skill, so rule 1 belongs with rules 3, 5 and 6 as doctrine never measured here. Cost: this removes a rule's support without replacing it, leaving four unmeasured rules where the lineage table showed three.
+11. **Build the cross-tier matrix as one metric per tier** (Finding 16). The published protocol asks a different qualitative question of each model, and three impressions cannot be subtracted. Limit: this diverges from the published protocol, so there is no external precedent to point at when the method is questioned.
+12. **Test the task-to-file list against the description, on this repository's own artifacts** (Findings 21, 24). Vercel measured the architecture at 100 against 53 and TanStack ships it, but neither result is about these skills, so hold content fixed and vary only whether the list sits in always-loaded context. Cost: it is a real A/B with a build and two arms, and the architecture may lose on this repository's artifacts.
+13. **Prefer wording that sequences the work over wording that commands it** (Findings 4, 22). Vercel measured a forceful instruction losing to one that sequenced the work and named the skill second, and this repository measured an imperative in-workflow pointer at 0 of 20. Limit: the Vercel half was measured on one suite on an unnamed model, so the direction is better supported than the size.
+14. **Publish the suite's defects alongside its findings** (Finding 20). Vercel's leakage removal, behaviour-based assertions and retries against variance are the same controls this repository learned the hard way, and stating them next to a result is what makes it checkable. Cost: a result carrying its own defects reads weaker at first glance than an unqualified number.
 
-Vercel varied only the wording of an instruction in an always-loaded file, holding the skill and the docs fixed.
+## Table of Contents
 
-| Wording | What the agent did | Outcome |
-|---|---|---|
-| "You MUST invoke the skill" | "Reads docs first, anchors on doc patterns" | "Misses project context" |
-| "Explore project first, then invoke skill" | "Builds mental model first, uses docs as reference" | "Better results" |
+1. Summary — the single most important claim, eleven results, and the two exhibits they rest on.
+2. Recommendations — fourteen actions, each citing its findings and naming its cost or limit.
+3. Table of Contents — this list.
+4. How to read the findings — the marker shape, the label vocabulary, and the citation convention.
+5. Findings 1 to 5: why the weak tier misses — list length, failure direction, and demand count.
+6. Findings 6 to 14: what helps, and what will not transfer — the remedies and their evidence.
+7. Finding 15: the figure a search summary invented — the method correction, kept as a finding.
+8. Findings 16 to 20: how these failures get detected — cross-tier testing and test design.
+9. Findings 21 to 24: Vercel and TanStack, read in full — two named sources in primary text.
+10. Method — the corpus, the instruments, the verification rule, and the provenance table.
+11. Corrections — three dated corrections, indexed to where each is stated in full.
+12. Open questions — sixteen items, each with why it is open and what would close it.
+13. Glossary — one word per concept, the words avoided, and three flagged ambiguities.
+14. Observations — forty-nine, grouped in five.
+15. Relations — two edges.
 
-The forceful wording lost. That is a direct counterexample to answering a missed pointer with a stronger imperative, and it converges with this repository's own 0-of-20 result. Finding 22 carries the detail.
+Two notes for an agent reading this file. Finding numbers are stable identifiers, and each claim's full statement lives under its own finding rather than in Summary or Recommendations, which only cite. Fenced blocks are quoted specimens, so a heading inside a fence belongs to the quoted material and not to this note.
 
-## What to do about it
+## How to read the findings
 
-Two constraints shape every recommendation. This repository is Claude-first, and a skill's frontmatter description is the only routing surface the mechanism exposes. Body genre has been measured here not to move triggering. Where a remedy needs a mechanism Claude Code skills do not have, it is recorded and not recommended.
+Every finding has the same markers, in this order.
 
-1. **Optimise the description on the tier that will route, not merely measure on it** (Findings 8, 9). ANALYSIS-004 established the weak tier as the detection instrument. The rewriter result makes it the optimisation target too. Editing a description is an intervention with a direction, and that direction has been observed negative. Measure an edit on the routing tier before it ships.
-2. **Spend triggering effort on the description** (Finding 12). One vendor now states the two-surface split outright and another implies it. This repository confirmed it from the other side, by measuring that body genre does not move triggering. The vendor floor for the routing surface is 3 to 4 sentences covering what it does, when to use it and when not to. Effort spent on the body to fix a triggering problem is spent on the wrong surface.
-3. **Attack description overlap between sibling skills, mechanically** (Finding 10). Two vendors name overlapping and vague descriptions as the confusion mechanism. One benchmark had to merge 390 tools into 198 before ground truth was definable. 8 of 19 misses here sit on near-verbatim hook vocabulary. Embedding sibling descriptions and clustering them is the operation that benchmark performed. It is cheap, and it produces a candidate list rather than a judgement.
-4. **When a step's pointer is missed, take demands out of the step** (Finding 4). Per-demand pass rate decays gently and the conjunction collapses multiplicatively. Strengthening one demand optimises the term that was not the problem. This is the first published account that explains the 0-of-20 in-step result, and it predicts a stronger imperative would not have helped.
-5. **Read a strong-tier null as the predicted result** (Findings 6, 7). Capability-graded benefit is measured with controls on current production tiers, and reproduced independently in vendor internal testing. Power any A/B on a routing remedy on the weak tier, and treat a strong-tier null as consistent with the remedy working.
-6. **Read the tool-count numbers as a bound on routing surfaces only** (Finding 1, and the open questions). The numbers are real and they describe a different surface. Vendors bound routing surfaces and decline to bound disclosure surfaces, which is consistent with ANALYSIS-004's depth-not-count principle rather than a reason to revisit it.
-7. **Write the tier guidance knowing the escape hatch is missing** (Finding 11). Every vendor ships a forced-invocation control for tools and none exists for skills. Guidance authored here compensates for that absence, exactly as ANALYSIS-004's reference-following guidance compensates for the absence of declarative attachment. Say so, rather than presenting a pointer as the natural mechanism.
-8. **Spend on pointer placement only after separating position from demand count** (Finding 5). Four accounts now disagree about where a pointer should sit, and one says position is not the variable at all. A further placement A/B buys nothing until demand count and position are varied independently.
-9. **Audit the should-fire set for scenarios the model can already pass, and treat each one as a measurement defect** (Finding 19). Two independent sources make reversion to training the observable that separates a working disclosure mechanism from a broken one. The existing ablation harness produces the audit for free: a scenario whose score does not move when the skill is stripped is one whose answer was already in the model, and it can neither pass nor fail informatively.
-10. **Correct ANALYSIS-005's lineage rule 1, where the next author will find it** (Finding 21). Its verdict of SURVIVES rests on a Vercel result that measured an instruction added to AGENTS.md, not a numbered workflow inside a skill. Move rule 1 to the same status as rules 3, 5 and 6, namely defensible doctrine never measured here. Re-file the Vercel result as evidence for prompt-level forced invocation. That note's own lineage section argues for making this kind of correction loudly.
-11. **Build the cross-tier matrix as one metric per tier** (Finding 16). The published protocol asks a different qualitative question of each model, and three impressions cannot be subtracted. This repository's existing two-tier sweeps are the correct shape, and no published equivalent was found, so describe them that way when the practice is written down.
-12. **Test the routing map against the description, on this repository's own artifacts** (Findings 21, 24). Vercel measured the architecture at 100 against 53 and TanStack ships it, but neither result is about these skills. Hold the content fixed and vary only whether a task-to-file map sits in always-loaded context. It is a clean A/B and the highest-value unrun experiment this survey surfaced.
-13. **Prefer wording that sequences the work over wording that commands it** (Findings 4, 22). Vercel measured "You MUST invoke the skill" losing to an instruction that sequenced the work and mentioned the skill second. This repository measured an imperative in-workflow pointer at 0 of 20. Two independent results, one mechanism: the conjunction collapses whatever force the individual term carries.
-14. **Publish the suite's defects alongside its findings** (Finding 20). Vercel's leakage removal, behaviour-based assertions and retries against variance are the same controls this repository learned the hard way. Stating them next to a result is what makes the result checkable rather than merely reported.
-
-## How to find things in this note
-
-1. What this note found — the ten results, in plain sentences.
-2. What these look like in practice — the tier gap, a routing map, two rival wordings.
-3. What to do about it — fourteen recommendations, each naming its findings.
-4. How to find things in this note — this list.
-5. How to read a finding — the five parts every finding has, and the label tokens.
-6. Findings 1 to 5 — why the weak tier misses.
-7. Findings 6 to 14 — what helps, and what will not transfer.
-8. Finding 15 — the figure a search summary invented.
-9. Findings 16 to 20 — how these failures get detected.
-10. Findings 21 to 24 — Vercel and TanStack, read in full.
-11. What nobody has measured yet — sixteen open questions.
-12. Words this note uses precisely — the glossary, and the words it avoids.
-13. How every claim here was checked — the method, and the sources reached.
-14. Observations — forty-nine, grouped.
-15. Relations.
-
-## How to read a finding
-
-Every finding has the same five parts, in the same order. Learn the shape once.
-
-- **Labels.** Fixed tokens, separated by a middle dot. Nothing else on the line.
-- **In short.** The finding itself, standalone. This line alone carries it.
-- **Evidence.** Who measured or asserted it, with exact words where exact words matter.
-- **Limits.** What the evidence does not support. Absent where the source states none.
+- **In short.** The finding standalone, in one or two sentences. This alone carries it.
+- **Labels.** A pure token list, nothing else on the line.
+- **Evidence.** Figures, quotations and sources.
+- **Limits.** What the evidence does not support.
 - **What this changes here.** What it means for this repository.
 
-The first three parts are lookup. The last is explanation. A reader who wants only the evidence can skip the last line of every finding, and a reader who wants only the consequences can read the first two and the last.
+**Markers are conditional, so an absence is informative.** A marker appears only where its content exists. `Limits` is missing from a finding whose source states none, and that absence is a fact about the source rather than an omission here.
 
-**Evidence label tokens**, one per finding:
+**The first three markers are lookup and the last is explanation.** A reader wanting only the evidence skips the last line of every finding. A reader wanting only the consequences reads `In short` and `What this changes here`.
+
+**Label tokens are CAPS, separated by a middle dot, and multiword tokens use spaces rather than hyphens.**
+
+Source tokens: `VENDOR` · `PUBLISHED` · `COMMUNITY` · `METHOD`.
+
+Evidence tokens:
 
 - `MEASURED` — somebody ran an experiment and reports a number.
 - `GUIDANCE` — somebody asserts it and publishes no evidence.
 - `SHIPPED-PRACTICE` — somebody does it in a product and claims nothing about it.
 
-**Source tokens**: `VENDOR`, `PUBLISHED`, `COMMUNITY`, `METHOD`.
-
-**Transfer tokens**, where the source assigns one:
+Transfer tokens, where the source supports one:
 
 - `PORTABLE EVIDENCE` — the result transfers to this repository's problem.
 - `TECHNIQUE` — the method transfers even though the result does not.
 - `MECHANISM-SPECIFIC` — it needs a mechanism Claude Code skills lack, so it is recorded and not recommended.
 
-**Qualifier tokens**, where a finding needs one:
+Qualifier tokens, where a finding needs one:
 
 - `CONTRARY` — the evidence cuts against this note's own thesis.
 - `CORRECTION` — the finding corrects something this repository had recorded.
@@ -159,15 +130,15 @@ The first three parts are lookup. The last is explanation. A reader who wants on
 - `OFF-TARGET` — the measurement is sound and it measures a neighbouring question.
 - `SCOPE` — what a source leaves unsaid bounds how far its number travels.
 
-The findings answer three questions in order. Findings 1 to 5 say why the weak tier misses. Findings 6 to 14 catalogue remedies. Finding 15 is a method correction. Findings 16 to 20, added on 2026-08-24, say how the community detects tier-dependent failures. Findings 21 to 24 cover Vercel and TanStack in primary text, and Finding 21 is a second correction that lands on a sibling note. This note extends ANALYSIS-004's vendor survey along the model-tier axis and does not repeat it.
+**Sibling notes are cited as bare text**, in the form ANALYSIS-004 Finding 17. No wikilink appears in the body, because a double bracket outside Relations parses as a graph edge.
 
 ## Findings 1 to 5: why the weak tier misses
 
-### Finding 1. Vendors cap tool lists, never reference files
-
-**Labels.** VENDOR · GUIDANCE
+### Finding 1: Vendors cap tool lists, never reference files
 
 **In short.** Three vendors bound how many tools a model may choose among. No vendor bounds how many reference files a skill may bundle.
+
+**Labels.** VENDOR · GUIDANCE
 
 **Evidence.** Verbatim, from primary text:
 
@@ -177,13 +148,13 @@ The findings answer three questions in order. Findings 1 to 5 say why the weak t
 
 **Limits.** The three numbers disagree. 30 to 50, 10 to 20, and under 20 are three different bounds, and none carries a published derivation. That is why the label is GUIDANCE despite the specificity. What matters is not the value but that all three exist.
 
-**What this changes here.** ANALYSIS-004 established that no vendor caps a skill's bundled reference files, that Anthropic's skill-creator calls bundled resources unlimited, and that its claude-api skill ships 66 of them. Set beside this finding the record is coherent rather than contradictory. A tool list is a routing surface, evaluated every turn. A reference file is a disclosure surface, evaluated only after its pointer has already won. The count guidance attaches to the first and not the second, and the two must never be conflated. Whether the tool thresholds transfer to skill counts is untested and sits in the open questions.
+**What this changes here.** ANALYSIS-004 established that no vendor caps a skill's bundled reference files, that Anthropic's skill-creator calls bundled resources unlimited, and that its claude-api skill ships 66 of them. Set beside this finding the record is coherent rather than contradictory. A tool list is a routing surface, evaluated every turn. A reference file is a disclosure surface, evaluated only after its pointer has already won. The count guidance attaches to the first and not the second, and the two must never be conflated. Whether the tool thresholds transfer to skill counts is untested and sits in Open questions.
 
-### Finding 2. Long tool lists hurt weaker models most
-
-**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
+### Finding 2: Long tool lists hurt weaker models most
 
 **In short.** Tool-selection accuracy falls as the candidate list grows, the fall is sharpest at small list sizes, and the strongest model barely moves.
+
+**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
 
 **Evidence.** MetaTool (arXiv 2310.03128) evaluates tool-usage awareness and tool selection across nine models, scoring selection with a Correct Selection Rate over lists of varying size. Verbatim from the v3 full text:
 
@@ -193,13 +164,13 @@ Three results sit in one paragraph. List length degrades selection. The degradat
 
 **Limits.** They are substantial. The models are the 2023 generation, and its open-source members are far weaker than any tier this repository ships against, so the weakest results are not predictive of sonnet. Correct Selection Rate measures selection from an explicitly presented list, which is closer to Claude's tool block than to skill triggering, where the candidates are frontmatter descriptions in the system prompt. The paragraph reports a figure rather than a controlled manipulation of list size over fixed queries. The transfer covers the direction of the effect and its tier-dependence, not its magnitude.
 
-**What this changes here.** This is the same shape as the recall table, on a different mechanism, a different task and a different model family. It is the first independent corroboration the tier gap has.
+**What this changes here.** This is the same shape as the recall table in Summary, on a different mechanism, a different task and a different model family. It is the first independent corroboration the tier gap has.
 
-### Finding 3. Weak models fail in both directions, unpredictably
-
-**Labels.** PUBLISHED · MEASURED
+### Finding 3: Weak models fail in both directions, unpredictably
 
 **In short.** Among weak models both failure directions occur, and which one a model takes is a property of that model rather than of its capability level.
+
+**Labels.** PUBLISHED · MEASURED
 
 **Evidence.** The same benchmark separates whether a model knows it needs a tool from whether it picks the right one. Verbatim on the first:
 
@@ -209,11 +180,11 @@ Three results sit in one paragraph. List length degrades selection. The degradat
 
 The consequence is narrow and real. The instrument choice here stays correct, because the tier this repository ships against is measured at the under-reach pole with zero over-fetch across eight negative runs. That is a measured fact about this tier on this artifact, and it does not transfer to a different weak model. An over-fetch check belongs in any sweep against a tier nobody has characterised.
 
-### Finding 4. Asking for too many things at once breaks all of them
-
-**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
+### Finding 4: Asking for too many things at once breaks all of them
 
 **In short.** Reliable instruction-following breaks down past five or six simultaneous demands, because the chance of satisfying all of them collapses while each one individually decays gently.
+
+**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
 
 **Evidence.** Constraint Saturation Evaluation (arXiv 2608.12426) varies the number of simultaneous constraints from one to twelve across 15 models, using deterministic rule-based verifiers and no LLM judge, over 369,753 checks. Verbatim from the abstract:
 
@@ -229,11 +200,11 @@ It also reframes the placement null. Moving a pointer into a workflow step does 
 
 The prescription is uncomfortable and clean. Reduce the number of things a step asks for, rather than strengthening any one of them. Strengthening a pointer raises its individual pass rate, which the paper measures as the term that decays gently. The term that collapses is the conjunction, and only removing demands touches that.
 
-### Finding 5. Model strength does not predict handling many demands
-
-**Labels.** PUBLISHED · MEASURED · CONTRARY
+### Finding 5: Model strength does not predict handling many demands
 
 **In short.** Capability does not predict which model handles several demands at once, and at least one variable other than capability moves a model eight ranks on its own. This is contrary evidence, kept live rather than resolved.
+
+**Labels.** PUBLISHED · MEASURED · CONTRARY
 
 **Evidence.** Under the heading "Scale does not predict compositional performance", verbatim:
 
@@ -249,11 +220,11 @@ IFScale's contribution is that size correlates with the pattern of degradation r
 
 ## Findings 6 to 14: what helps, and what will not transfer
 
-### Finding 6. One rewrite helps weak models, not strong ones
-
-**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
+### Finding 6: One rewrite helps weak models, not strong ones
 
 **In short.** A training-free prompt rewrite recovers up to 11 points of instruction-following for weaker production models and leaves stronger ones essentially unchanged, with named controls excluding the obvious confounds. This is the central remedy result in the note.
+
+**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
 
 **Evidence.** Instruction Stacking Collapse (arXiv 2608.02639) stacks 24 verifier-checked instructions, one to twenty at a time, over three production-tier models: Claude Sonnet 4.6, GPT-5-mini and Gemini 2.5 Flash. Verbatim from the abstract:
 
@@ -263,13 +234,13 @@ Three properties make this the most useful external result. The models are curre
 
 **Limits.** The object rewritten is a stacked system prompt, not a skill description. The technique does not transfer directly. The grading does.
 
-**What this changes here.** This licenses the note's most transferable output. A remedy measured on the strong tier and showing nothing has produced the predicted result. A remedy measured only on the strong tier has measured almost nothing, which is ANALYSIS-004's Finding 3 reached from the remedy side rather than the detection side.
+**What this changes here.** This licenses the note's most transferable output. A remedy measured on the strong tier and showing nothing has produced the predicted result. A remedy measured only on the strong tier has measured almost nothing, which is ANALYSIS-004 Finding 3 reached from the remedy side rather than the detection side.
 
-### Finding 7. Anthropic's own numbers show the same lopsided gain
-
-**Labels.** VENDOR · MEASURED · MECHANISM-SPECIFIC
+### Finding 7: Anthropic's own numbers show the same lopsided gain
 
 **In short.** Anthropic's tool search tool improves selection accuracy far more for the weaker starting model than for the stronger one, and this repository cannot adopt the mechanism.
+
+**Labels.** VENDOR · MEASURED · MECHANISM-SPECIFIC
 
 **Evidence.** Anthropic's advanced tool use engineering post reports, verbatim: "Internal testing showed significant accuracy improvements on MCP evaluations when working with large tool libraries. **Opus 4 improved from 49% to 74%, and Opus 4.5 improved from 79.5% to 88.1% with Tool Search Tool enabled.**"
 
@@ -281,13 +252,13 @@ The mechanism is deferred loading plus a search step. Tools marked `defer_loadin
 
 **Limits.** Two, before this reads as a recommendation. The numbers are internal testing and not externally reproducible. And the comparison runs across model generations, Opus 4 against Opus 4.5, rather than across tiers within one generation, so it corroborates the grading rather than establishing it.
 
-**What this changes here.** Skills already implement three-level progressive disclosure, and there is no `defer_loading` flag, no search step, and no way for an author to ask that a skill body or reference be retrieved rather than chosen. This is ANALYSIS-004's Finding 11 recurring on a new axis: the harness can do the deterministic thing, and skills are not wired to it.
+**What this changes here.** Skills already implement three-level progressive disclosure, and there is no `defer_loading` flag, no search step, and no way for an author to ask that a skill body or reference be retrieved rather than chosen. This is ANALYSIS-004 Finding 11 recurring on a new axis: the harness can do the deterministic thing, and skills are not wired to it.
 
-### Finding 8. A strong model's rewrite can make a weak model worse
-
-**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
+### Finding 8: A strong model's rewrite can make a weak model worse
 
 **In short.** A description rewritten by a strong model is an intervention with a measurable direction, and that direction has been observed negative for some downstream model families. This is the most actionable finding in the note.
+
+**Labels.** PUBLISHED · MEASURED · PORTABLE EVIDENCE
 
 **Evidence.** MetaTool v6 reports two description experiments. On length, verbatim: "The more detailed the description, the more efficient tool selection. As shown by the fitted line, as the length of the description increases, the CSR continuously increases, indicating that detailed descriptions can help LLMs better understand the functionality of tools, thus improving the accuracy of tool selection."
 
@@ -297,11 +268,11 @@ On rewriting, verbatim and in full because the detail carries the finding: "we b
 
 **What this changes here.** ANALYSIS-004 Finding 3 established that signposting must be measured on the weak tier. This extends it: the description must be optimised on the tier that will route, because a description tuned by or for the strongest tier is a specific intervention with a measurable sign, and that sign has been observed negative.
 
-### Finding 9. A fix can help one model and harm another
-
-**Labels.** VENDOR · PUBLISHED · GUIDANCE
+### Finding 9: A fix can help one model and harm another
 
 **In short.** The direction of a phrasing intervention depends on the model receiving it, which retires the search for a portable weak-model phrasing rule. Three sources converge on it.
+
+**Labels.** VENDOR · PUBLISHED · GUIDANCE
 
 **Evidence.** Beyond Finding 8, two vendors say the same about their own levers, without numbers:
 
@@ -314,11 +285,11 @@ Anthropic generalises the principle to output format: "Even your tool response s
 
 **What this changes here.** Together these retire the question the owner's brief asked, in the form it was asked. No community-favoured phrasing rule for weak-model routing survives contact with the evidence, because three independent sources report that the direction of a phrasing intervention depends on the model. What survives is a method: hold the routing surface fixed, vary one thing, measure on the deployment tier, keep the result. This repository already does that. The finding is that doing so is not merely good practice here, but the only thing the record supports.
 
-### Finding 10. Fewer, broader tools beat many overlapping ones
-
-**Labels.** VENDOR · GUIDANCE · PUBLISHED · TECHNIQUE
+### Finding 10: Fewer, broader tools beat many overlapping ones
 
 **In short.** Overlapping and narrow descriptions are the named confusion mechanism, and one benchmark could not define ground truth until it removed the overlap.
+
+**Labels.** VENDOR · GUIDANCE · PUBLISHED · TECHNIQUE
 
 **Evidence.** Anthropic's define-tools page, verbatim: "**Consolidate related operations into fewer tools.** Rather than creating a separate tool for every action (`create_pr`, `review_pr`, `merge_pr`), group them into a single tool with an `action` parameter. Fewer, more capable tools reduce selection ambiguity and make your tool surface easier for Claude to navigate." And: "**Use meaningful namespacing in tool names.** When your tools span multiple services or resources, prefix names with the service... This makes tool selection unambiguous as your library grows."
 
@@ -330,11 +301,11 @@ The incidental measured corroboration is the more interesting evidence. MetaTool
 
 **What this changes here.** This touches the measured weakness here most directly. 8 of the 19 triggering misses sit on near-verbatim hook vocabulary. Description overlap between sibling skills is the failure two vendors name and one benchmark had to engineer around, and it is detectable mechanically. Embedding sibling descriptions and looking for clusters is exactly what MetaTool did.
 
-### Finding 11. Vendors can force a tool call, never a skill
-
-**Labels.** VENDOR · MECHANISM-SPECIFIC · GUIDANCE
+### Finding 11: Vendors can force a tool call, never a skill
 
 **In short.** Every vendor surveyed ships a control that takes the routing choice away from the model for tools, and a Claude Code skill has no equivalent.
+
+**Labels.** VENDOR · MECHANISM-SPECIFIC · GUIDANCE
 
 **Evidence.** The controls:
 
@@ -348,11 +319,11 @@ What the skill mechanism offers instead is graded prompt-level steering, which A
 
 **What this changes here.** A user can name a skill and invoke it directly, and that is the whole deterministic path. An author cannot declare that a skill must fire on a condition. This extends ANALYSIS-004's central vendor result, that a skill's bundled reference is the only case where whether a file is read depends on the model deciding to read it, onto the triggering surface itself. The gap is not that the mechanism is unknown. It is standard, and it is absent here.
 
-### Finding 12. Choosing a tool and using it need different text
-
-**Labels.** VENDOR · GUIDANCE · TECHNIQUE
+### Finding 12: Choosing a tool and using it need different text
 
 **In short.** The text that wins the routing decision and the text that governs correct use are different objects with different targets, and conflating them degrades both. This is the remedy most compatible with the skill mechanism.
+
+**Labels.** VENDOR · GUIDANCE · TECHNIQUE
 
 **Evidence.** OpenAI's function-calling guide, verbatim: "**For deferred tools, put detailed guidance in the function description and keep the namespace description concise. The namespace helps the model choose what to load; the function description helps it use the loaded tool correctly.**"
 
@@ -362,11 +333,11 @@ Alongside sits Anthropic's unqualified statement about the routing surface, verb
 
 **What this changes here.** The mapping onto skills is exact and already validated. A skill's frontmatter description is the routing surface, its body the instruction surface, its references the deep surface. This repository measured the separation from the other side, because body genre does not move triggering, which is the same claim reached empirically rather than by assertion. Effort spent on the body to fix a triggering problem is spent on the wrong surface, and the 3-to-4-sentence floor is the vendor's guidance for the surface that does move it. The description is the one routing lever an author controls.
 
-### Finding 13. Routing between models is measured; skills are not
-
-**Labels.** PUBLISHED · MEASURED · OFF-TARGET · SHIPPED-PRACTICE
+### Finding 13: Routing between models is measured; skills are not
 
 **In short.** Routing queries between a strong and a weak model is measured and survives swapping the models. A stronger model choosing skills on behalf of a weaker one is measured nowhere this survey reached.
+
+**Labels.** PUBLISHED · MEASURED · OFF-TARGET · SHIPPED-PRACTICE
 
 **Evidence.** RouteLLM (arXiv 2406.18665), verbatim from its abstract: "we propose several efficient router models that dynamically select between a stronger and a weaker LLM during inference, aiming to optimize the balance between cost and response quality... Our evaluation on widely-recognized benchmarks shows that our approach significantly reduces costs-by over 2 times in certain cases-without compromising the quality of responses. Interestingly, our router models also demonstrate significant transfer learning capabilities, maintaining their performance even when the strong and weak models are changed at test time."
 
@@ -374,11 +345,11 @@ Alongside sits Anthropic's unqualified statement about the routing surface, verb
 
 **What this changes here.** The shipped analogue in this ecosystem is the subagent: a stronger orchestrator dispatching to a subordinate agent with its own context. That pattern is SHIPPED-PRACTICE and, as far as this survey found, entirely unmeasured on routing accuracy.
 
-### Finding 14. Addy Osmani's pack says nothing about model tiers
-
-**Labels.** SHIPPED-PRACTICE · NEGATIVE RESULT
+### Finding 14: Addy Osmani's pack says nothing about model tiers
 
 **In short.** The most-cited third-party prior art in this ecosystem says nothing about model tiers, and its stated reason for progressive disclosure is token cost rather than model capability.
+
+**Labels.** SHIPPED-PRACTICE · NEGATIVE RESULT
 
 **Evidence.** Grepping his repository README, his blog post on agent skills and his lesson on agent skills, case-insensitively, for Haiku, Opus, Sonnet, weaker model, smaller model, cheaper model, model tier and less capable returns **zero matches in all three files**. The absence is genuine rather than a wording difference. The method is the same negative confirmation ANALYSIS-005 used on the anti-rationalization genre.
 
@@ -392,11 +363,11 @@ On the routing surface specifically, from the lesson: "The description field is 
 
 ## Finding 15: the figure a search summary invented
 
-### Finding 15. A search summary invented two figures
-
-**Labels.** METHOD · CORRECTION
+### Finding 15: A search summary invented two figures
 
 **In short.** A web-search summary invented two figures and an anti-correlation claim, attributed them to the constraint-saturation paper, and the paper argues the opposite direction on that exact question.
+
+**Labels.** METHOD · CORRECTION
 
 **Evidence.** While locating Finding 4's source, a web-search summary asserted of the constraint-saturation paper that "the degradation rate under constraint composition is strongly anti-correlated with baseline capability, spanning nearly an order of magnitude from 8.1% (Gemini 3.1 Pro) to 81.8% (Qwen3.5 0.8B)".
 
@@ -408,13 +379,11 @@ This is the second recorded instance of the fault class in this research program
 
 ## Findings 16 to 20: how these failures get detected
 
-Added on 2026-08-24 in response to a third question: what methods the community uses to identify tier-dependent failures before they bite. Sources added for this pass: Anthropic's skill-authoring and evaluation pages, the writing-tools-for-agents engineering post re-read for its evaluation protocol, promptfoo's configuration guide, Vercel's agent-eval post, and TanStack's agent-skills documentation. Where this repository's harness already implements a method, it is cross-referenced as existing practice rather than presented as new.
-
-### Finding 16. The vendor asks for tier tests and ships no metric
-
-**Labels.** VENDOR · GUIDANCE
+### Finding 16: The vendor asks for tier tests and ships no metric
 
 **In short.** Anthropic tells authors to test a skill on every tier, and supplies three different qualitative questions rather than one metric, so the published protocol cannot produce a tier diff.
+
+**Labels.** VENDOR · GUIDANCE
 
 **Evidence.** Verbatim, from the skill-authoring best-practices page under the heading "Test with all models you plan to use": "Skills act as additions to models, so effectiveness depends on the underlying model. Test your Skill with all the models you plan to use it with."
 
@@ -428,11 +397,11 @@ Separately, `claude plugin eval` exists as tooling in this ecosystem but does no
 
 This repository's two-tier trigger sweeps, its tier-study flag and its recall-by-tier split already implement what the published protocol lacks: one metric, both tiers, subtractable. That is not novelty imported from this survey. It is existing practice the survey finds no published equivalent for.
 
-### Finding 17. Community eval tools compare models by default
-
-**Labels.** COMMUNITY · SHIPPED-PRACTICE
+### Finding 17: Community eval tools compare models by default
 
 **In short.** In promptfoo, naming a second provider is the whole of the work needed for a cross-model comparison, and the tool treats one-model evaluation as the special case.
+
+**Labels.** COMMUNITY · SHIPPED-PRACTICE
 
 **Evidence.** promptfoo's configuration guide takes `providers` as a list and states the consequence verbatim: "Running promptfoo eval over this config will result in a matrix view that you can use to evaluate GPT vs Gemini." The worked config lists two providers against one shared test set.
 
@@ -440,11 +409,11 @@ This repository's two-tier trigger sweeps, its tier-study flag and its recall-by
 
 **What this changes here.** Where a vendor prescribes cross-tier testing without an instrument, the community tooling makes the instrument the path of least resistance.
 
-### Finding 18. Watch why a tool was not called, not just whether
-
-**Labels.** VENDOR · GUIDANCE · TECHNIQUE
+### Finding 18: Watch why a tool was not called, not just whether
 
 **In short.** Anthropic prescribes routing observability and secondary metrics alongside top-level accuracy, and reaches the hand-annotation problem without solving it.
+
+**Labels.** VENDOR · GUIDANCE · TECHNIQUE
 
 **Evidence.** From the writing-tools-for-agents post, verbatim: "In your evaluation agents' system prompts, we recommend instructing agents to output not just structured response blocks (for verification), but also reasoning and feedback blocks." And, more directly on routing observability: "If you're running your evaluation with Claude, you can turn on interleaved thinking for similar functionality 'off-the-shelf'. This will help you probe **why agents do or don't call certain tools** and highlight specific areas of improvement in tool descriptions and specs."
 
@@ -456,11 +425,11 @@ Anthropic's general evaluation guidance adds two lines that bear on tier work: "
 
 **What this changes here.** This is the vendor independently reaching the hand-annotation problem, because a should-have-used label is a guess about one valid path among several, and stopping at the warning. ANALYSIS-004 Finding 18 goes further and solves it. An ablation denominator establishes need causally, by removing content and watching the score move, rather than by asserting the expected path in advance. This survey found no published equivalent anywhere. The vendor guidance corroborates that the annotation problem is real, and this repository's answer to it remains the stronger one.
 
-### Finding 19. A test the model can already pass detects nothing
-
-**Labels.** COMMUNITY · TECHNIQUE
+### Finding 19: A test the model can already pass detects nothing
 
 **In short.** A disclosure mechanism has failed when the model produces its training prior instead of the supplied content, so a test the model can already pass detects nothing. Two independent sources converge on it, and it is the sharpest detection result in the note.
+
+**Labels.** COMMUNITY · TECHNIQUE
 
 **Evidence.** Vercel, on why their first eval suite could not see anything, verbatim: "Our initial test suite had ambiguous prompts, tests that validated implementation details rather than observable behavior, and **a focus on APIs already in model training data**. We weren't measuring what we actually cared about." Their fix: "Most importantly, we added tests targeting Next.js 16 APIs that aren't in model training data." Their closing recommendation states it as a rule: "Test with evals. **Build evals targeting APIs not in training data. That's where doc access matters most.**"
 
@@ -470,11 +439,11 @@ Both make the same move from opposite directions. The observable separating a wo
 
 **What this changes here.** This is directly actionable and names a defect class never audited for here. Any should-fire scenario whose expected output the model can generate without the skill is inert. That is the triggering-side twin of the recall-denominator problem ANALYSIS-004 Finding 1 corrects. There, a raw rate could not separate rarely-needed from needed-and-missed. Here, a passing scenario cannot separate the skill fired from the model already knew. It converges with the ablation method already in use: a scenario whose score does not move when the skill is stripped is one whose answer was already in the model.
 
-### Finding 20. Fix the test suite before trusting its numbers
-
-**Labels.** COMMUNITY · TECHNIQUE
+### Finding 20: Fix the test suite before trusting its numbers
 
 **In short.** Vercel published their eval suite's defects and the three controls that fixed them before publishing any result the suite produced.
+
+**Labels.** COMMUNITY · TECHNIQUE
 
 **Evidence.** Verbatim: "Before drawing conclusions, we needed evals we could trust... We hardened the eval suite by removing test leakage, resolving contradictions, and shifting to behavior-based assertions." And on run discipline: "All the results that follow come from this hardened eval suite. Every configuration was judged against the same tests, **with retries to rule out model variance**."
 
@@ -484,11 +453,11 @@ Three controls sit in one paragraph: leakage removal, behaviour-based rather tha
 
 ## Findings 21 to 24: Vercel and TanStack, read in full
 
-### Finding 21. Vercel is right; one citation here is wrong
-
-**Labels.** CORRECTION · MEASURED
+### Finding 21: Vercel is right; one citation here is wrong
 
 **In short.** Vercel's figures are accurate as published, this repository's 44 percent is a computed complement rather than a stated figure, and ANALYSIS-005's rule 1 rests on a change that was not what the rule describes.
+
+**Labels.** CORRECTION · MEASURED
 
 **Evidence.** The post's figures, verified verbatim: baseline 53 percent; skill with default behaviour 53 percent, described as "Zero improvement. The skill existed, the agent could use it, and the agent chose not to"; skill with explicit instructions 79 percent; and the AGENTS.md docs index at 100 percent across Build, Lint and Test. On triggering: "In 56% of eval cases, the skill was never invoked", and after the intervention, "This improved the trigger rate to 95%+".
 
@@ -500,19 +469,28 @@ The substantive correction is larger and lands on a sibling note. ANALYSIS-005's
 Before writing code, first explore the project structure, then invoke the nextjs-doc skill for documentation.
 ```
 
+Fidelity: verbatim. Lines around it are trimmed and an over-long line may wrap. No character is changed, added or removed.
+
 That is host-prompt-level forced invocation, authored **outside** the skill, in always-loaded passive context. It is evidence for Finding 11, where prompt-level steering is the only substitute available when a `tool_choice` equivalent is missing. It is not evidence about body structure.
 
 This repository's other Vercel citation is accurate as stated. The context-optimizer surface cites passive context at 100 percent against skills at 53 to 79 percent, and the post says exactly that: "A compressed 8KB docs index embedded directly in AGENTS.md achieved a 100% pass rate, while skills maxed out at 79% even with explicit instructions telling the agent to use them. Without those instructions, skills performed no better than having no documentation at all."
 
 **What this changes here.** Rule 1 loses its only positive measured support and joins rules 3, 5 and 6 as defensible doctrine never measured on this repository's artifacts. ANALYSIS-005's own framing makes this the right correction to make loudly. That note wrote that every genre entry carries a value label precisely because two of six proposed rules died on contact with measurement, and this is a third dying on contact with its own citation.
 
-### Finding 22. The most forceful wording performed worst
-
-**Labels.** COMMUNITY · MEASURED
+### Finding 22: The most forceful wording performed worst
 
 **In short.** On the same skill and the same docs, the maximally forceful instruction lost to one that sequenced the work and mentioned the skill second.
 
-**Evidence.** Their wording table, verbatim in both rows. "You MUST invoke the skill" produced "Reads docs first, anchors on doc patterns", with the outcome "Misses project context". "Explore project first, then invoke skill" produced "Builds mental model first, uses docs as reference", with the outcome "Better results". Their summary: "Same skill. Same docs. Different outcomes based on subtle wording changes."
+**Labels.** COMMUNITY · MEASURED
+
+**Evidence.** Vercel varied only the wording of an instruction in an always-loaded file, holding the skill and the docs fixed. Every cell below is verbatim from their wording table:
+
+| Wording | What the agent did | Outcome |
+|---|---|---|
+| "You MUST invoke the skill" | "Reads docs first, anchors on doc patterns" | "Misses project context" |
+| "Explore project first, then invoke skill" | "Builds mental model first, uses docs as reference" | "Better results" |
+
+Their summary: "Same skill. Same docs. Different outcomes based on subtle wording changes."
 
 With a concrete instance: "In one eval (the 'use cache' directive test), the 'invoke first' approach wrote correct page.tsx but completely missed the required next.config.ts changes. The 'explore first' approach got both." And their reaction: "This fragility concerned us. If small wording tweaks produce large behavioral swings, the approach feels brittle for production use."
 
@@ -522,11 +500,11 @@ The same section carries a cost finding for a skill that is present and unused: 
 
 **What this changes here.** This corroborates Finding 9's model-dependence cluster and adds what none of those sources do: the maximally forceful phrasing lost. That is a direct counterexample to the intuition that a missed pointer wants a stronger imperative. It converges with Finding 4's account of why strengthening one term does not fix a collapsing conjunction, and with this repository's own imperative in-workflow pointer scoring 0 of 20. The unused-skill number is partial evidence on ANALYSIS-004's open question about whether over-fetch costs anything, from the other side: not the cost of reading something unnecessary, but the cost of it merely being available.
 
-### Finding 23. Vercel never names a model, and that matters
-
-**Labels.** COMMUNITY · SCOPE
+### Finding 23: Vercel never names a model, and that matters
 
 **In short.** The most-cited external result in this repository's skill guidance reports one configuration on an unnamed model, so its tier-sensitivity is unknown.
+
+**Labels.** COMMUNITY · SCOPE
 
 **Evidence.** The post was grepped for every Claude, GPT and Gemini model name, and for "model tier", "weaker model", "smaller model" and "across models": **zero matches**.
 
@@ -534,56 +512,99 @@ Their stated theory for why passive context wins is three factors, verbatim: "No
 
 Their scoping is more careful than the headline suggests, and deserves quoting since this repository builds skills: "Skills aren't useless... Skills work better for vertical, action-specific workflows that users explicitly trigger, like 'upgrade my Next.js version,' 'migrate to the App Router,' or applying framework best practices. The two approaches complement each other."
 
-**What this changes here.** State it plainly because of what the number is used for. A 56 percent non-invocation rate is exactly the quantity Findings 2, 6 and 7 predict should move with tier, since long-list and routing failures are where the tiers diverge most, and capability-graded benefit says an instruction remedy should pay off differently at different tiers. The tier-sensitivity cannot be recovered from the published text.
+**What this changes here.** State it plainly because of what the number is used for. A 56 percent non-invocation rate is exactly the quantity Findings 2, 6 and 7 predict should move with tier. Long-list and routing failures are where the tiers diverge most. Capability grading says an instruction remedy should pay off differently at different tiers. The tier-sensitivity cannot be recovered from the published text.
 
 Their third factor converges independently with Finding 4. Invoking a skill adds a sequencing demand to a step that already carries several, and their own wording-fragility result demonstrates the mechanism.
 
-### Finding 24. TanStack ships the same fix with no evidence
+### Finding 24: TanStack ships the same fix with no evidence
+
+**In short.** TanStack installs a task-to-file list into the agent's own config file, which is Vercel's measured remedy turned into a distributable mechanism, and publishes no measurement of it.
 
 **Labels.** SHIPPED-PRACTICE · SCOPED NEGATIVE
 
-**In short.** TanStack installs a routing map into the agent's own config file, which is Vercel's measured remedy turned into a distributable mechanism, and publishes no measurement of it.
-
-**Evidence.** TanStack's **Intent** mechanism ships skills inside npm packages and installs a routing table into the agent's own config file. `npx @tanstack/intent@latest install` writes an `intent-skills` block whose entries pair a task description with a file path. One entry pairs a task of "Building chat, tool calling, adapters, or streaming with TanStack AI" with `node_modules/@tanstack/ai/skills/ai-core/SKILL.md`, under the header comment "Skill mappings — when working in these areas, load the linked skill file into context." The block is rendered in "What these look like in practice" above.
+**Evidence.** TanStack's **Intent** mechanism ships skills inside npm packages and installs a routing table into the agent's own config file. `npx @tanstack/intent@latest install` writes an `intent-skills` block whose entries pair a task description with a file path. One entry pairs a task of "Building chat, tool calling, adapters, or streaming with TanStack AI" with `node_modules/@tanstack/ai/skills/ai-core/SKILL.md`, under the header comment "Skill mappings — when working in these areas, load the linked skill file into context." The block is shown in Summary.
 
 TanStack names the routing lever explicitly, verbatim: "Check that the `task:` descriptions match areas you actually work in. Tighten or reword them if needed — **they're how your agent decides when to pull the skill into context.**"
 
 Their stated reason for packaging is the training-prior framing Finding 19 turns into a detection method. Skills ship in the package "so the guidance travels with `npm update` instead of being pinned in a model's training data or copy-pasted into CLAUDE.md manually."
 
-The scoped negative, stated because a named source's silence is a finding. The TanStack agent-skills documentation was grepped for Haiku, Opus, Sonnet, weaker model, smaller model, model tier, less capable, eval, benchmark and pass rate: **zero matches on all of them.** As of 2026-08-24 TanStack publishes a routing mechanism and a manual verification procedure, and publishes no evaluation, no measurement, and no model-tier guidance whatever.
+The scoped negative, stated because a named source's silence is a finding. The TanStack agent-skills documentation was grepped for ten terms. Those were Haiku, Opus, Sonnet, weaker model, smaller model, model tier, less capable, eval, benchmark and pass rate. **Zero matches on all of them.** As of 2026-08-24 TanStack publishes a routing mechanism and a manual verification procedure, and publishes no evaluation, no measurement, and no model-tier guidance whatever.
 
 **Limits.** One shipped practice here conflicts with published vendor guidance and should be recorded rather than adopted. TanStack routes skills to each other: "ai-core points at the companion packages' skills, and ai-persistence is an entry point that routes to its own sub-skills (`server`, `stores`, and the `build-{drizzle,prisma,cloudflare,custom}-adapter` recipes)." That is multi-level nesting, against the one-level-deep rule and the partial-read mechanism behind it recorded in ANALYSIS-004 Findings 8 and 17. Nobody has measured which is right, and the tension is live.
 
 **What this changes here.** Rather than relying on a skill's own description to win the routing decision from inside the skill, both Vercel and TanStack put a task-to-file map into always-loaded passive context. Vercel measured that architecture at 100 percent against 53. TanStack ships it as the install path for a library. Two unconnected teams converging on the same structural answer is the strongest non-measured signal in this survey. TanStack is also the third independent source saying the description is where routing is won, which is Finding 12 again. Their contribution is architecture and a detection procedure, not evidence.
 
-## What nobody has measured yet
+## Method
 
-- **Whether skill triggering has ever been measured against model tier by anyone else.** Nothing in this survey measures whether a skill fires, by tier, on realistic user phrasings. Every external result quoted here is about tool selection, function calling or constraint following. This repository's 20-of-39-against-90-percent figure appears to be the only measurement of the actual quantity, which means it has no external replication and no external contradiction.
-- **Whether the tool-count thresholds transfer to skill counts.** Three vendors bound the tool list at 30 to 50, 10 to 20, and under 20. A tool definition sits in the tool block with a schema. A skill contributes roughly 100 tokens of name and description to the system prompt. The surfaces differ in size, position and structure, and nobody has measured whether the thresholds move together. Adopting a skill-count cap from these numbers would repeat the category error ANALYSIS-004 Finding 17 corrects.
-- **Whether the description-rewriter result transfers to the Claude family.** MetaTool's rewriters and downstream models are all the 2023 generation. Whether a description tuned by the strongest current Claude degrades routing on a weaker current Claude is exactly the experiment this repository could run and has not.
-- **Whether description length helps monotonically, has a ceiling, or reverses.** The fitted-line result is observational and confounded with overlap reduction, and Anthropic's 3-to-4-sentence floor is a floor with no stated ceiling. No source anywhere states where more detail stops helping.
-- **Where a pointer should sit, now with three published claims in three directions.** Lost-in-the-middle predicts end-of-context is favoured. IFScale reports bias toward earlier instructions. This repository measured trailing beating in-step at 8 of 40 against 4 of 40, p approximately 0.20. Finding 4 offers a fourth account in which position is not the variable at all and demand count is. None has been separated from the others, and the honest position is that the question is open and expensive.
-- **Whether the 5-to-6 demand ceiling applies to a skill body's rules.** The demands measured are verifier-checkable output properties. Whether "read this file when X" occupies the same budget as "output valid JSON" is unestablished, and the whole application of Finding 4 to this repository's 0-of-20 result rests on it.
-- **Whether a strong-routes-weak-executes architecture improves skill selection.** RouteLLM measures query routing between models, not skill selection. The subagent pattern is the shipped analogue and no measurement of its routing accuracy was found.
-- **Whether over-fetch on the strong tier costs anything.** Inherited unresolved from ANALYSIS-004 and untouched here.
-- **Eight vendors not checked on this axis.** Cursor, Windsurf, Cline, Continue, JetBrains AI, Amazon Q Developer, Zed and Sourcegraph Amp were not searched for model-tier guidance in this pass. The five matcher vendors are the most likely to hold something useful, since a deterministic matcher is precisely the mechanism that makes tier irrelevant, and any statement they make about why would bear on Finding 11.
-- **Whether Vercel's 56 percent non-invocation rate is tier-dependent.** Their post names no model anywhere. It is the most-cited external result in this repository's skill guidance, and the quantity it reports is exactly the one Findings 2, 6 and 7 predict should move with tier. Unrecoverable from the published text.
-- **Whether a routing map beats a skill description on this repository's own artifacts.** Vercel measured that architecture at 100 percent against 53 and TanStack ships it, but neither result is about this repository's skills, and the A/B has not been run here. It is the most directly testable thing this survey surfaced.
-- **How many of this repository's should-fire scenarios are inert.** Finding 19 establishes that a scenario the model can pass without the skill cannot detect a triggering failure. The existing should-fire set has never been audited for training-prior leakage, so the fraction is unknown, and the 20-of-39 figure's denominator is unaudited in a way distinct from every limitation already recorded.
-- **Whether any community harness can observe skill selection rather than output quality.** promptfoo makes cross-model matrices the default output shape, but on prompt outputs. Whether it or anything else can see which skill an agent harness selected was not established from primary text in this pass.
-- **Whether `claude plugin eval` supports a cross-tier matrix.** It exists as tooling in this ecosystem and does not appear in the public plugins documentation as of 2026-08-24, grepped and confirmed absent. Its capabilities are not establishable from public primary text.
-- **Whether TanStack's multi-level skill routing degrades reads.** They route skills to sub-skills, against the published one-level-deep rule and the partial-read mechanism behind it. Nobody has measured which is right.
-- **Whether an unused-but-present skill costs anything.** Vercel observed 58 percent against a 63 percent baseline on one metric, and offered noise or distraction as a hypothesis. That is one metric in one suite, and it is a different question from whether an unnecessary read costs anything.
+**The verification rule.** Every external claim was checked against primary text on 2026-08-24. Each quoted sentence was grepped for in the fetched file before it was written down. No claim rests on a search summary or a fetch summariser. That rule is not caution for its own sake: during this investigation a search summariser attributed two figures to a paper, and grepping the paper's own text found neither, plus a result running the opposite way. Finding 15 records it.
 
-## Words this note uses precisely
+**The instruments.** Vendor documentation was fetched as raw markdown where the site serves it. Where it does not, the page was fetched as HTML and stripped locally with a regex stripper, so no model touched it. Papers were fetched as their arXiv abstract, and as the full HTML of the specific version cited wherever a body claim was quoted. Negative results were established by grepping a fetched file for an explicit term list and reporting zero matches.
 
-One word for one concept, everywhere. Each **Avoid** list names the words this note does not use for that concept, so a reader never has to work out whether two words are two ideas, and a search for the right word finds every place it appears.
+**Version matters and is recorded.** MetaTool's abstract changed materially between v3 and v6, and the recommendation this note leans on appears only in v6.
+
+**A dated addition to the corpus.** Findings 16 to 20 were added on 2026-08-24, answering a third question about how tier-dependent failures get detected. The sources added for that pass are the lower half of the provenance table.
+
+**One interpretation is recorded so a later reader can overturn it.** The owner's question named "AdiazMadi" among the sources to cover. That is almost certainly Addy Osmani, whose skill pack is prior art in this repository's research and whose name matches phonetically. Finding 14 covers him by name.
+
+**Provenance.**
+
+| Source | How it was read | Findings resting on it |
+|---|---|---|
+| Anthropic documentation and engineering posts, seven in total | Raw markdown at published URLs, and locally stripped HTML for the two engineering posts | 1, 7, 9, 10, 11, 12, 16, 18 |
+| Gemini function-calling documentation | HTML, stripped locally | 1, 11 |
+| OpenAI function-calling guide and GPT-5 prompting guide | HTML, stripped locally | 1, 9, 10, 12 |
+| MetaTool, arXiv 2310.03128, v3 and v6 | Abstract plus full HTML of the cited version | 2, 3, 8, 10 |
+| Constraint Saturation Evaluation, arXiv 2608.12426 | Abstract plus full v1 HTML, 155KB stripped | 4, 5, 15 |
+| Instruction Stacking Collapse, arXiv 2608.02639 | Abstract | 6 |
+| IFScale, arXiv 2507.11538 | Abstract | 5 |
+| RouteLLM, arXiv 2406.18665 | Abstract | 13 |
+| Addy Osmani README, blog post and lesson | Fetched, then grepped for eight tier terms | 14 |
+| promptfoo configuration guide | Fetched | 17 |
+| Vercel agent-eval post | Fetched, then grepped for every model name | 19, 20, 21, 22, 23 |
+| TanStack agent-skills documentation | Fetched, then grepped for ten terms | 19, 24 |
+| Claude Code plugins documentation | Fetched, then grepped for three terms | 16 |
+| Berkeley Function Calling Leaderboard posts | Fetched | Background only; no finding rests on it |
+
+**Not reached on this axis.** JetBrains AI, Amazon Q Developer, Zed, Sourcegraph Amp, Cursor, Windsurf, Cline and Continue. None was checked for model-tier guidance in this pass.
+
+## Corrections
+
+Three dated corrections apply to the record. Each is stated in full under the finding named.
+
+| Date | What changed | Stated in full |
+|---|---|---|
+| 2026-08-24 | A search summary's two figures and its anti-correlation claim were found absent from the paper it cited, which argues the opposite direction on that question | Finding 15 |
+| 2026-08-24 | ANALYSIS-005's lineage rule 1, "A numbered workflow is the spine of the body", loses its only measured support: the Vercel result behind it measured an instruction added to AGENTS.md, not a numbered workflow inside a skill | Finding 21 |
+| 2026-08-24 | This repository's cited 44 percent is a complement it computed rather than a published figure, and the upper bound is 95 percent or more rather than 95 flat | Finding 21 |
+
+## Open questions
+
+- **Whether anyone else has measured skill triggering against model tier.** Nothing in this survey measures whether a skill fires, by tier, on realistic user phrasings. Every external result quoted here is about tool selection, function calling or constraint following. This repository's 20-of-39-against-90-percent figure has neither replication nor contradiction outside itself. It closes when someone else publishes a tier-split triggering measurement, or when this one is reproduced externally.
+- **Whether the tool-count thresholds transfer to skill counts.** A tool definition sits in the tool block with a schema. A skill contributes roughly 100 tokens of name and description to the system prompt. The surfaces differ in size, position and structure. Adopting a skill-count cap from these numbers would repeat the category error ANALYSIS-004 Finding 17 corrects. It closes with a sweep that varies installed skill count against a fixed should-fire set.
+- **Whether the description-rewriter result transfers to the Claude family.** MetaTool's rewriters and downstream models are all the 2023 generation, and no current-generation replication exists. It closes with the experiment this repository could run today: have the strongest current Claude rewrite a description, then measure routing on the weak tier against the unrewritten original.
+- **Whether description length helps without limit, has a ceiling, or reverses.** The fitted-line result is observational and confounded with overlap reduction, and Anthropic's 3-to-4-sentence floor is a floor with no stated ceiling. No source anywhere states where more detail stops helping. It closes with a length sweep on one skill, holding the content fixed and varying only how much of it sits in the description.
+- **Where a pointer should sit, with three published claims pointing three ways.** Lost-in-the-middle predicts end-of-context is favoured. IFScale reports bias toward earlier instructions. This repository measured trailing beating in-step at 8 of 40 against 4 of 40, p approximately 0.20. Finding 4 offers a fourth account in which position is not the variable at all. It closes only when position and demand count are varied independently, which is why Recommendation 8 holds spending until then.
+- **Whether the five-to-six demand ceiling applies to a skill body's rules.** The demands measured are verifier-checkable output properties, and whether "read this file when X" occupies the same budget as "output valid JSON" is unestablished. The whole application of Finding 4 to this repository's 0-of-20 result rests on it. It closes with a step-level sweep that adds read-this-file demands one at a time and watches where reach collapses.
+- **Whether a strong model choosing skills for a weak one improves selection.** RouteLLM measures query routing between models, not skill selection, and the subagent pattern is the shipped analogue with no measurement attached. It closes with a routing-accuracy measurement on the subagent pattern, comparing skills chosen by the orchestrator against skills chosen by the subagent itself.
+- **Whether over-fetch on the strong tier costs anything.** Inherited unresolved from ANALYSIS-004 and untouched here. It closes with a cost measurement on the strong tier in tokens, latency or answer quality, comparing runs where unnecessary files were read against runs where they were not.
+- **What eight unchecked vendors say on this axis.** Cursor, Windsurf, Cline, Continue, JetBrains AI, Amazon Q Developer, Zed and Sourcegraph Amp were not searched for model-tier guidance in this pass. The five matcher vendors are the most likely to hold something useful, since a deterministic matcher is precisely the mechanism that makes tier irrelevant, and any statement they make about why would bear on Finding 11. It closes with a bounded documentation pass over those eight.
+- **Whether Vercel's 56 percent non-invocation rate is tier-dependent.** Their post names no model anywhere, and the quantity it reports is exactly the one Findings 2, 6 and 7 predict should move with tier. It cannot be closed from the published text; it closes only if Vercel names the model, or if someone reruns the suite per tier.
+- **Whether a task-to-file list beats a skill description on this repository's own artifacts.** Vercel measured that architecture at 100 percent against 53 and TanStack ships it, but neither result is about these skills. It closes with the A/B in Recommendation 12, holding content fixed and varying only whether the list sits in always-loaded context.
+- **How many of this repository's should-fire scenarios are inert.** Finding 19 establishes that a scenario the model can pass without the skill cannot detect a triggering failure. The existing set has never been audited for training-prior leakage. That leaves the 20-of-39 denominator unaudited, in a way distinct from every limitation already recorded. It closes by running the existing ablation harness over the should-fire set and counting the scenarios whose score does not move.
+- **Whether any community harness can observe which skill was selected.** promptfoo makes cross-model matrices the default output shape, but it compares prompt outputs. Whether it or anything else can see a harness's skill selection was not established from primary text. It closes by reading promptfoo's source, or by trialling it against an agent harness and checking what the run record contains.
+- **Whether `claude plugin eval` supports a cross-tier matrix.** It exists as tooling in this ecosystem and does not appear in the public plugins documentation as of 2026-08-24, grepped and confirmed absent. It closes when the tool is publicly documented, or by running it and recording what it accepts.
+- **Whether TanStack's multi-level skill routing degrades reads.** They route skills to sub-skills, against the published one-level-deep rule and the partial-read mechanism behind it, and nobody has measured which is right. It closes with a nesting-depth measurement: recall at one level against recall at two, holding content fixed.
+- **Whether a skill that is present but unused costs anything.** Vercel observed 58 percent against a 63 percent baseline on one metric, and offered noise or distraction as a hypothesis. That is one metric in one suite. It is also a different question from whether an unnecessary read costs anything. It closes by adding a present-but-unused arm to this repository's own sweeps.
+
+## Glossary
+
+One word for one concept, everywhere. Each **Avoid** list names the words this note does not use for that concept. A reader never has to work out whether two words are two ideas. A search for the right word finds every place it appears. Everything above reads without this section; it is here for lookup.
 
 Quoted text is the exception. A quotation keeps its author's words, so a vendor's "invoke", "trigger" or "activate" appears inside quotation marks unchanged.
 
 **Routing.** The model choosing which tool or which skill to use for a request. Routing happens before anything is read. **Avoid:** selection, dispatch, activation, tool choice.
 
-**Triggering.** Routing applied to skills: whether a given skill loads for a given request. Triggering is one kind of routing, not a second idea. **Avoid:** invocation, firing, activation.
+**Triggering.** Routing applied to skills: whether a given skill loads for a given request. **Avoid:** invocation, firing, activation.
 
 **Disclosure.** The model reading supplied material after routing has already picked something. A reference file is read at disclosure time, not at routing time. **Avoid:** retrieval, lookup, fetch.
 
@@ -603,17 +624,17 @@ Quoted text is the exception. A quotation keeps its author's words, so a vendor'
 
 **Capability-graded.** A remedy whose benefit depends on the tier receiving it: large on the weak tier, near zero on the strong tier. The direction of the effect is fixed; only its size changes with tier. **Avoid:** tier-sensitive, scales with model.
 
-**Model-dependent.** An effect whose direction changes with the model: it helps one model and harms another. This is a different thing from capability-graded, where the direction never flips. Reading a null result correctly depends on knowing which one you are looking at, so the two are never blurred here. **Avoid:** varies by model, model-specific.
+**Model-dependent.** An effect whose direction changes with the model: it helps one model and harms another. **Avoid:** varies by model, model-specific.
 
 **Passive context.** Text in front of the model on every turn because an always-loaded file such as AGENTS.md or CLAUDE.md holds it. The model does not decide to read passive context. It is simply there. **Avoid:** ambient context, always-on docs, system prompt injection.
 
-**Routing map.** A short list in passive context. Each line pairs a task description with a file path: when working in this area, read this file. A skill asks the model to make a judgment call, matching its own description against the request. A routing map asks for nothing of the kind, because the instruction is already there and the model only matches a task to a line. "What these look like in practice" shows one. **Avoid:** passive-context routing map, since passive context is already its home; skill index; task map.
+**Task-to-file list.** A short list in passive context. Each line pairs a task description with a file path: when working in this area, read this file. Summary shows one. **Avoid:** routing map, skill index, task map.
 
-**Pointer.** One sentence in a document telling the model to read another document. A skill description is a pointer. A line in a workflow step saying to read the reference file is a pointer. **Avoid:** signpost, reference, link.
+**Pointer.** One sentence in a document telling the model to read another document. A skill description is a pointer. **Avoid:** signpost, reference, link.
 
-**Demand.** One thing a step asks the model to do. A step saying produce JSON, stay under 200 words, and read the reference file carries three demands. The papers behind Findings 4 and 5 call these constraints, and their quoted text keeps that word. **Avoid:** instruction, requirement, rule, when a single ask inside a step is meant.
+**Demand.** One thing a step asks the model to do. A step saying produce JSON, stay under 200 words, and read the reference file carries three demands. **Avoid:** instruction, requirement, rule, when a single ask inside a step is meant.
 
-**Forced invocation.** A vendor control that takes the routing choice away from the model. Anthropic's `tool_choice` is one. The vendor's own word is kept here because the term names their control rather than the event. **Avoid:** forced triggering, mandatory tool use.
+**Forced invocation.** A vendor control that takes the routing choice away from the model. Anthropic's `tool_choice` is one. **Avoid:** forced triggering, mandatory tool use.
 
 **Training prior.** What a model can already produce from its training, with nothing supplied.
 
@@ -621,19 +642,11 @@ Quoted text is the exception. A quotation keeps its author's words, so a vendor'
 
 **Ablation denominator.** Establishing that content was needed by removing it and watching the score move, rather than by asserting in advance which skill should have fired. **Avoid:** expected-tool annotation, ground-truth label.
 
-## How every claim here was checked
+### Flagged ambiguities
 
-Every external claim was checked against primary text on 2026-08-24. Vendor documentation was fetched as raw markdown where the site serves it, and as locally stripped HTML where it does not. Papers were fetched as their arXiv abstract or as full HTML. Each quoted sentence was then grepped for in the fetched file before it was written down.
-
-No claim rests on a search summary or a fetch summariser. That rule is not caution for its own sake. During this investigation a search summariser attributed two figures to a paper, and grepping the paper's own text found neither, plus a result running the opposite way. Finding 15 records it.
-
-Three method details are worth keeping. Gemini's function-calling page, OpenAI's function-calling guide and prompting guide, and the two Anthropic engineering posts were fetched as HTML and stripped locally with a regex stripper, so no model touched them. Papers quoted on a body claim were fetched as the full HTML of the specific version cited. And version matters: MetaTool's abstract changed materially between v3 and v6, and the recommendation this note leans on appears only in v6.
-
-The owner's question named "AdiazMadi" among the sources to cover. That is almost certainly Addy Osmani, whose skill pack is prior art in this repository's research and whose name matches phonetically. Finding 14 covers him by name, and the interpretation is recorded here so a later reader can correct it if it is wrong.
-
-**Sources reached.** Anthropic (skill-authoring best practices, tool-use overview, define-tools, tool search tool, the advanced tool use engineering post, the writing-tools-for-agents engineering post, the agent-skills engineering post), Google (Gemini function-calling documentation), OpenAI (function-calling guide, GPT-5 prompting guide), Berkeley Function Calling Leaderboard blog posts, Addy Osmani (repository README, blog post, lesson), promptfoo's configuration guide, Vercel's agent-eval post, TanStack's agent-skills documentation, and four papers read in primary text.
-
-**Not reached on this axis.** JetBrains AI, Amazon Q Developer, Zed, Sourcegraph Amp, Cursor, Windsurf, Cline and Continue. None was checked for model-tier guidance in this pass.
+- **Demand against constraint.** The papers behind Findings 4 and 5 call these constraints, and their quoted text keeps that word. This note says demand in its own prose. Constraint already means a frontmatter or schema rule in this repository. A word the project uses for something else is worse than a word it has never used.
+- **Capability-graded against model-dependent.** These name two different effects and are easy to conflate. Capability-graded means the size of a benefit changes with tier while its direction holds. Model-dependent means the direction itself flips between models. Reading a null result correctly depends on knowing which one is in play, so the two are never blurred here.
+- **Routing against triggering.** These are one idea at two scopes, not two ideas. Routing is any choice among candidates. Triggering is that choice on the skill surface. Where a sentence covers both tools and skills, it says routing.
 
 ## Observations
 
@@ -703,7 +716,7 @@ The owner's question named "AdiazMadi" among the sources to cover. That is almos
 
 ## Relations
 
-<!-- ANALYSIS-006 carries no inverse edge back to this note, by owner instruction. -->
+<!-- The original note carries no inverse edge back to this rebuild, by owner instruction: original files stay byte-identical. -->
 
 - pairs_with [[ANALYSIS-006: Weak-Model Routing for Progressive Disclosure]]
 - relates_to [[SESSION-2026-08-23_01: Plugin Kit Measurement Tooling Hardening]]
