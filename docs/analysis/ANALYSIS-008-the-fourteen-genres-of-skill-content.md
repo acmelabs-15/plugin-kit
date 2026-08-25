@@ -94,6 +94,8 @@ This note repeats two shapes. Learn each once and every entry parses the same wa
 
 **Cross-note citations are bare text**, in the form ANALYSIS-004 Finding 17. Genre numbers match the note of record and its sibling notes, so one citation resolves in both.
 
+**One quoted specimen mints a graph edge, and the edge is an artifact.** The indexer reads markdown link syntax as a relation even inside a code fence. Genre 14's specimen quotes two anchor bullets, and their fragment-only targets resolve to the current document, so this note carries an edge to itself. That edge is a by-product of quoting faithfully rather than a link this note makes. Fidelity outranks tidiness, so the quoted characters stay exactly as they are. The Relations section is the authority on what this note links to.
+
 ## Findings 1 to 6: what the survey establishes
 
 ### Finding 1: Two of three claimed genres belong to one author
@@ -696,6 +698,7 @@ _Avoid_: the original, source note, canonical copy.
 - [technique] The first pass of this rebuild's re-check scanned only each file's opening lines and reported both a mid-file table of contents and a relocated file as absent, which is the catalog's own detection-signature discipline landing on the catalog — a head-scoped detector is correct as a check for Genre 14 and wrong as a census #re-check #signature-artifact
 - [constraint] The same-day re-check is a replication rather than a first measurement, since it re-ran an existing signature against changed files and measured compliance, which was already measurable, rather than effect, which stays unmeasured for thirteen genres #re-check #replication
 - [technique] Every specimen in this rebuild was copied from primary text in the file named beside it, with only two edits allowed — the trim drops surrounding lines and an over-long source line may wrap — so no character inside a specimen is changed #specimens #verified
+- [fact] The indexer reads markdown link syntax as a relation even inside a code fence, so the Genre 14 specimen's two quoted anchor bullets mint one self-edge on this note — three resolved edges against two authored — and the ruling is to document the artifact rather than alter a faithful quote #graph #quoting-artifact
 
 ## Relations
 
