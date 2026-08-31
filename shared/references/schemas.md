@@ -558,7 +558,7 @@ One shape that every measured operation writes alongside its own output. Defined
 | `artifact` | no | `skill`, `agent`, `command`, `mcp`, `plugin` or `hooks`. An unlisted value is refused |
 | `target` | no | The artifact's authored name — `ask-user-question`, not a path |
 | `operation` | no | `measure-triggering`, `measure-disclosure`, `optimize-description`, `optimize-disclosure` or `validate`. A closed set, so a typo cannot invent an operation that consumers then group by |
-| `model` | **yes** | The model the run pinned. `null` means either no model was involved or the caller omitted `--model`; the two are told apart by a `caps` sentence, which a producer taking the second path must add |
+| `model` | **yes** | The model the run swept on: `MEASUREMENT_MODEL` unless `--tier-study` named another, in which case a `caps` sentence marks the run as a study. `null` only where no model was involved (`validate`) |
 | `graderModel` | **yes** | The grading model, `null` when the operation has no grading step. Only `optimize-disclosure` fills it today |
 | `workers` | no | Concurrent units of work. `1` for a sequential operation, never `0` |
 | `runsPer` | no | Repeats per unit — runs per query, runs per scenario. `1` where there is no sampling |

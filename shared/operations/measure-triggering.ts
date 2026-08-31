@@ -1858,7 +1858,7 @@ async function main(): Promise<void> {
       needs: "installed",
       found: sighting.state,
     });
-    // A run that did not pin `--model` was answered by whatever the operator had
+    // The model is fixed in the tool now; a `--tier-study` run is the one case that
     // configured, and this script has no way to find out what that was. Recording `null`
     // and saying so is the only honest option: inventing a name would make two runs on
     // different machines look comparable, which is the exact failure the run block exists

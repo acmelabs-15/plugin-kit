@@ -207,7 +207,7 @@ export async function runValidation(
  *
  *   model / graderModel  `null`, and the contract says `null` is a real answer. Nothing is
  *                        asked of a model here. The nullable-model doc requires a `caps`
- *                        sentence from a producer that OMITTED `--model` and let the
+ *                        sentence from a producer that swept on a `--tier-study` model, or let the
  *                        environment choose; this producer has no such flag, so the
  *                        absence of that cap is itself the statement that no model ran.
  *   timeoutSeconds       `null`. Nothing is spawned, so nothing can exceed a budget.
