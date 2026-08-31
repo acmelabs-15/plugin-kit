@@ -205,6 +205,8 @@ interface ScenarioRunParams {
   readonly logDir?: string | undefined;
   /** See {@link MeasureParams.fixtureDir}. */
   readonly fixtureDir?: string | undefined;
+  /** See {@link MeasureParams.allowedTools}. */
+  readonly allowedTools?: string | undefined;
   /**
    * Handed this attempt's isolation proof, read from the child's own `init` event.
    *
@@ -271,6 +273,13 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
       // model rummaging for the file rather than being handed it. See the constant.
       ...SKILL_EXECUTION_GRANT,
     ];
+    // The grants a human would answer at the prompt, pre-answered: a scenario that runs the
+    // skill's own tool or commits its output is denied by a child nobody is watching, and a
+    // denied step reads as the skill failing to do the work. Appended after the skill grant
+    // so the last --allowedTools wins nothing: Claude Code merges repeated flags.
+    if (params.allowedTools !== undefined && params.allowedTools !== "") {
+      cmd.push("--allowedTools", params.allowedTools);
+    }
     if (params.model !== undefined && params.model !== "") cmd.push("--model", params.model);
     // Left off unless asked for. A scenario that only reads and reports needs nothing; one
     // that writes an artifact needs `acceptEdits`, and that is the operator's call to make
@@ -564,6 +573,13 @@ export interface MeasureParams {
    * file from a prompt and wrong for one that works on a repo.
    */
   readonly fixtureDir?: string | undefined;
+  /**
+   * Extra `--allowedTools` rules for every scenario child, e.g. `Bash(git *),Bash(bun *)`.
+   * A scenario child has no human at the permission prompt, so a skill whose work runs a
+   * tool or makes a commit is denied at that step and the run measures the denial. Pass what
+   * a user of the skill would approve; the child still runs in its throwaway root.
+   */
+  readonly allowedTools?: string | undefined;
   readonly onProgress?: (settled: number, total: number) => void;
   /** Called as each run STARTS, so a caller can show a busy pool before anything settles. */
   readonly onStarted?: (inFlight: number, started: number, total: number) => void;
@@ -673,6 +689,7 @@ export async function measureLayout(params: MeasureParams): Promise<readonly Sce
         grade: params.grade,
         logDir: params.logDir,
         fixtureDir: params.fixtureDir,
+        allowedTools: params.allowedTools,
         onIsolation: params.onIsolation,
       }),
     params.onProgress,

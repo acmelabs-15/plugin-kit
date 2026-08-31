@@ -138,6 +138,8 @@ export interface MeasureDisclosureParams {
   readonly tierStudy?: string | undefined;
   /** See `MeasureParams.fixtureDir` in disclosure-measure.ts. */
   readonly fixtureDir?: string | undefined;
+  /** See `MeasureParams.allowedTools` in disclosure-measure.ts. */
+  readonly allowedTools?: string | undefined;
   /**
    * Which slice of the scenario set `scenarios` already is, when `--only` narrowed it.
    *
@@ -361,6 +363,7 @@ export async function measureDisclosure(
     grade: true,
     logDir: params.logDir,
     fixtureDir: params.fixtureDir,
+    allowedTools: params.allowedTools,
     onIsolation: params.onIsolation,
     onProgress: params.onProgress,
     onStarted: params.onStarted,
@@ -684,6 +687,11 @@ export const MEASURE_FLAGS: Spec = {
     help:
       "A repository to copy into every throwaway root before its child starts (its .git included, node_modules skipped), for a skill whose scenarios work on a repo",
   },
+  "allowed-tools": {
+    kind: "string",
+    help:
+      "Extra --allowedTools rules for every scenario child (e.g. \"Bash(git *),Bash(bun *)\"): what a user of the skill would approve at the prompt, which a child nobody is watching cannot",
+  },
   scenarios: {
     kind: "string",
     help: "Path to scenarios JSON: evals.json, or an array of {id, prompt, expectations}",
@@ -954,6 +962,7 @@ async function main(): Promise<void> {
       inlineThreshold: flagNumber(flags, "inline-threshold"),
       tierStudy,
       fixtureDir: flagString(flags, "fixture"),
+      allowedTools: flagString(flags, "allowed-tools"),
       ...(subset === null ? {} : { subset }),
       graderModel: flagString(flags, "grader-model") ?? DEFAULT_GRADER_MODEL,
       logDir: resultsDir === undefined ? undefined : `${resultsDir}/logs`,

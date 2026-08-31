@@ -339,6 +339,8 @@ export interface OptimizeParams {
   readonly permissionMode?: string | undefined;
   /** See `MeasureParams.fixtureDir` in disclosure-measure.ts. */
   readonly fixtureDir?: string | undefined;
+  /** See `MeasureParams.allowedTools` in disclosure-measure.ts. */
+  readonly allowedTools?: string | undefined;
   readonly workspaceDir: string;
   readonly verbose: boolean;
   readonly liveReportPath?: string | undefined;
@@ -562,6 +564,7 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
         grade: true,
         logDir: params.logDir,
         fixtureDir: params.fixtureDir,
+        allowedTools: params.allowedTools,
         durationHints,
         onIsolation: params.onIsolation,
         onProgress: (settled) => {
@@ -1604,6 +1607,11 @@ export const OPTIMIZE_FLAGS: Spec = {
     help:
       "A repository to copy into every throwaway root before its child starts (its .git included, node_modules skipped), for a skill whose scenarios work on a repo",
   },
+  "allowed-tools": {
+    kind: "string",
+    help:
+      "Extra --allowedTools rules for every scenario child (e.g. \"Bash(git *),Bash(bun *)\"): what a user of the skill would approve at the prompt, which a child nobody is watching cannot",
+  },
   scenarios: {
     kind: "string",
     help: "Path to scenarios JSON: evals.json, or an array of {id, prompt, expectations}",
@@ -1842,6 +1850,7 @@ async function main(): Promise<void> {
     graderModel,
     permissionMode: flagString(flags, "permission-mode"),
     fixtureDir: flagString(flags, "fixture"),
+    allowedTools: flagString(flags, "allowed-tools"),
     workspaceDir,
     verbose: flagBoolean(flags, "verbose"),
     liveReportPath,
