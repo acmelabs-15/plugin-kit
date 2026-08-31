@@ -26,6 +26,8 @@
  * equivalent -- and `Bun.file` / `Bun.write` / `Bun.spawn` for everything else.
  */
 
+import { MEASUREMENT_MODEL } from "../util/measurement.ts";
+import { existsSync } from "node:fs";
 import { cp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -342,6 +344,12 @@ export interface OptimizeParams {
   /** See `MeasureParams.allowedTools` in disclosure-measure.ts. */
   readonly allowedTools?: string | undefined;
   readonly workspaceDir: string;
+  /**
+   * A previous run's state to continue from, read by {@link readResumeState}. The baseline
+   * is not re-measured, every scored iteration is carried, every candidate already tried
+   * stays tried, and the loop starts at the iteration after the last one on record.
+   */
+  readonly resume?: ResumeState | undefined;
   readonly verbose: boolean;
   readonly liveReportPath?: string | undefined;
   readonly resultsDir?: string | undefined;
@@ -457,11 +465,13 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
     },
   });
 
-  const iterations: IterationRecord[] = [];
-  const notes: string[] = [];
-  const appliedEdits: string[] = [];
-  const alreadyTried = new Set<string>();
-  let settledSoFar = 0;
+  const iterations: IterationRecord[] = [...(params.resume?.iterations ?? [])];
+  const notes: string[] = [...(params.resume?.notes ?? [])];
+  const appliedEdits: string[] = [...(params.resume?.appliedEdits ?? [])];
+  const alreadyTried = new Set<string>(params.resume?.alreadyTried ?? []);
+  // A resumed run's bar counts the attempts the earlier run already spent, so it reads
+  // as the whole budget rather than restarting at zero.
+  let settledSoFar = params.resume?.settledAttempts ?? 0;
   // "in progress" rather than "unknown": every terminal path below assigns a real reason,
   // and this value is what the live report shows in the window before one exists.
   let exitReason = "in progress";
@@ -475,8 +485,8 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
    * would also let an older snapshot land last.
    */
   let reportChain: Promise<void> = Promise.resolve();
-  let current: MeasuredLayout | null = null;
-  let baseline: MeasuredLayout | null = null;
+  let current: MeasuredLayout | null = params.resume?.current ?? null;
+  let baseline: MeasuredLayout | null = params.resume?.baseline ?? null;
 
   const publish = (progress?: DisclosureProgress): void => {
     if (params.liveReportPath === undefined) return;
@@ -631,6 +641,13 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
   };
 
   try {
+    if (params.resume !== undefined) {
+      if (params.verbose) {
+        console.error(
+          `Resuming: ${params.resume.iterations.length} scored layout(s) carried, continuing at iteration ${params.resume.nextIteration}`,
+        );
+      }
+    } else {
     // Null gate: the baseline runs both splits unconditionally. It is not competing for a
     // slot, it is the yardstick, and `selectCandidate` needs a held-out baseline score.
     baseline = await measure(params.skillPath, "baseline measurement", 1, null);
@@ -651,11 +668,12 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
       buildOutput({ skillName, params, counter, iterations, baseline, current, trainScenarios, holdoutScenarios, exitReason: "in progress", appliedEdits, notes }),
     );
     if (params.verbose) printLayout("Baseline", baseline);
+    }
     // Said once, at the point it is still cheap to act on. Every pull rate below is
     // conditional on the body having reached context, so a run set where it mostly did
     // not is a measurement of almost nothing -- and the usual cause is a scenario prompt
     // the skill has no business answering rather than anything about the layout.
-    if (baseline.train.runsWithoutSkill > 0 || (baseline.holdout?.runsWithoutSkill ?? 0) > 0) {
+    if (baseline !== null && params.resume === undefined && (baseline.train.runsWithoutSkill > 0 || (baseline.holdout?.runsWithoutSkill ?? 0) > 0)) {
       const missed = baseline.train.runsWithoutSkill + (baseline.holdout?.runsWithoutSkill ?? 0);
       console.error(
         `Warning: the skill never loaded on ${missed} baseline run(s). Those runs are excluded ` +
@@ -665,7 +683,7 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
 
     exitReason = `max_iterations (${params.maxIterations})`;
 
-    for (let iteration = 2; iteration <= params.maxIterations; iteration += 1) {
+    for (let iteration = params.resume?.nextIteration ?? 2; iteration <= params.maxIterations; iteration += 1) {
       const layout = current;
       // Unreachable in practice -- the baseline above assigns it -- but narrowing it here
       // beats a cast, because a cast would still compile the day someone reorders this.
@@ -868,6 +886,79 @@ function buildReportInput(input: BuildInput): DisclosureReportInput {
     appliedTo: input.appliedTo,
     notes: input.notes,
     ...(input.inProgress === undefined ? {} : { inProgress: input.inProgress }),
+  };
+}
+
+/** What a later run needs from an earlier one's `results.json` to carry on where it stopped. */
+export interface ResumeState {
+  readonly iterations: readonly IterationRecord[];
+  readonly alreadyTried: readonly string[];
+  readonly appliedEdits: readonly string[];
+  readonly notes: readonly string[];
+  readonly baseline: MeasuredLayout;
+  readonly current: MeasuredLayout;
+  readonly nextIteration: number;
+  /** Attempts the earlier run spent, for a progress bar that reads as one budget. */
+  readonly settledAttempts: number;
+}
+
+/**
+ * Rebuild the loop's state from a persisted `results.json`.
+ *
+ * Validated rather than trusted, for the reason the description loop gives: a resume seed
+ * decides which layouts count as already measured, so a malformed entry would silently drop
+ * real work or inject a fake score. The one thing the file cannot carry is the runs
+ * themselves; a resumed layout has an empty `runs` list and everything the loop reads from
+ * a layout afterwards -- its scores, its file table, its body tokens, its directory -- is
+ * on record. The directory has to exist: it lived under the earlier run's --results-dir,
+ * which is why the workspace moved there.
+ */
+export function readResumeState(raw: unknown, source = "--resume-from"): ResumeState {
+  const fail = (why: string): never => {
+    throw new Error(`${source}: ${why}; refusing a partial resume`);
+  };
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+  if (!isRecord(raw)) return fail("not a results.json object");
+  const iterations = raw["iterations"];
+  if (!Array.isArray(iterations) || iterations.length === 0) return fail("holds no scored layouts");
+  for (const [index, item] of iterations.entries()) {
+    if (!isRecord(item) || typeof item["iteration"] !== "number" || !isRecord(item["train"]) || typeof item["accepted"] !== "boolean") {
+      return fail(`iterations[${index}] is not a scored layout record`);
+    }
+  }
+  const records = iterations as IterationRecord[];
+  const first = records[0] as IterationRecord;
+  const accepted = [...records].reverse().find((record) => record.accepted) ?? first;
+  const layoutPath = raw["best_layout_path"];
+  if (typeof layoutPath !== "string" || layoutPath === "") return fail("has no best_layout_path");
+  if (!existsSync(layoutPath)) return fail(`best_layout_path ${layoutPath} does not exist on disk (the earlier run needs a --results-dir for its layouts to survive)`);
+  const files = Array.isArray(raw["files"]) ? (raw["files"] as FileStat[]) : [];
+  const groundTruth = isRecord(raw["ground_truth"]) ? (raw["ground_truth"] as unknown as GroundTruth) : NO_GROUND_TRUTH;
+  const numberOr = (value: unknown, fallback: number): number => (typeof value === "number" ? value : fallback);
+  const layout = (dir: string, record: IterationRecord, bodyTokens: number, fileTable: readonly FileStat[]): MeasuredLayout => ({
+    dir,
+    bodyTokens,
+    runs: [],
+    train: record.train,
+    holdout: record.holdout,
+    gateReason: null,
+    files: fileTable,
+    groundTruth,
+  });
+  const skillPath = typeof raw["skill_path"] === "string" ? raw["skill_path"] : layoutPath;
+  const baseline = layout(skillPath, first, numberOr(raw["baseline_body_tokens"], first.bodyTokens), accepted === first ? files : []);
+  const current = accepted === first ? baseline : layout(layoutPath, accepted, numberOr(raw["best_body_tokens"], accepted.bodyTokens), files);
+  const perLayout = numberOr(raw["train_size"], 0) + numberOr(raw["holdout_size"], 0);
+  return {
+    iterations: records,
+    alreadyTried: records.map((record) => record.candidateId).filter((id): id is string => typeof id === "string"),
+    appliedEdits: Array.isArray(raw["applied_edits"]) ? (raw["applied_edits"] as string[]).filter((edit) => typeof edit === "string") : [],
+    notes: Array.isArray(raw["notes"]) ? (raw["notes"] as string[]).filter((note) => typeof note === "string") : [],
+    baseline,
+    current,
+    nextIteration: Math.max(...records.map((record) => record.iteration)) + 1,
+    settledAttempts: records.length * perLayout * numberOr(raw["runs_per_scenario"], 1),
   };
 }
 
@@ -1590,8 +1681,8 @@ const USAGE =
   "real work. Usually less — a candidate is measured on the train scenarios first, and\n" +
   "only one still in contention there is measured on the held-out scenarios, so at the\n" +
   "default --holdout 0.4 a losing candidate costs three fifths of a sweep.\n\n" +
-  "Each run makes two calls: the scenario itself on --model, then a grader on\n" +
-  "--grader-model, which defaults to a small fast model rather than inheriting --model.";
+  `Each run makes two calls: the scenario itself on ${MEASUREMENT_MODEL} (or --tier-study), then a grader on\n` +
+  "--grader-model, which defaults to a small fast model rather than inheriting the measurement model.";
 
 /**
  * The flag spec, exported so the defaults are reachable from the suite.
@@ -1616,9 +1707,13 @@ export const OPTIMIZE_FLAGS: Spec = {
     kind: "string",
     help: "Path to scenarios JSON: evals.json, or an array of {id, prompt, expectations}",
   },
-  model: {
+  "tier-study": {
     kind: "string",
-    help: "Model for the scenario runs and the proposal step (NOT the grader)",
+    help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL} for the scenario runs and the proposal step (never the grader). Marks the run as a tier study, comparable only with other runs on that model`,
+  },
+  "resume-from": {
+    kind: "string",
+    help: "results.json from an earlier run: its scored layouts are carried, its candidates stay tried, and the loop continues at the next iteration. Needs that run's --results-dir, where its layouts live",
   },
   // Its own flag, and a small model by default, because the grader is the one call
   // here that needs no capability: single-turn, transcript already in the prompt,
@@ -1631,7 +1726,7 @@ export const OPTIMIZE_FLAGS: Spec = {
   "grader-model": {
     kind: "string",
     default: DEFAULT_GRADER_MODEL,
-    help: "Model that grades assertions — measured against --model, not assumed cheaper",
+    help: `Model that grades assertions — measured against ${MEASUREMENT_MODEL}, not assumed cheaper`,
   },
   // Off by default because it cannot work everywhere: bare mode reads auth strictly from
   // ANTHROPIC_API_KEY, an apiKeyHelper via --settings, or a third-party provider's own
@@ -1809,7 +1904,31 @@ async function main(): Promise<void> {
   // Candidate layouts live outside the repository. They are throwaway copies of a skill,
   // and a workspace inside the repo would be one `git add -A` away from committing three
   // half-restructured duplicates of the artifact under test.
-  const workspaceDir = `${tempDir()}/skill-disclosure-${baseName(skillPath)}-${timestamp("")}`;
+  // …unless a results directory was given: then the workspace lives under it, so the
+  // layout a later --resume-from has to continue from survives the process that built it.
+  const workspaceDir =
+    resultsDir === undefined
+      ? `${tempDir()}/skill-disclosure-${baseName(skillPath)}-${timestamp("")}`
+      : `${resultsDir}/workspace`;
+
+  // Resume seed, read before anything is spent so a malformed file fails fast.
+  const resumePath = flagString(flags, "resume-from");
+  const resume = resumePath === undefined ? undefined : readResumeState(await Bun.file(resumePath).json(), resumePath);
+  if (resume !== undefined) {
+    console.error(
+      `Resuming from ${resumePath}: ${resume.iterations.length} scored layout(s) will not be re-run; continuing at iteration ${resume.nextIteration}.`,
+    );
+  }
+
+  const tierStudy = flagString(flags, "tier-study");
+  if (tierStudy !== undefined) {
+    console.error(
+      `TIER STUDY: sweeping on ${tierStudy} instead of ${MEASUREMENT_MODEL}. This run is NOT a ` +
+        "measurement of record: its rates are comparable only with other runs on that model, " +
+        "and the envelope says so.",
+    );
+  }
+  const model = tierStudy ?? MEASUREMENT_MODEL;
 
   // Process-wide rather than a param: every helper call wants the same answer, and the
   // latch in `callClaude` has to survive across calls to be worth having.
@@ -1846,12 +1965,13 @@ async function main(): Promise<void> {
     passRateTolerance: flagNumber(flags, "pass-rate-tolerance"),
     minExtractTokens: flagNumber(flags, "min-extract-tokens"),
     propose: !flagBoolean(flags, "no-propose"),
-    model: flagString(flags, "model"),
+    model,
     graderModel,
     permissionMode: flagString(flags, "permission-mode"),
     fixtureDir: flagString(flags, "fixture"),
     allowedTools: flagString(flags, "allowed-tools"),
     workspaceDir,
+    resume,
     verbose: flagBoolean(flags, "verbose"),
     liveReportPath,
     resultsDir,
@@ -1945,14 +2065,11 @@ async function main(): Promise<void> {
     // configured, and this script cannot find out what that was. Recording `null` and
     // saying so is the only honest option; inventing a name would make two runs on
     // different machines look comparable, which is what the run block exists to prevent.
-    const model = flagString(flags, "model") ?? null;
     const unpinned =
-      model === null
-        ? "No `--model` was pinned, so the scenario runs and the proposal step were " +
-          "answered by the operator's configured default and the model is not recorded. " +
-          "Runs made this way are not comparable across machines even though their " +
-          "`run.model` fields match."
-        : null;
+      tierStudy === undefined
+        ? null
+        : `TIER STUDY: this run swept on ${tierStudy} rather than the ${MEASUREMENT_MODEL} every ` +
+          "measurement of record uses; its rates are comparable only with other runs on that model.";
 
     await writeEnvelope(
       envelopePath,
