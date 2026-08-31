@@ -14,6 +14,7 @@
  * whitespace included, because it is the behavioural contract of this script.
  */
 
+import { MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { parseSkillMd } from "../parse/frontmatter.ts";
 import { runIsolatedHelper } from "../util/subprocess.ts";
 import {
@@ -381,15 +382,15 @@ async function main(): Promise<void> {
       "eval-results": { kind: "string", help: "Path to eval results JSON (from measure-triggering.ts)" },
       "skill-path": { kind: "string", help: "Path to skill directory" },
       history: { kind: "string", help: "Path to history JSON (previous attempts)" },
-      model: { kind: "string", help: "Model for improvement" },
+      model: { kind: "string", help: `Model that proposes; defaults to ${MEASUREMENT_MODEL}, the one the loop measures on, so a proposal and its measurement never disagree about the tier` },
       verbose: { kind: "boolean", default: false, help: "Print thinking to stderr" },
       help: { kind: "boolean", short: "h", help: "Show this message" },
     },
-    "Usage: bun shared/operations/propose-description.ts --eval-results <path> --skill-path <path> --model <id>",
+    "Usage: bun shared/operations/propose-description.ts --eval-results <path> --skill-path <path> [--model <id>]",
   );
   const evalResultsPath = requireFlag(flags, "eval-results");
   const skillPath = requireFlag(flags, "skill-path");
-  const model = requireFlag(flags, "model");
+  const model = flagString(flags, "model") ?? MEASUREMENT_MODEL;
   const verbose = flagBoolean(flags, "verbose");
 
   if (!(await Bun.file(`${skillPath}/SKILL.md`).exists())) {

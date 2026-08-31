@@ -213,7 +213,8 @@ export const RunBlockSchema = z.object({
    *
    * `null` covers two cases and they are told apart by `provenance.caps`, not by this
    * field: an operation that spawns no model at all (`validate`), and a caller that left
-   * the choice to the environment by omitting `--model`. A producer taking the second
+   * the choice to the environment (no measured operation does so any more; the model is
+   * fixed in the tool and `--tier-study` is the recorded override). A producer taking the second
    * path MUST add a cap saying so, because two runs that both say `null` compare as
    * equal here while having been answered by whatever each machine had configured --
    * which is precisely the incomparability {@link compareRuns} exists to catch.

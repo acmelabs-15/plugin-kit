@@ -29,7 +29,6 @@ Restructuring as well is the same command with the optimizer's name and its extr
 bun ../operations/optimize-disclosure.ts \
   --skill-path ../my-skill \
   --scenarios ../my-skill/evals/evals.json \
-  --model sonnet \
   --results-dir ./disclosure-runs/my-skill
 ```
 
@@ -41,7 +40,7 @@ bun ../operations/optimize-disclosure.ts \
 
 ## Run it on the weaker tier
 
-**Sonnet, not opus, and this is not a cost preference.** `measure-disclosure.ts` no longer takes `--model` at all — sonnet is hardcoded there, and a deliberate off-tier sweep goes through `--tier-study`, which marks its own output as not a measurement of record. `optimize-disclosure.ts` still takes `--model`, so the choice below is still yours to get wrong there. The two tiers fail in opposite directions, measured on the same skill and the same scenarios: opus reached 100% of what it should have on five of six references and read a file it did not need on 3 of 8 runs that should have reached nothing; sonnet over-fetched on none and missed between a third and two-thirds.
+**Sonnet, not opus, and this is not a cost preference.** Neither `measure-disclosure.ts` nor `optimize-disclosure.ts` takes `--model` — the measurement model is fixed in the tool, and a deliberate off-tier sweep goes through `--tier-study`, which marks its own output as not a measurement of record. The same is true of the triggering and description loops. The two tiers fail in opposite directions, measured on the same skill and the same scenarios: opus reached 100% of what it should have on five of six references and read a file it did not need on 3 of 8 runs that should have reached nothing; sonnet over-fetched on none and missed between a third and two-thirds.
 
 So a routing defect is invisible on the strong model, because eager reading opens the file whatever the pointer says. **An opus-only sweep of the measured skill showed five of six references at 100% and would have surfaced nothing at all.** A signposting measurement taken on the strongest available model is a check that returns a healthy verdict from the wrong configuration, which is worth less than no check — a passing result is stronger evidence than an absent one, and this one has not earned it.
 

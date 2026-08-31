@@ -61,6 +61,7 @@
  *   2  usage error
  */
 
+import { MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "../cli.ts";
 import { runIsolatedHelper } from "../util/subprocess.ts";
 import {
@@ -1714,7 +1715,7 @@ export const CLI_SPEC: Spec = {
     help: "Report the inventory and stop, without calling a model",
   },
   count: { kind: "integer", default: DEFAULT_COUNT, help: "Total scenarios, split half each way" },
-  model: { kind: "string", help: "Model for synthesis (default: user's configured)" },
+  model: { kind: "string", help: `Model for synthesis; defaults to ${MEASUREMENT_MODEL} so a set does not vary by operator` },
   "project-dir": { kind: "string", help: "Project root for the neighbour sweep (default: cwd)" },
   "min-shared": {
     kind: "number",
@@ -1851,7 +1852,7 @@ async function main(argv: readonly string[]): Promise<number> {
   try {
     response = await callClaude(
       built.prompt,
-      flagString(flags, "model"),
+      flagString(flags, "model") ?? MEASUREMENT_MODEL,
       flagNumber(flags, "timeout", SYNTHESIS_TIMEOUT_SECONDS),
     );
   } catch (error) {
