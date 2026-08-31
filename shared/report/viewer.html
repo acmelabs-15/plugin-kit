@@ -1063,8 +1063,10 @@
     }
 
     function closeDoneDialog() {
-      // Reset status back to in_progress
-      saveCurrentFeedback();
+      // Dismissing the confirmation is not a change of mind: the submission on disk
+      // stays `complete`. (It used to re-save as in_progress with only the non-empty
+      // feedback, which erased an all-empty "everything looks good" submission the
+      // moment the dialog closed.) Editing a textarea afterwards is what reopens it.
       document.getElementById("done-overlay").classList.remove("visible");
     }
 

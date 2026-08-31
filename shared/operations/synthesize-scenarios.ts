@@ -1242,6 +1242,7 @@ export async function buildInventory(options: InventoryOptions): Promise<Capabil
     : await findNeighbours({
         targetTerms,
         excludePath: options.kind === "skill" ? `${targetPath}/SKILL.md` : targetPath,
+        excludeName: raw.name,
         ...(options.projectDir === undefined ? {} : { projectDir: options.projectDir }),
         minShared: options.minShared ?? SHARED_TERM_FLOOR,
       });

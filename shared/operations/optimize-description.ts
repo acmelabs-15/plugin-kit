@@ -253,7 +253,10 @@ let cachedGenerator: GenerateHtml | null | undefined;
 async function loadGenerateHtml(): Promise<GenerateHtml | null> {
   if (cachedGenerator !== undefined) return cachedGenerator;
   try {
-    const module: unknown = await import(new URL("./generate-report.ts", import.meta.url).href);
+    // The generator lives in ../report/, beside the dashboard and the eval viewer.
+    const module: unknown = await import(
+      new URL("../report/generate-report.ts", import.meta.url).href
+    );
     if (isRecord(module) && typeof module["generateHtml"] === "function") {
       cachedGenerator = module["generateHtml"] as GenerateHtml;
       return cachedGenerator;
