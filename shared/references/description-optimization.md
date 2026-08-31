@@ -108,8 +108,6 @@ nohup bun ../operations/optimize-description.ts \
   --eval-set <path-to-trigger-eval.json> \
   --target-path <path-to-skill-or-agent> \
   --target-type skill \
-  --model <model-id-powering-this-session> \
-  --max-iterations 5 \
   --verbose > /dev/null 2>&1 &
 ```
 
@@ -117,8 +115,10 @@ Read `running-detached.md` once the job is launched and you are wondering whethe
 it is alive: it covers the dashboard, what each row's pid answers, and why a
 report and a status file can disagree.
 
-Use the model ID from your own system prompt, so the triggering test matches what
-the user actually experiences rather than a cheaper proxy.
+The tool picks the model — the routing tier (`MEASUREMENT_MODEL`, the same one the disclosure
+loop measures on) — and the worker count (twice the core count, capped at 24), so a sweep never
+varies by operator and a description defect shows where it shows. `--tier-study <model>` is the one override, and the run is then a study: comparable only with
+other runs on that model, which the envelope says.
 
 What it does: splits the set 60% train / 40% held-out, evaluates the current
 description at 3 runs per query for a stable trigger rate, asks Claude to propose

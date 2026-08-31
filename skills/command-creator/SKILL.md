@@ -215,8 +215,6 @@ Otherwise the command is competing for triggers exactly like a skill, and the sa
 bun ../../shared/operations/optimize-description.ts \
   --eval-set <path-to-trigger-eval.json> \
   --skill-path <path-to-command-as-a-skill-directory> \
-  --model <model-id-powering-this-session> \
-  --max-iterations 5 \
   --verbose
 ```
 

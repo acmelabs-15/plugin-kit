@@ -15,6 +15,8 @@
  * exactly as it did.
  */
 
+import { availableParallelism } from "node:os";
+import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { proposeDescription, type ProposeHistoryEntry } from "./propose-description.ts";
 import { ensureDashboard, openInBrowser } from "../util/browser.ts";
 import {
@@ -993,7 +995,10 @@ async function main(): Promise<void> {
         default: 0.4,
         help: "Fraction of eval set held out for testing (0 to disable)",
       },
-      model: { kind: "string", help: "Model for improvement" },
+      "tier-study": {
+        kind: "string",
+        help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, the routing tier every measurement uses. Marks the run as a tier study, comparable only with other runs on that model`,
+      },
       report: {
         kind: "string",
         default: "auto",
@@ -1014,7 +1019,7 @@ async function main(): Promise<void> {
         help: "Also write the results envelope here (default: <results-dir>/envelope.json)",
       },
     },
-    "Usage: bun shared/operations/optimize-description.ts --eval-set <path> --target-path <path> --model <id> [options]\n\n" +
+    "Usage: bun shared/operations/optimize-description.ts --eval-set <path> --target-path <path> [options]\n\n" +
       "Each iteration scores the current description, then proposes a replacement. Queries\n" +
       "stop early once their verdict is settled, which is safe here because iterations are\n" +
       "ranked on pass COUNTS rather than on mean trigger rate. Pass --no-early-stop if you\n" +
@@ -1023,7 +1028,29 @@ async function main(): Promise<void> {
   const evalSetPath = requireFlag(flags, "eval-set");
   const targetType = requireTargetType(flags);
   const skillPath = requireTargetPath(flags);
-  const model = requireFlag(flags, "model");
+  // Owned here for the reason measure-disclosure.ts owns MEASUREMENT_MODEL: a run that inherits
+  // whatever model the operator configured is a run whose numbers vary by operator without
+  // saying so. Routing is measured on the weaker tier, where a description defect shows.
+  // Same cliff the disclosure loop signs: past roughly three times the core count the
+  // machine thrashes rather than saturating (measured: 48 workers on a 10-core box ran
+  // about five times SLOWER per run than 24). The escape hatch stays; the cliff gets a sign.
+  const requestedWorkers = flagNumber(flags, "num-workers");
+  if (requestedWorkers !== undefined && requestedWorkers > availableParallelism() * 3) {
+    console.error(
+      `Warning: --num-workers ${requestedWorkers} is more than three times this machine's ` +
+        `${availableParallelism()} cores; the default is ${DEFAULT_NUM_WORKERS}, twice the core count.`,
+    );
+  }
+  const tierStudy = flagString(flags, "tier-study");
+  if (tierStudy !== undefined) {
+    console.error(
+      `TIER STUDY: sweeping on ${tierStudy} instead of ${MEASUREMENT_MODEL}. This run is NOT a ` +
+        "measurement of record: its rates are comparable only with other runs on that model, " +
+        "and the envelope says so.",
+    );
+  }
+  const model = tierStudy ?? MEASUREMENT_MODEL;
+
 
   const definitionFile = await resolveTargetFile(skillPath, targetType);
   if (!(await Bun.file(definitionFile).exists())) {
@@ -1150,7 +1177,7 @@ async function main(): Promise<void> {
         // denominator rather than a rounding error.
         plannedAttempts: evalSet.length * runsPer * output.iterations_run,
         model,
-        workers: flagNumber(flags, "num-workers") ?? 1,
+        workers: flagNumber(flags, "num-workers") ?? DEFAULT_NUM_WORKERS,
         runsPer,
         timeoutSeconds: flagNumber(flags, "timeout") ?? 0,
         evalSetHash: hashJsonValue(evalSet),

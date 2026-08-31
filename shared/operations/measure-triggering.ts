@@ -12,8 +12,9 @@
  * break every reader of an existing results file to gain nothing measurable.
  */
 
+import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { cp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import {tmpdir, availableParallelism } from "node:os";
 
 import { ensureDashboard } from "../util/browser.ts";
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "../cli.ts";
@@ -1551,7 +1552,7 @@ export const SHARED_EVAL_FLAGS: Spec = {
     help: "Artifact under test: skill, agent or command",
   },
   description: { kind: "string", help: "Override description to test" },
-  "num-workers": { kind: "number", default: 10, help: "Number of parallel workers" },
+  "num-workers": { kind: "number", default: DEFAULT_NUM_WORKERS, help: "Concurrent claude -p children (the tool picks twice the core count, capped at 24)" },
   // 180s, not 30. Calls were measured at up to 124s, and a timeout is scored as a
   // non-trigger, so a 30s ceiling silently converted slow calls into failures -- the
   // measurement corruption documented for rate limits, reached by the DEFAULT invocation.
@@ -1630,7 +1631,10 @@ async function main(): Promise<void> {
     {
       ...SHARED_EVAL_FLAGS,
       ...SUBSET_FLAGS,
-      model: { kind: "string", help: "Model to use for claude -p (default: user's configured)" },
+      "tier-study": {
+        kind: "string",
+        help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, the routing tier every measurement uses. Marks the run as a tier study, comparable only with other runs on that model`,
+      },
     },
     "Usage: bun shared/operations/measure-triggering.ts --eval-set <path> --target-path <path> [options]\n\n" +
       "Each query is run --runs-per-query times and passes when its trigger rate clears\n" +
@@ -1735,6 +1739,25 @@ async function main(): Promise<void> {
   });
 
   const numWorkers = flagNumber(flags, "num-workers");
+  // Same cliff the disclosure loop signs: past roughly three times the core count the
+  // machine thrashes rather than saturating (measured: 48 workers on a 10-core box ran
+  // about five times SLOWER per run than 24). The escape hatch stays; the cliff gets a sign.
+  const requestedWorkers = flagNumber(flags, "num-workers");
+  if (requestedWorkers !== undefined && requestedWorkers > availableParallelism() * 3) {
+    console.error(
+      `Warning: --num-workers ${requestedWorkers} is more than three times this machine's ` +
+        `${availableParallelism()} cores; the default is ${DEFAULT_NUM_WORKERS}, twice the core count.`,
+    );
+  }
+  const tierStudy = flagString(flags, "tier-study");
+  if (tierStudy !== undefined) {
+    console.error(
+      `TIER STUDY: sweeping on ${tierStudy} instead of ${MEASUREMENT_MODEL}. This run is NOT a ` +
+        "measurement of record: its rates are comparable only with other runs on that model, " +
+        "and the envelope says so.",
+    );
+  }
+  const model = tierStudy ?? MEASUREMENT_MODEL;
   const timeoutSeconds = flagNumber(flags, "timeout");
   const triggerThreshold = flagNumber(flags, "trigger-threshold");
   const tally = createAttemptTally();
@@ -1757,7 +1780,7 @@ async function main(): Promise<void> {
       runsPerQuery,
       triggerThreshold,
       earlyStop: !flagBoolean(flags, "no-early-stop"),
-      model: flagString(flags, "model"),
+      model,
       verbose,
       onAttemptOutcome: tally.record,
       onIsolation: isolation.record,
@@ -1831,13 +1854,11 @@ async function main(): Promise<void> {
     // and saying so is the only honest option: inventing a name would make two runs on
     // different machines look comparable, which is the exact failure the run block exists
     // to prevent.
-    const model = flagString(flags, "model") ?? null;
     const unpinned =
-      model === null
-        ? "No `--model` was pinned, so the run was answered by the operator's configured " +
-          "default and the model is not recorded. Runs made this way are not comparable " +
-          "across machines even though their `run.model` fields match."
-        : null;
+      model === MEASUREMENT_MODEL
+        ? null
+        : `TIER STUDY: this sweep ran on ${model} rather than the ${MEASUREMENT_MODEL} every ` +
+          "measurement of record uses; its rates are comparable only with other runs on that model.";
     await writeEnvelope(
       envelopePath,
       buildTriggeringEnvelope({
