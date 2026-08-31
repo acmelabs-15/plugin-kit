@@ -662,7 +662,7 @@ Change `workers`, `model` or `timeoutSeconds` and a run is incomparable with eve
 | `../operations/measure-disclosure.ts` | `--envelope <path>` | `<--results-dir>/envelope.json`, when `--results-dir` was passed |
 | `../validate/validate.ts` | `--envelope <path>` | none — no flag, no envelope |
 
-`../operations/optimize-description.ts` accepts `--envelope` and exports `buildDescriptionEnvelope`, but does not yet write the file; the row and verdict shapes above are what it will emit. Until it does, a description-optimization run leaves only `results.json` and `report.html`.
+`../operations/optimize-description.ts` writes it beside `results.json` when `--results-dir` is passed (and wherever `--envelope` names); the row and verdict shapes above are what it emits.
 
 **Why the two disclosure entry points default the envelope on and `measure-triggering.ts` does not.** It is not a disagreement: `measure-triggering.ts` has no `--results-dir` to hang a default off, so `--envelope` is the only way to name a path. Where a results directory exists, an operator saving a run's output wants the conditions that output was produced under, and requiring a second flag to get them is the habit-flag pattern rather than a guard against one — correct behaviour available to whoever remembered to ask for it is behaviour that goes missing. Nothing is traded by defaulting it on, because `results.json` does not change.
 

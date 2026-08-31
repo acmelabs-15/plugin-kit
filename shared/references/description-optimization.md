@@ -122,8 +122,10 @@ other runs on that model, which the envelope says.
 
 What it does: splits the set 60% train / 40% held-out, evaluates the current
 description at 3 runs per query for a stable trigger rate, asks Claude to propose
-improvements from what failed, and re-evaluates each candidate on both splits, up
-to `--max-iterations`. It opens an HTML report and returns JSON containing
+improvements from what failed, and re-evaluates each candidate train-first — a
+candidate that scores below the incumbent on the train split is retired there and
+never runs its held-out queries (the same gate the disclosure loop applies, for the
+same budget reason) — up to `--max-iterations`. It opens an HTML report and returns JSON containing
 `best_description`, **selected on the held-out score rather than the train
 score** — a description tuned until it aces its own training queries has usually
 just memorized them.

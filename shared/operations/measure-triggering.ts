@@ -12,6 +12,7 @@
  * break every reader of an existing results file to gain nothing measurable.
  */
 
+import { warnOnInstallConflict } from "../util/install-conflict.ts";
 import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { cp, rm } from "node:fs/promises";
 import {tmpdir, availableParallelism } from "node:os";
@@ -1691,6 +1692,14 @@ async function main(): Promise<void> {
     targetPath,
     targetType,
   );
+
+  // Before the sweep, not after: a copy installed under the real name competes with the
+
+  // aliased one for every trigger, so the sweep measures the pair. Told at second zero, an
+
+  // operator can stop; nothing else in the run would say so.
+
+  if (targetType === "skill") await warnOnInstallConflict({ skillPath: targetPath, skillName: name, operation: "measure-triggering" });
   const description = flagString(flags, "description") ?? originalDescription;
 
   if (verbose) console.error(`Evaluating: ${description}`);

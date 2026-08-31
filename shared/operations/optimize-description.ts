@@ -15,6 +15,7 @@
  * exactly as it did.
  */
 
+import { warnOnInstallConflict } from "../util/install-conflict.ts";
 import { availableParallelism } from "node:os";
 import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { proposeDescription, type ProposeHistoryEntry } from "./propose-description.ts";
@@ -78,6 +79,11 @@ export interface LoopHistoryEntry {
   readonly failed: number;
   readonly total: number;
   readonly results: readonly QueryResult[];
+  /**
+   * Why this candidate never ran the held-out split: it lost to the incumbent on train.
+   * Absent on a candidate that earned its held-out measurement, and on the baseline.
+   */
+  readonly gate_reason?: string;
 }
 
 /** What the report shows for work that has started but produced no results row yet. */
@@ -370,12 +376,26 @@ function scoreOf(entry: LoopHistoryEntry, useTest: boolean): number {
   return useTest ? (entry.test_passed ?? 0) : entry.train_passed;
 }
 
+/**
+ * The train-first gate, ported from the disclosure loop: a candidate that scores below the
+ * incumbent on the train split is retired there and never runs the held-out split. A tie
+ * goes through -- the held-out split is what tells two equals apart. Returns the reason a
+ * candidate was retired, or null when it earned its held-out measurement.
+ */
+export function gateOnTrain(incumbentTrainPassed: number, candidateTrainPassed: number, trainTotal: number): string | null {
+  if (candidateTrainPassed >= incumbentTrainPassed) return null;
+  return `lost to the incumbent on the train split (${candidateTrainPassed}/${trainTotal} against ${incumbentTrainPassed}/${trainTotal}), so its held-out queries were not run`;
+}
+
 /** Python's `max()` keeps the FIRST maximum on ties; so does this. */
-function bestIteration(history: readonly LoopHistoryEntry[], useTest: boolean): LoopHistoryEntry {
+export function bestIteration(history: readonly LoopHistoryEntry[], useTest: boolean): LoopHistoryEntry {
   const first = history[0];
   if (first === undefined) throw new Error("run loop produced no iterations");
   let best = first;
   for (const entry of history) {
+    // A gated candidate has no held-out score; scoring it on train here would let a
+    // description retired on train win the loop, which is the mistake the gate exists for.
+    if (useTest && entry.gate_reason !== undefined) continue;
     if (scoreOf(entry, useTest) > scoreOf(best, useTest)) best = entry;
   }
   return best;
@@ -399,6 +419,11 @@ export async function optimizeDescription(params: OptimizeDescriptionParams): Pr
   } = await readTargetDefinition(params.skillPath, targetType);
   let currentDescription = params.descriptionOverride ?? originalDescription;
 
+  // Before the sweep, not after: an installed copy under the real name competes with every
+  // aliased candidate for the triggers being measured, and nothing else in the run says so.
+  if (targetType === "skill") {
+    await warnOnInstallConflict({ skillPath: params.skillPath, skillName: name, operation: "optimize-description" });
+  }
   const [trainSet, testSet] =
     params.holdout > 0
       ? splitEvalSet(params.evalSet, params.holdout)
@@ -512,8 +537,13 @@ export async function optimizeDescription(params: OptimizeDescriptionParams): Pr
     const phase = iteration === 1 ? "baseline evaluation" : `evaluating iteration ${iteration}`;
     reporter.update({ iteration, phase });
 
-    const allResults = await measureTriggering({
-      evalSet: [...trainSet, ...testSet],
+    // Train first, held-out only for a candidate still in contention -- the disclosure loop's
+    // gate, for the same budget reason: a candidate retired on train costs three fifths of a
+    // sweep rather than a whole one. The baseline runs both splits unconditionally; it is
+    // the yardstick, and selection needs its held-out score.
+    const incumbent = history.at(-1);
+    const measure = async (evalSet: readonly EvalItem[], offset: number) => await measureTriggering({
+      evalSet: [...evalSet],
       skillName: name,
       description: currentDescription,
       skillPath: params.skillPath,
@@ -530,7 +560,7 @@ export async function optimizeDescription(params: OptimizeDescriptionParams): Pr
       model: params.model,
       verbose: params.verbose,
       onProgress: (settled, total) => {
-        reporter.report(priorAttempts + settled);
+        reporter.report(priorAttempts + offset + settled);
         // Projected against THIS iteration's clock rather than the loop's, so a slow
         // first iteration does not skew the estimate for a later one. Shared with the
         // dashboard's projection so the two cannot disagree.
@@ -550,16 +580,30 @@ export async function optimizeDescription(params: OptimizeDescriptionParams): Pr
         });
       },
     });
+    let trainResults: QueryResult[];
+    let testResults: QueryResult[];
+    let gateReason: string | null = null;
+    if (incumbent === undefined || testSet.length === 0) {
+      const all = await measure([...trainSet, ...testSet], 0);
+      const trainQueries = new Set(trainSet.map((item) => item.query));
+      trainResults = all.results.filter((result) => trainQueries.has(result.query));
+      testResults = all.results.filter((result) => !trainQueries.has(result.query));
+    } else {
+      trainResults = [...(await measure(trainSet, 0)).results];
+      const trainPassedNow = trainResults.filter((result) => result.pass).length;
+      gateReason = gateOnTrain(incumbent.train_passed, trainPassedNow, trainResults.length);
+      testResults = gateReason === null
+        ? [...(await measure(testSet, trainSet.length * (params.runsPerQuery ?? 3))).results]
+        : [];
+      if (gateReason !== null && params.verbose) console.error(`\nSkipped held-out queries: ${gateReason}`);
+    }
     const evalElapsed = elapsedSince(started);
-
-    // Split results back into train/test by matching queries.
-    const trainQueries = new Set(trainSet.map((item) => item.query));
-    const trainResults = allResults.results.filter((result) => trainQueries.has(result.query));
-    const testResults = allResults.results.filter((result) => !trainQueries.has(result.query));
 
     const trainPassed = trainResults.filter((result) => result.pass).length;
     const testPassed = testResults.filter((result) => result.pass).length;
-    const hasTestSet = testSet.length > 0;
+    // A gated candidate has no held-out row; the shape below says so with nulls, exactly
+    // as a run with no held-out split does, plus the reason.
+    const hasTestSet = testSet.length > 0 && gateReason === null;
 
     history.push({
       iteration,
@@ -576,6 +620,7 @@ export async function optimizeDescription(params: OptimizeDescriptionParams): Pr
       failed: trainResults.length - trainPassed,
       total: trainResults.length,
       results: trainResults,
+      ...(gateReason === null ? {} : { gate_reason: gateReason }),
     });
 
     // The swap: this iteration now has a history entry, so publishing without a
