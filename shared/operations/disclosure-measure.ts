@@ -419,7 +419,12 @@ const GRADER_FILE_COUNT = 3;
  */
 async function gradeRun(params: {
   readonly scenario: DisclosureScenario;
-  readonly observation: { readonly toolCalls: readonly string[]; readonly filesWritten: readonly string[]; readonly finalText: string };
+  readonly observation: {
+    readonly toolCalls: readonly string[];
+    readonly toolTrace?: readonly { readonly tool: string; readonly summary: string; readonly resultHead: string }[] | undefined;
+    readonly filesWritten: readonly string[];
+    readonly finalText: string;
+  };
   readonly projectRoot: string;
   readonly model?: string | undefined;
 }): Promise<{ passed: number; total: number; verdicts: readonly unknown[] }> {
@@ -445,6 +450,10 @@ ${params.scenario.prompt}
 <tools_used>
 ${params.observation.toolCalls.join(", ") || "none"}
 </tools_used>
+
+<tool_trace>
+${(params.observation.toolTrace ?? []).map((entry, index) => `${index + 1}. ${entry.tool}: ${entry.summary}${entry.resultHead === "" ? "" : ` → ${entry.resultHead}`}`).join("\n") || "none"}
+</tool_trace>
 
 <files_written>
 ${params.observation.filesWritten.join("\n") || "none"}

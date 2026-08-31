@@ -1410,6 +1410,32 @@ describe("createRunCollector", () => {
     },
   });
 
+  test("the tool trace keeps what each call asked and the head of its result, bounded", () => {
+    const bash = (id: string, command: string) => ({
+      type: "assistant",
+      message: { content: [{ type: "tool_use", name: "Bash", id, input: { command } }] },
+    });
+    const result = (id: string, content: string) => ({
+      type: "user",
+      message: { content: [{ type: "tool_result", tool_use_id: id, content }] },
+    });
+    const observed = feed([
+      bash("b1", "bun session.ts check --session SES-007"),
+      result("b1", "session: complete (SES-007, open)\n"),
+      bash("b2", "git commit -m \"docs(session): handoff\""),
+      result("b2", "x".repeat(2000)),
+      readTool(`${skillDir}/references/rules.md`, "r1"),
+    ]);
+    expect(observed.toolTrace.map((entry) => entry.tool)).toEqual(["Bash", "Bash", "Read"]);
+    expect(observed.toolTrace[0]).toEqual({
+      tool: "Bash",
+      summary: "bun session.ts check --session SES-007",
+      resultHead: "session: complete (SES-007, open)",
+    });
+    expect(observed.toolTrace[1]?.resultHead.length).toBe(600);
+    expect(observed.toolTrace[2]?.summary).toBe(`${skillDir}/references/rules.md`);
+  });
+
   test("a Read inside the skill directory is a pull, recorded relative to the skill", () => {
     const observed = feed([readTool(`${skillDir}/references/deep.md`)]);
     expect(observed.filesRead).toEqual(["references/deep.md"]);

@@ -1719,6 +1719,23 @@ export function sumUsage(usage: unknown): number {
  */
 export type SkillLoadPath = "skill" | "file" | null;
 
+/**
+ * One tool call as the grader sees it: the tool, what it was asked (a Bash command, a
+ * path, a skill name), and the head of what came back. Bounded on both sides, because
+ * a grader prompt is a budget and a 4,000-line diff in it drowns the evidence it was
+ * meant to carry.
+ */
+export interface ToolTraceEntry {
+  readonly tool: string;
+  readonly summary: string;
+  readonly resultHead: string;
+}
+
+/** Entries kept per run, and characters kept per summary and per result head. */
+export const TOOL_TRACE_MAX_ENTRIES = 80;
+export const TOOL_TRACE_SUMMARY_CHARS = 240;
+export const TOOL_TRACE_RESULT_CHARS = 600;
+
 export interface RunObservation {
   readonly filesRead: readonly string[];
   /**
@@ -1739,6 +1756,12 @@ export interface RunObservation {
   readonly contextTokens: number;
   /** Tool names in call order, for the grader's trace and for diagnosing a stuck run. */
   readonly toolCalls: readonly string[];
+  /**
+   * The calls with what each was asked and the head of its result, in order, so an
+   * expectation about what a command PRINTED — a gate going green, a commit landing — is
+   * gradeable. Tool names alone made every such expectation fail for want of evidence.
+   */
+  readonly toolTrace: readonly ToolTraceEntry[];
   /**
    * Paths the run wrote, outside the skill itself.
    *
@@ -1819,6 +1842,18 @@ export function createRunCollector(params: {
   const filesRead: string[] = [];
   const filesWritten: string[] = [];
   const toolCalls: string[] = [];
+  const toolTrace: { tool: string; summary: string; resultHead: string }[] = [];
+  /** Trace index by tool-use id, so a result can be attached to its call. */
+  const traceById = new Map<string, number>();
+
+  /** What a call was asked, in the words the grader can match an expectation against. */
+  const summarise = (toolName: string, input: Record<string, unknown>): string => {
+    const pick = (key: string): string | null => (typeof input[key] === "string" ? (input[key] as string) : null);
+    const text =
+      pick("command") ?? pick("file_path") ?? pick("pattern") ?? pick("skill") ?? pick("name") ??
+      (toolName === "Skill" ? JSON.stringify(input) : Object.keys(input).join(", "));
+    return text.replace(/\s+/g, " ").slice(0, TOOL_TRACE_SUMMARY_CHARS);
+  };
   let skillLoaded = false;
   let skillRequested = false;
   let loadedVia: SkillLoadPath = null;
@@ -1859,6 +1894,10 @@ export function createRunCollector(params: {
 
   const record = (toolName: string, input: Record<string, unknown>, toolUseId: string): void => {
     toolCalls.push(toolName);
+    if (toolTrace.length < TOOL_TRACE_MAX_ENTRIES) {
+      if (toolUseId !== "") traceById.set(toolUseId, toolTrace.length);
+      toolTrace.push({ tool: toolName, summary: summarise(toolName, input), resultHead: "" });
+    }
     const filePath = typeof input["file_path"] === "string" ? input["file_path"] : "";
     if (toolName === "Skill") {
       // The Skill tool loading this skill is the body entering context. Matched on the
@@ -1927,6 +1966,17 @@ export function createRunCollector(params: {
           const item = asRecord(raw);
           if (item["type"] !== "tool_result") continue;
           const id = typeof item["tool_use_id"] === "string" ? item["tool_use_id"] : "";
+          const at = traceById.get(id);
+          if (at !== undefined) {
+            const raw = item["content"];
+            const text = typeof raw === "string"
+              ? raw
+              : Array.isArray(raw)
+                ? raw.map((part) => (typeof asRecord(part)["text"] === "string" ? String(asRecord(part)["text"]) : "")).join("\n")
+                : "";
+            const entry = toolTrace[at];
+            if (entry !== undefined) entry.resultHead = text.replace(/\s+/g, " ").slice(0, TOOL_TRACE_RESULT_CHARS);
+          }
           const via = awaitingLoadResult.get(id);
           if (via === undefined) continue;
           awaitingLoadResult.delete(id);
@@ -1960,6 +2010,7 @@ export function createRunCollector(params: {
       skillRequested,
       contextTokens,
       toolCalls,
+      toolTrace: toolTrace.map((entry) => ({ ...entry })),
       filesWritten: [...new Set(filesWritten)],
       finalText,
       resultSubtype,
