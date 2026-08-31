@@ -388,3 +388,31 @@ test("every attempt of a scenario is still produced", () => {
   expect(order.filter((o) => o.scenario.id === "a").map((o) => o.attempt)).toEqual([1, 2, 3]);
 });
 
+
+describe("seedFixture", () => {
+  test("copies the fixture's entries, .git included, beside the installed skill and skips node_modules", async () => {
+    const { mkdtemp, mkdir, writeFile, rm, stat } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { seedFixture } = await import("../disclosure-measure.ts");
+    const fixture = await mkdtemp(`${tmpdir()}/fixture-`);
+    const root = await mkdtemp(`${tmpdir()}/root-`);
+    try {
+      await mkdir(`${fixture}/.git`, { recursive: true });
+      await writeFile(`${fixture}/.git/HEAD`, "ref: refs/heads/main\n");
+      await mkdir(`${fixture}/docs/sessions`, { recursive: true });
+      await writeFile(`${fixture}/docs/sessions/README.md`, "# Sessions\n");
+      await mkdir(`${fixture}/node_modules/x`, { recursive: true });
+      await writeFile(`${fixture}/node_modules/x/index.js`, "");
+      await mkdir(`${root}/.claude/skills/alias`, { recursive: true });
+      await writeFile(`${root}/.claude/skills/alias/SKILL.md`, "---\nname: alias\n---\n");
+      await seedFixture(root, fixture);
+      expect((await stat(`${root}/.git/HEAD`)).isFile()).toBe(true);
+      expect((await stat(`${root}/docs/sessions/README.md`)).isFile()).toBe(true);
+      expect((await stat(`${root}/.claude/skills/alias/SKILL.md`)).isFile()).toBe(true);
+      await expect(stat(`${root}/node_modules`)).rejects.toThrow();
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});

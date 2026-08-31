@@ -18,7 +18,7 @@
  * Bun-native equivalent.
  */
 
-import { rm } from "node:fs/promises";
+import { cp, readdir, rm } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 
 import {
@@ -203,6 +203,8 @@ interface ScenarioRunParams {
   readonly permissionMode?: string | undefined;
   readonly grade: boolean;
   readonly logDir?: string | undefined;
+  /** See {@link MeasureParams.fixtureDir}. */
+  readonly fixtureDir?: string | undefined;
   /**
    * Handed this attempt's isolation proof, read from the child's own `init` event.
    *
@@ -243,6 +245,9 @@ async function runScenario(params: ScenarioRunParams): Promise<ScenarioRun> {
   const installedSkillDir = `${root}/.claude/skills/${alias}`;
 
   try {
+    if (params.fixtureDir !== undefined && params.fixtureDir !== "") {
+      await seedFixture(root, params.fixtureDir);
+    }
     const collector = createRunCollector({ skillDir: installedSkillDir, projectRoot: root });
     const prompt =
       `Use the ${alias} skill to carry out the task below, then say what you did ` +
@@ -552,6 +557,13 @@ export interface MeasureParams {
   readonly permissionMode?: string | undefined;
   readonly grade: boolean;
   readonly logDir?: string | undefined;
+  /**
+   * A repository to copy into every throwaway root before its child starts, for a skill
+   * whose scenarios need one (a docs tree to read, a git history to gate against). Without
+   * it a scenario runs in an empty directory, which is right for a skill that produces a
+   * file from a prompt and wrong for one that works on a repo.
+   */
+  readonly fixtureDir?: string | undefined;
   readonly onProgress?: (settled: number, total: number) => void;
   /** Called as each run STARTS, so a caller can show a busy pool before anything settles. */
   readonly onStarted?: (inFlight: number, started: number, total: number) => void;
@@ -614,6 +626,28 @@ export function orderAttempts(
   return attempts;
 }
 
+/**
+ * Copy a fixture repository into a throwaway root, so a scenario that needs a working
+ * repository -- files to read, a git history to gate against, a docs tree to update --
+ * finds one under its own cwd rather than an empty directory.
+ *
+ * The fixture's top-level entries are copied into `root` (its `.git` included, which is
+ * what makes `git log` inside the child real), so the skill the run installed under
+ * `root/.claude/skills/<alias>` sits beside the fixture's own `.claude/` rather than
+ * being replaced by it. `node_modules` is skipped: it is never what a scenario reads, and
+ * it is usually the largest thing in the tree.
+ */
+export async function seedFixture(root: string, fixtureDir: string): Promise<void> {
+  for (const entry of await readdir(fixtureDir, { withFileTypes: true })) {
+    if (entry.name === "node_modules") continue;
+    await cp(`${fixtureDir}/${entry.name}`, `${root}/${entry.name}`, {
+      recursive: true,
+      force: false,
+      errorOnExist: false,
+    });
+  }
+}
+
 export async function measureLayout(params: MeasureParams): Promise<readonly ScenarioRun[]> {
   const attempts = orderAttempts(params.scenarios, params.runsPerScenario, params.durationHints);
 
@@ -638,6 +672,7 @@ export async function measureLayout(params: MeasureParams): Promise<readonly Sce
         permissionMode: params.permissionMode,
         grade: params.grade,
         logDir: params.logDir,
+        fixtureDir: params.fixtureDir,
         onIsolation: params.onIsolation,
       }),
     params.onProgress,
