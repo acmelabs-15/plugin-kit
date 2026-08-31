@@ -1723,6 +1723,7 @@ describe("inventoryBundledFiles", () => {
     await Bun.write(`${dir}/references/b.md`, "# B\n\nnot referenced\n");
     await Bun.write(`${dir}/scripts/tool.ts`, "console.log('hi');\n");
     await Bun.write(`${dir}/scripts/__tests__/tool.test.ts`, "// harness, not skill surface\n");
+    await Bun.write(`${dir}/evals/results/iteration-1/transcript.md`, "# evidence, not skill surface\n");
   });
 
   afterEach(async () => {
@@ -1739,6 +1740,7 @@ describe("inventoryBundledFiles", () => {
     // SKILL.md is the body, not a bundled file; a test suite is harness, not skill surface.
     expect(paths).not.toContain("SKILL.md");
     expect(paths).not.toContain("scripts/__tests__/tool.test.ts");
+    expect(paths).not.toContain("evals/results/iteration-1/transcript.md");
 
     expect(inventory.find((file) => file.path === "references/a.md")?.signposted).toBe(true);
     expect(inventory.find((file) => file.path === "references/b.md")?.signposted).toBe(false);

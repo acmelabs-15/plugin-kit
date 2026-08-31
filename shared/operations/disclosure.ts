@@ -287,6 +287,10 @@ function isExcluded(relPath: string): boolean {
   // the findings table with rows whose correct verdict is always "ignore this".
   return (
     relPath.startsWith("node_modules/") ||
+    // Eval evidence ships inside the skill directory (skill-creator puts it there) and is
+    // never a disclosure surface; without this every transcript and benchmark of every
+    // iteration lands in the table as a "prune" row.
+    relPath.startsWith("evals/") ||
     relPath.includes("/__tests__/") ||
     relPath.endsWith(".lock") ||
     relPath.startsWith(".")
