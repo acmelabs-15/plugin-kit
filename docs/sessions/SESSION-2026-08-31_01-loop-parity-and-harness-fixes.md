@@ -52,3 +52,13 @@ spent. The resume works (baseline not re-measured, both scored layouts carried, 
   as a shell-out). The earlier session note claimed 1,756 green; it was 1,754 with 5 failing. Fixed at the
   cause each time: trace heads are trimmed, `install-conflict.ts` moved to `shared/` beside the module it
   depends on, the helper renamed, the two tests rewritten for `--tier-study`. 1,759 pass.
+
+### 2026-08-31 · T-10 (open) — a timed-out query leaves no trace in results.json
+
+The description loop on the `sessions` skill printed nine `query timed out after 180s and is scored as a
+non-trigger` warnings. The warning names neither the query nor the iteration, and the per-query rows in
+`results.json` (`query, should_trigger, trigger_rate, triggers, runs, pass, early_stopped`) carry no
+timed-out count. So a one-query gap between two candidates cannot be told from a timeout, and the
+decision rule ("adopt when held-out improves") has no way to discount it. Fix at the cause: the row
+gains `timed_out` (attempts), the warning names the query, and the report marks the row — the same
+shape `early_stopped` already has.
