@@ -25,8 +25,10 @@ tags:
 - T-02 inventory excludes `evals/`; `--allowed-tools`; measurement constants; `--tier-study`; tool trace (PR #3)
 - T-03 install-conflict warning, train-first gate (PR #4)
 - T-04 `--resume-from`, `--tier-study` and the workspace under `--results-dir` on the disclosure optimizer; the staleness sweep (PR #5)
+- T-08 second staleness sweep after #5: `--resume-from` documented for both loops (`running-detached.md`, both loop references); two comments still describing a `--model` flag on the run model and the proposal step corrected; the description reference no longer tells the reader to set `--num-workers`
 
 ### Open
 
 - T-05 glossary gaps in `CONTEXT.md` (see companion record)
 - T-06 rename `--fixture` if the owner accepts **scenario repo** as the term
+- T-07 `--resume-from` reads only `results.json`: it validates shape and the layout directory but never compares the dead run's `envelope.json` (model, eval-set hash, target) with the current inputs, so a resume under different inputs mixes figures. A guard belongs in `readResumeState`'s caller, where the envelope is at hand

@@ -1721,8 +1721,9 @@ export const OPTIMIZE_FLAGS: Spec = {
   // model twice -- once to do the work and once, serially in the same worker slot, to
   // have it marked. The guardrail is a comparison against a baseline graded by this
   // same model, so a different grader moves both numbers and not the gap between them.
-  // The proposal step deliberately keeps --model: judging which body sections a
-  // minority of runs need is exactly the kind of call a small model gets wrong.
+  // The proposal step deliberately runs on the measurement model (or the --tier-study
+  // one), not on this grader: judging which body sections a minority of runs need is
+  // exactly the kind of call a small model gets wrong.
   "grader-model": {
     kind: "string",
     default: DEFAULT_GRADER_MODEL,

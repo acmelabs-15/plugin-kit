@@ -121,10 +121,10 @@ export const DEFAULT_TIMEOUT_SECONDS = 600;
 /**
  * The model that grades a run's assertions, DELIBERATELY NOT the model that runs them.
  *
- * The run model is whatever the skill should be measured under, and it is often the most
- * capable one available -- `--model opus` is the documented invocation. Grading inherited
- * that, which meant every scenario paid twice for the heavy model: once to do the work,
- * and once again, serially in the same worker slot, to have a transcript checked.
+ * The run model is the measurement tier -- `MEASUREMENT_MODEL`, or the `--tier-study` model
+ * for a study; there is no `--model` flag. Grading once inherited the run model, which
+ * meant every scenario paid twice for it: once to do the work, and once again, serially in
+ * the same worker slot, to have a transcript checked.
  *
  * The second call is not the same kind of problem as the first. It is single-turn, with
  * the transcript and the produced files already in the prompt, against an explicit list

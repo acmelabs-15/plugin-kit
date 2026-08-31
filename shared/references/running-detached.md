@@ -19,6 +19,7 @@ That is a complete invocation. The script starts the dashboard itself and opens 
 - [Screenshotting a page](#screenshotting-a-page)
 - [A report is a snapshot; the status file is the truth](#a-report-is-a-snapshot-the-status-file-is-the-truth)
 - [A crash no longer costs the completed work](#a-crash-no-longer-costs-the-completed-work)
+- [Resuming a run that died](#resuming-a-run-that-died)
 - [How a stopped run is reported](#how-a-stopped-run-is-reported)
 - [Progress inside the description report](#progress-inside-the-description-report)
 
@@ -151,6 +152,28 @@ scored attempts because the step *after* them failed.
 A failing improvement step also no longer kills the run. The loop stops proposing candidates, reports
 every iteration it did score, exits non-zero, and records `improvement_error` in its output — so
 `best_description` is still the best of what was actually measured.
+
+## Resuming a run that died
+
+Both loops take `--resume-from <results.json>`, the file a dead run left in its `--results-dir`.
+The scored iterations in it are carried, so the loop continues at the next iteration rather than
+re-measuring the baseline and every candidate it already paid for.
+
+```bash
+nohup bun ../operations/optimize-description.ts --eval-set <path> --skill-path <path> \
+  --results-dir <dir> --resume-from <dir>/results.json &
+
+nohup bun ../operations/optimize-disclosure.ts --skill-path <path> --scenarios <path> \
+  --results-dir <dir> --resume-from <dir>/results.json &
+```
+
+The disclosure loop needs the **same** `--results-dir` as the run it continues: its candidate
+layouts are directories under `<dir>/workspace`, and the resumed run reads them from there rather
+than materializing them again. The file is validated before anything is spent — malformed, holding no
+scored layout, or naming a best layout whose directory is gone, it is refused as a partial resume.
+What is **not** checked is comparability: nothing reads the dead run's `envelope.json`, so a resume
+under a different model, scenario set or target inherits figures that were never measured alike.
+Resume with the same inputs, or start over.
 
 ## How a stopped run is reported
 
