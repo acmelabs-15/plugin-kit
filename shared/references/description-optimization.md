@@ -117,8 +117,8 @@ report and a status file can disagree.
 
 The tool picks the model — the routing tier (`MEASUREMENT_MODEL`, the same one the disclosure
 loop measures on) — and the worker count (twice the core count, capped at 24), so a sweep never
-varies by operator and a description defect shows where it shows. `--model` overrides it for a
-deliberate tier study, which the envelope then records as one.
+varies by operator and a description defect shows where it shows. `--tier-study <model>` is the one override, and the run is then a study: comparable only with
+other runs on that model, which the envelope says.
 
 What it does: splits the set 60% train / 40% held-out, evaluates the current
 description at 3 runs per query for a stable trigger rate, asks Claude to propose

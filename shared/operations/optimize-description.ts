@@ -15,6 +15,7 @@
  * exactly as it did.
  */
 
+import { availableParallelism } from "node:os";
 import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { proposeDescription, type ProposeHistoryEntry } from "./propose-description.ts";
 import { ensureDashboard, openInBrowser } from "../util/browser.ts";
@@ -994,9 +995,9 @@ async function main(): Promise<void> {
         default: 0.4,
         help: "Fraction of eval set held out for testing (0 to disable)",
       },
-      model: {
+      "tier-study": {
         kind: "string",
-        help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL} — the routing tier the disclosure loop also measures on. A choice the tool makes so a sweep never varies by operator; override deliberately, and say so where the result is quoted`,
+        help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, the routing tier every measurement uses. Marks the run as a tier study, comparable only with other runs on that model`,
       },
       report: {
         kind: "string",
@@ -1030,7 +1031,26 @@ async function main(): Promise<void> {
   // Owned here for the reason measure-disclosure.ts owns MEASUREMENT_MODEL: a run that inherits
   // whatever model the operator configured is a run whose numbers vary by operator without
   // saying so. Routing is measured on the weaker tier, where a description defect shows.
-  const model = flagString(flags, "model") ?? MEASUREMENT_MODEL;
+  // Same cliff the disclosure loop signs: past roughly three times the core count the
+  // machine thrashes rather than saturating (measured: 48 workers on a 10-core box ran
+  // about five times SLOWER per run than 24). The escape hatch stays; the cliff gets a sign.
+  const requestedWorkers = flagNumber(flags, "num-workers");
+  if (requestedWorkers !== undefined && requestedWorkers > availableParallelism() * 3) {
+    console.error(
+      `Warning: --num-workers ${requestedWorkers} is more than three times this machine's ` +
+        `${availableParallelism()} cores; the default is ${DEFAULT_NUM_WORKERS}, twice the core count.`,
+    );
+  }
+  const tierStudy = flagString(flags, "tier-study");
+  if (tierStudy !== undefined) {
+    console.error(
+      `TIER STUDY: sweeping on ${tierStudy} instead of ${MEASUREMENT_MODEL}. This run is NOT a ` +
+        "measurement of record: its rates are comparable only with other runs on that model, " +
+        "and the envelope says so.",
+    );
+  }
+  const model = tierStudy ?? MEASUREMENT_MODEL;
+
 
   const definitionFile = await resolveTargetFile(skillPath, targetType);
   if (!(await Bun.file(definitionFile).exists())) {

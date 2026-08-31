@@ -14,7 +14,7 @@
 
 import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { cp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import {tmpdir, availableParallelism } from "node:os";
 
 import { ensureDashboard } from "../util/browser.ts";
 import { CliError, formatHelp, parseArgs, type ParsedArgs, type Spec } from "../cli.ts";
@@ -1631,7 +1631,10 @@ async function main(): Promise<void> {
     {
       ...SHARED_EVAL_FLAGS,
       ...SUBSET_FLAGS,
-      model: { kind: "string", help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, the routing tier every measurement uses; a deliberate tier study, recorded as one` },
+      "tier-study": {
+        kind: "string",
+        help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, the routing tier every measurement uses. Marks the run as a tier study, comparable only with other runs on that model`,
+      },
     },
     "Usage: bun shared/operations/measure-triggering.ts --eval-set <path> --target-path <path> [options]\n\n" +
       "Each query is run --runs-per-query times and passes when its trigger rate clears\n" +
@@ -1736,6 +1739,25 @@ async function main(): Promise<void> {
   });
 
   const numWorkers = flagNumber(flags, "num-workers");
+  // Same cliff the disclosure loop signs: past roughly three times the core count the
+  // machine thrashes rather than saturating (measured: 48 workers on a 10-core box ran
+  // about five times SLOWER per run than 24). The escape hatch stays; the cliff gets a sign.
+  const requestedWorkers = flagNumber(flags, "num-workers");
+  if (requestedWorkers !== undefined && requestedWorkers > availableParallelism() * 3) {
+    console.error(
+      `Warning: --num-workers ${requestedWorkers} is more than three times this machine's ` +
+        `${availableParallelism()} cores; the default is ${DEFAULT_NUM_WORKERS}, twice the core count.`,
+    );
+  }
+  const tierStudy = flagString(flags, "tier-study");
+  if (tierStudy !== undefined) {
+    console.error(
+      `TIER STUDY: sweeping on ${tierStudy} instead of ${MEASUREMENT_MODEL}. This run is NOT a ` +
+        "measurement of record: its rates are comparable only with other runs on that model, " +
+        "and the envelope says so.",
+    );
+  }
+  const model = tierStudy ?? MEASUREMENT_MODEL;
   const timeoutSeconds = flagNumber(flags, "timeout");
   const triggerThreshold = flagNumber(flags, "trigger-threshold");
   const tally = createAttemptTally();
@@ -1758,7 +1780,7 @@ async function main(): Promise<void> {
       runsPerQuery,
       triggerThreshold,
       earlyStop: !flagBoolean(flags, "no-early-stop"),
-      model: flagString(flags, "model") ?? MEASUREMENT_MODEL,
+      model,
       verbose,
       onAttemptOutcome: tally.record,
       onIsolation: isolation.record,
@@ -1832,7 +1854,6 @@ async function main(): Promise<void> {
     // and saying so is the only honest option: inventing a name would make two runs on
     // different machines look comparable, which is the exact failure the run block exists
     // to prevent.
-    const model = flagString(flags, "model") ?? MEASUREMENT_MODEL;
     const unpinned =
       model === MEASUREMENT_MODEL
         ? null
