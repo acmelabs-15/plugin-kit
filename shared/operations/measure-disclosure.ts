@@ -109,7 +109,8 @@ import { ProgressReporter } from "../util/progress.ts";
  * inherit whatever model the environment happened to be configured with -- the worst of all
  * worlds, since the measurement then varied by operator without saying so.
  */
-export const MEASUREMENT_MODEL = "sonnet";
+export { MEASUREMENT_MODEL } from "../util/measurement.ts";
+import { MEASUREMENT_MODEL } from "../util/measurement.ts";
 
 /**
  * The permission mode every spawned scenario run uses. Also not a flag.

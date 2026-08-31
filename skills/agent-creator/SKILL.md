@@ -186,8 +186,6 @@ When the set is ready for the user to approve rather than read in chat, `../skil
 bun ../../shared/operations/optimize-description.ts \
   --eval-set evals/delegation-eval.json \
   --target-type agent \
-  --model <model-id-powering-this-session> \
-  --max-iterations 5 \
   --verbose
 ```
 

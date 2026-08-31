@@ -97,7 +97,7 @@ export const DEFAULT_RUNS_PER_SCENARIO = 2;
  * capped at the highest value actually measured good. Extrapolating past 24 is precisely
  * what produced the 48-worker result, so the cap stays at the evidence.
  */
-export const DEFAULT_NUM_WORKERS = Math.max(4, Math.min(24, availableParallelism() * 2));
+export { DEFAULT_NUM_WORKERS } from "../util/measurement.ts";
 
 /**
  * Per-run wall clock, in seconds.

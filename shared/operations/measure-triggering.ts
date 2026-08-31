@@ -12,6 +12,7 @@
  * break every reader of an existing results file to gain nothing measurable.
  */
 
+import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { cp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
@@ -1551,7 +1552,7 @@ export const SHARED_EVAL_FLAGS: Spec = {
     help: "Artifact under test: skill, agent or command",
   },
   description: { kind: "string", help: "Override description to test" },
-  "num-workers": { kind: "number", default: 10, help: "Number of parallel workers" },
+  "num-workers": { kind: "number", default: DEFAULT_NUM_WORKERS, help: "Concurrent claude -p children (the tool picks twice the core count, capped at 24)" },
   // 180s, not 30. Calls were measured at up to 124s, and a timeout is scored as a
   // non-trigger, so a 30s ceiling silently converted slow calls into failures -- the
   // measurement corruption documented for rate limits, reached by the DEFAULT invocation.
@@ -1630,7 +1631,7 @@ async function main(): Promise<void> {
     {
       ...SHARED_EVAL_FLAGS,
       ...SUBSET_FLAGS,
-      model: { kind: "string", help: "Model to use for claude -p (default: user's configured)" },
+      model: { kind: "string", help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL}, the routing tier every measurement uses; a deliberate tier study, recorded as one` },
     },
     "Usage: bun shared/operations/measure-triggering.ts --eval-set <path> --target-path <path> [options]\n\n" +
       "Each query is run --runs-per-query times and passes when its trigger rate clears\n" +
@@ -1757,7 +1758,7 @@ async function main(): Promise<void> {
       runsPerQuery,
       triggerThreshold,
       earlyStop: !flagBoolean(flags, "no-early-stop"),
-      model: flagString(flags, "model"),
+      model: flagString(flags, "model") ?? MEASUREMENT_MODEL,
       verbose,
       onAttemptOutcome: tally.record,
       onIsolation: isolation.record,
@@ -1831,13 +1832,12 @@ async function main(): Promise<void> {
     // and saying so is the only honest option: inventing a name would make two runs on
     // different machines look comparable, which is the exact failure the run block exists
     // to prevent.
-    const model = flagString(flags, "model") ?? null;
+    const model = flagString(flags, "model") ?? MEASUREMENT_MODEL;
     const unpinned =
-      model === null
-        ? "No `--model` was pinned, so the run was answered by the operator's configured " +
-          "default and the model is not recorded. Runs made this way are not comparable " +
-          "across machines even though their `run.model` fields match."
-        : null;
+      model === MEASUREMENT_MODEL
+        ? null
+        : `TIER STUDY: this sweep ran on ${model} rather than the ${MEASUREMENT_MODEL} every ` +
+          "measurement of record uses; its rates are comparable only with other runs on that model.";
     await writeEnvelope(
       envelopePath,
       buildTriggeringEnvelope({

@@ -15,6 +15,7 @@
  * exactly as it did.
  */
 
+import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { proposeDescription, type ProposeHistoryEntry } from "./propose-description.ts";
 import { ensureDashboard, openInBrowser } from "../util/browser.ts";
 import {
@@ -993,7 +994,10 @@ async function main(): Promise<void> {
         default: 0.4,
         help: "Fraction of eval set held out for testing (0 to disable)",
       },
-      model: { kind: "string", help: "Model for improvement" },
+      model: {
+        kind: "string",
+        help: `Sweep on this model INSTEAD of ${MEASUREMENT_MODEL} — the routing tier the disclosure loop also measures on. A choice the tool makes so a sweep never varies by operator; override deliberately, and say so where the result is quoted`,
+      },
       report: {
         kind: "string",
         default: "auto",
@@ -1014,7 +1018,7 @@ async function main(): Promise<void> {
         help: "Also write the results envelope here (default: <results-dir>/envelope.json)",
       },
     },
-    "Usage: bun shared/operations/optimize-description.ts --eval-set <path> --target-path <path> --model <id> [options]\n\n" +
+    "Usage: bun shared/operations/optimize-description.ts --eval-set <path> --target-path <path> [options]\n\n" +
       "Each iteration scores the current description, then proposes a replacement. Queries\n" +
       "stop early once their verdict is settled, which is safe here because iterations are\n" +
       "ranked on pass COUNTS rather than on mean trigger rate. Pass --no-early-stop if you\n" +
@@ -1023,7 +1027,10 @@ async function main(): Promise<void> {
   const evalSetPath = requireFlag(flags, "eval-set");
   const targetType = requireTargetType(flags);
   const skillPath = requireTargetPath(flags);
-  const model = requireFlag(flags, "model");
+  // Owned here for the reason measure-disclosure.ts owns MEASUREMENT_MODEL: a run that inherits
+  // whatever model the operator configured is a run whose numbers vary by operator without
+  // saying so. Routing is measured on the weaker tier, where a description defect shows.
+  const model = flagString(flags, "model") ?? MEASUREMENT_MODEL;
 
   const definitionFile = await resolveTargetFile(skillPath, targetType);
   if (!(await Bun.file(definitionFile).exists())) {
@@ -1150,7 +1157,7 @@ async function main(): Promise<void> {
         // denominator rather than a rounding error.
         plannedAttempts: evalSet.length * runsPer * output.iterations_run,
         model,
-        workers: flagNumber(flags, "num-workers") ?? 1,
+        workers: flagNumber(flags, "num-workers") ?? DEFAULT_NUM_WORKERS,
         runsPer,
         timeoutSeconds: flagNumber(flags, "timeout") ?? 0,
         evalSetHash: hashJsonValue(evalSet),

@@ -6,7 +6,7 @@ set at three runs each is sixty of those. So these jobs are meant to be **launch
 watched**, not babysat in a terminal.
 
 ```bash
-nohup bun ../operations/optimize-description.ts --eval-set <path> --skill-path <path> --model <id> &
+nohup bun ../operations/optimize-description.ts --eval-set <path> --skill-path <path> &
 ```
 
 That is a complete invocation. The script starts the dashboard itself and opens a window.
@@ -36,7 +36,7 @@ to go faster does not work — it corrupts the result instead, the same way a ra
 timeout warns on stderr when it happens, so a budget that is too tight says so rather than hiding in
 the score.
 
-What governs total wall clock is `--num-workers` (default 10), `--runs-per-query`, and the model. There
+What governs total wall clock is the worker count (the tool picks twice the core count, capped at 24; `--num-workers` overrides), `--runs-per-query`, and the model. There
 is no flag that makes a single call shorter.
 
 Raising the worker count much past the default is unlikely to help: each worker is one `claude -p`
@@ -44,7 +44,7 @@ child making an API call, so this is network-bound rather than CPU-bound, and th
 limiting. Runs that fail on a rate limit are scored as non-triggers, which corrupts the measurement
 rather than speeding it up.
 
-The disclosure loop's `--num-workers` defaults to **12** rather than 10, and its `--timeout` to 600
+The disclosure loop shares that worker default, and its `--timeout` is 600
 seconds rather than 180. Both differ for the same reason: a scenario run does the skill's whole job
 instead of answering a routing question, so it takes longer and its fixed per-call cost amortizes
 worse at low concurrency. The ten-minute ceiling is the other side of that — a scenario still running
