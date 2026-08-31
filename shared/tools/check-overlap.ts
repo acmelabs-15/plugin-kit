@@ -172,7 +172,10 @@ function searchRoots(projectDir: string): ReadonlyArray<{ root: string; origin: 
 }
 
 /** Directories that hold copies, caches, or scaffolds rather than live skills. */
-const SKIP_SEGMENTS = ["node_modules", ".git", "cache", "template", "templates", "__tests__"];
+// `evals` holds a skill's eval evidence, which can carry snapshots of its own SKILL.md
+// (skill-creator writes `evals/results/skill-snapshot/SKILL.md`); a snapshot is the target
+// under another path, not a neighbour.
+const SKIP_SEGMENTS = ["node_modules", ".git", "cache", "template", "templates", "__tests__", "evals"];
 
 /**
  * File reads in flight at once during the sweep.
@@ -215,6 +218,7 @@ export interface Discovery {
 export async function discoverSkillsWithStatus(
   projectDir: string,
   exclude: string,
+  excludeName?: string,
 ): Promise<Discovery> {
   const glob = new Bun.Glob("**/SKILL.md");
   const seen = new Set<string>([exclude]);
@@ -277,9 +281,14 @@ export async function discoverSkillsWithStatus(
       if (text === undefined) continue;
       const parsed = parseSkillFrontmatter(text);
       if (!parsed?.description) continue;
+      const name = parsed.name || fallbackName;
+      // The same `name` under another path is the target itself -- a copy the caller
+      // handed in from a scratch directory, or an installed duplicate -- and quoting
+      // its description back is exactly the circularity the sweep exists to avoid.
+      if (excludeName !== undefined && name === excludeName) continue;
 
       found.push({
-        name: parsed.name || fallbackName,
+        name,
         description: parsed.description,
         path: abs,
         origin,
@@ -291,8 +300,12 @@ export async function discoverSkillsWithStatus(
   return { skills: found, roots, homeless: HOME === "" };
 }
 
-export async function discoverSkills(projectDir: string, exclude: string): Promise<SkillRecord[]> {
-  return (await discoverSkillsWithStatus(projectDir, exclude)).skills;
+export async function discoverSkills(
+  projectDir: string,
+  exclude: string,
+  excludeName?: string,
+): Promise<SkillRecord[]> {
+  return (await discoverSkillsWithStatus(projectDir, exclude, excludeName)).skills;
 }
 
 // ---------------------------------------------------------------------------
@@ -464,6 +477,12 @@ export interface NeighbourSearch {
   readonly targetTerms: ReadonlySet<string>;
   /** Absolute path of the target's own SKILL.md, so it cannot match itself. */
   readonly excludePath: string;
+  /**
+   * The target's `name`, so a copy of it under another path cannot match either --
+   * the target handed in from a scratch directory, a results snapshot, an installed
+   * duplicate. Path exclusion alone misses all three.
+   */
+  readonly excludeName?: string;
   /** Project root to sweep alongside the user and plugin roots. Defaults to cwd. */
   readonly projectDir?: string;
   readonly minShared?: number;
@@ -501,6 +520,7 @@ export async function findNeighboursWithStatus(
   const discovery = await discoverSkillsWithStatus(
     search.projectDir ?? process.cwd(),
     search.excludePath,
+    search.excludeName,
   );
   const candidates = discovery.skills;
 

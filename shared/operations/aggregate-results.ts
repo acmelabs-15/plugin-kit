@@ -329,11 +329,17 @@ async function loadRun(
 
   // Timing lives in grading.json when the grader recorded it, and in a sibling
   // timing.json when the orchestrator captured it from the task notification.
+  // timing.json is the only source of token counts, so read it whenever it
+  // exists rather than only when the duration is missing: a grader that
+  // recorded timing into grading.json would otherwise suppress the token
+  // lookup too, and tokens would silently fall back to output_chars.
   const timingFile = joinPath(runDir, "timing.json");
-  if (timeSeconds === 0 && (await pathExists(timingFile))) {
+  if (await pathExists(timingFile)) {
     try {
       const timing = asRecord(await readJson(timingFile));
-      timeSeconds = getNumber(timing, "total_duration_seconds", 0);
+      if (timeSeconds === 0) {
+        timeSeconds = getNumber(timing, "total_duration_seconds", 0);
+      }
       tokens = getNumber(timing, "total_tokens", 0);
     } catch {
       // Malformed timing.json leaves the grading.json values in place.
