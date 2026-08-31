@@ -112,8 +112,8 @@ nohup bun ../operations/optimize-description.ts \
 ```
 
 Read `running-detached.md` once the job is launched and you are wondering whether
-it is alive: it covers the dashboard, what each row's pid answers, and why a
-report and a status file can disagree.
+it is alive: it covers the dashboard, what each row's pid answers, why a
+report and a status file can disagree, and `--resume-from` for a run that died.
 
 The tool picks the model — the routing tier (`MEASUREMENT_MODEL`, the same one the disclosure
 loop measures on) — and the worker count (twice the core count, capped at 24), so a sweep never
@@ -151,8 +151,8 @@ flowchart LR
   H --> SEL[select on held-out score]
 ```
 
-Each worker holds one QUERY and runs its attempts in sequence; `--num-workers`
-sets how many queries are in flight. The barrier is why a per-query verdict shown
+Each worker holds one QUERY and runs its attempts in sequence; the worker count the
+tool picks is how many queries are in flight. The barrier is why a per-query verdict shown
 mid-round can still flip — the trigger rate is not decided until the last attempt
 for that query arrives.
 
@@ -163,8 +163,9 @@ queries score 0/3 or 3/3 and are settled by their first two attempts. Ranking is
 unaffected — iterations are compared on pass COUNTS, not on mean trigger rate — but
 the per-query rates in `results.json` become rates over attempts actually run, and
 `--no-early-stop` restores full-N ones. The scheduling is coarser than an
-attempt-level pool, so set `--num-workers` at or above the query count when you can;
-below it, a slow query can extend the tail.
+attempt-level pool, so on a set larger than the worker count a slow query can extend the
+tail; that is the tail's cause, not a reason to pass `--num-workers` (the count is the
+tool's, and raising it past the default hits the API rate limit, which scores as non-triggers).
 
 ### Iterating on a slice
 
