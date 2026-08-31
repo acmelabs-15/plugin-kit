@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { readResumeState } from "../optimize-disclosure.ts";
+import { readResumeFile, readResumeState } from "../optimize-disclosure.ts";
 
 const split = (passed: number) => ({
   scenarios: 4, runs: 8, assertionsPassed: passed, assertionsTotal: 27, passRate: passed / 27,
@@ -24,7 +24,7 @@ describe("readResumeState", () => {
         train_size: 3, holdout_size: 2, runs_per_scenario: 2,
         applied_edits: ["moved rules out"],
         notes: ["a note"],
-        files: [{ path: "references/a.md" }],
+        files: [{ path: "references/a.md", loadMode: "read", bytes: 4_000, tokens: 1_000, signposted: true, pulls: 0, countedRuns: 8, pullRate: 0, verdict: "signpost", recall: { reads: 0, expectedRuns: 2, rate: 0 } }],
         ground_truth: { annotatedScenarios: 1, negativeScenarios: 0, annotatedRuns: 2, overFetch: null },
         iterations: [record(1, null, true, 4_100), record(2, "cand-a", false), record(2, "cand-b", true, 3_600)],
       }, "test");
@@ -46,6 +46,21 @@ describe("readResumeState", () => {
     expect(() => readResumeState({ iterations: [record(1, null, true)], best_layout_path: "/nonexistent/x" }, "t")).toThrow(/does not exist on disk/);
     expect(() => readResumeState({ iterations: [], best_layout_path: "/" }, "t")).toThrow(/no scored layouts/);
     expect(() => readResumeState({ iterations: [{ iteration: 1 }], best_layout_path: "/" }, "t")).toThrow(/not a scored layout record/);
+  });
+
+  test("refuses a file row missing what the report renders, instead of crashing the report later", () => {
+    expect(() => readResumeState({ skill_path: "/", best_layout_path: "/", files: [{ path: "references/a.md" }], iterations: [record(1, null, true)] }, "t")).toThrow(/files\[0\] is not a file record/);
+  });
+
+  test("a missing or non-JSON resume file is one plain refusal, not a stack", async () => {
+    await expect(readResumeFile("/nonexistent/results.json")).rejects.toThrow(/cannot read it as JSON .*refusing a partial resume/);
+    const dir = await mkdtemp(`${tmpdir()}/resume-`);
+    try {
+      await Bun.write(`${dir}/results.json`, "{ not json");
+      await expect(readResumeFile(`${dir}/results.json`)).rejects.toThrow(/cannot read it as JSON/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("when the baseline is the only accepted layout, current is the baseline itself", () => {

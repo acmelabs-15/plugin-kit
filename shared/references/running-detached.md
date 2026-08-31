@@ -155,22 +155,25 @@ every iteration it did score, exits non-zero, and records `improvement_error` in
 
 ## Resuming a run that died
 
-Both loops take `--resume-from <results.json>`, the file a dead run left in its `--results-dir`.
-The scored iterations in it are carried, so the loop continues at the next iteration rather than
+Both loops take `--resume-from <results.json>`, the file a dead run left under its `--results-dir`
+(each run writes into its own timestamped subdirectory: `<dir>/<timestamp>/results.json`). The
+scored iterations in it are carried, so the loop continues at the next iteration rather than
 re-measuring the baseline and every candidate it already paid for.
 
 ```bash
 nohup bun ../operations/optimize-description.ts --eval-set <path> --skill-path <path> \
-  --results-dir <dir> --resume-from <dir>/results.json &
+  --results-dir <dir> --resume-from <dir>/<timestamp>/results.json &
 
 nohup bun ../operations/optimize-disclosure.ts --skill-path <path> --scenarios <path> \
-  --results-dir <dir> --resume-from <dir>/results.json &
+  --results-dir <dir> --resume-from <dir>/<timestamp>/results.json &
 ```
 
-The disclosure loop needs the **same** `--results-dir` as the run it continues: its candidate
-layouts are directories under `<dir>/workspace`, and the resumed run reads them from there rather
-than materializing them again. The file is validated before anything is spent — malformed, holding no
-scored layout, or naming a best layout whose directory is gone, it is refused as a partial resume.
+The disclosure loop's candidate layouts are directories under `<dir>/<timestamp>/workspace`, and
+the resumed run reads the incumbent from there by the absolute path the file records rather than
+materializing it again — so that directory has to still exist; the resumed run itself gets a new
+timestamped subdirectory. The file is validated before anything is spent — unreadable, malformed,
+holding no scored layout, or naming a best layout whose directory is gone, it is refused as a
+partial resume.
 What is **not** checked is comparability: nothing reads the dead run's `envelope.json`, so a resume
 under a different model, scenario set or target inherits figures that were never measured alike.
 Resume with the same inputs, or start over.

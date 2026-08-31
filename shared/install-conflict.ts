@@ -8,7 +8,7 @@
  * back, so the loudness has one home and one test; the run that motivated it said nothing
  * and spent 144 runs.
  */
-import { detectInstallState, installConflict, type InstallState, type OperationName } from "../envelope.ts";
+import { detectInstallState, installConflict, type InstallState, type OperationName } from "./envelope.ts";
 
 export async function warnOnInstallConflict(params: {
   readonly skillPath: string;

@@ -1411,7 +1411,7 @@ describe("createRunCollector", () => {
   });
 
   test("the tool trace keeps what each call asked and the head of its result, bounded", () => {
-    const bash = (id: string, command: string) => ({
+    const shellUse = (id: string, command: string) => ({
       type: "assistant",
       message: { content: [{ type: "tool_use", name: "Bash", id, input: { command } }] },
     });
@@ -1420,9 +1420,9 @@ describe("createRunCollector", () => {
       message: { content: [{ type: "tool_result", tool_use_id: id, content }] },
     });
     const observed = feed([
-      bash("b1", "bun session.ts check --session SES-007"),
+      shellUse("b1", "bun session.ts check --session SES-007"),
       result("b1", "session: complete (SES-007, open)\n"),
-      bash("b2", "git commit -m \"docs(session): handoff\""),
+      shellUse("b2", "git commit -m \"docs(session): handoff\""),
       result("b2", "x".repeat(2000)),
       readTool(`${skillDir}/references/rules.md`, "r1"),
     ]);
@@ -2249,14 +2249,18 @@ describe("gating leaves selection where it was", () => {
 // ---------------------------------------------------------------------------
 
 describe("--grader-model", () => {
-  test("defaults to a small fast model rather than inheriting --model", () => {
+  test("defaults to a small fast model rather than inheriting the tier a study sweeps on", () => {
     // The whole saving: grading is single-turn, has the transcript in the prompt already,
-    // and runs serially in the same worker slot as the scenario. Inheriting `--model opus`
-    // made every scenario wait on the heavy model twice.
-    const { flags } = parseArgs(["--model", "opus"], OPTIMIZE_FLAGS);
-    expect(flags["model"]).toBe("opus");
+    // and runs serially in the same worker slot as the scenario. When the run model was
+    // inherited, every scenario waited on the heavy model twice.
+    const { flags } = parseArgs(["--tier-study", "opus"], OPTIMIZE_FLAGS);
+    expect(flags["tier-study"]).toBe("opus");
     expect(flags["grader-model"]).toBe(DEFAULT_GRADER_MODEL);
-    expect(flags["grader-model"]).not.toBe(flags["model"]);
+    expect(flags["grader-model"]).not.toBe(flags["tier-study"]);
+  });
+
+  test("there is no --model flag: the run model is the tool's", () => {
+    expect(() => parseArgs(["--model", "opus"], OPTIMIZE_FLAGS)).toThrow(/unknown flag: --model/);
   });
 
   test("the default is an alias the CLI resolves, not an empty string", () => {
@@ -2279,8 +2283,8 @@ describe("--grader-model", () => {
     expect(flagString(flags, "grader-model") ?? DEFAULT_GRADER_MODEL).toBe(DEFAULT_GRADER_MODEL);
   });
 
-  test("--model documents that it is not the grader", () => {
-    expect(OPTIMIZE_FLAGS["model"]?.help).toContain("NOT the grader");
+  test("--tier-study documents that it never reaches the grader", () => {
+    expect(OPTIMIZE_FLAGS["tier-study"]?.help).toContain("never the grader");
   });
 });
 

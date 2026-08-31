@@ -12,7 +12,7 @@
  * break every reader of an existing results file to gain nothing measurable.
  */
 
-import { warnOnInstallConflict } from "../util/install-conflict.ts";
+import { warnOnInstallConflict } from "../install-conflict.ts";
 import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { cp, rm } from "node:fs/promises";
 import {tmpdir, availableParallelism } from "node:os";
