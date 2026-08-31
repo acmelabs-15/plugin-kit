@@ -32,3 +32,23 @@ tags:
 - T-05 glossary gaps in `CONTEXT.md` (see companion record)
 - T-06 rename `--fixture` if the owner accepts **scenario repo** as the term
 - T-07 `--resume-from` reads only `results.json`: it validates shape and the layout directory but never compares the dead run's `envelope.json` (model, eval-set hash, target) with the current inputs, so a resume under different inputs mixes figures. A guard belongs in `readResumeState`'s caller, where the envelope is at hand
+
+### 2026-08-31 · T-09 — the resume port verified end to end, and the suite made honest
+
+Peter asked whether `--resume-from` on the disclosure loop was completely done. Read on `main`, then two
+smokes: a bogus file, and a real resume with `--max-iterations` already reached so no measurement is
+spent. The resume works (baseline not re-measured, both scored layouts carried, `results.json`,
+`report.html`, `envelope.json`, `best-layout` written, exit 0). Found and fixed on the way:
+
+- an unreadable or non-JSON `--resume-from` path died with a stack; it is now one `Error:` line, exit 2,
+  like the removed-flag guard;
+- `readResumeState` carried `files[]` rows unchecked, so a row missing `loadMode` crashed the report of a
+  run that had already spent its budget; rows are validated with the rest of the file;
+- the reference said `<dir>/results.json` and "the same `--results-dir`"; the file is at
+  `<dir>/<timestamp>/results.json` and the incumbent is found by absolute path — corrected;
+- **the suite was not green on `main`**: five tests failed (two still asserting a `--model` flag on the
+  optimizer, one trace head with a trailing space, `install-conflict.ts` in `shared/util` importing
+  `../envelope.ts` against the layering rule, and the purity checker reading a test helper named `bash`
+  as a shell-out). The earlier session note claimed 1,756 green; it was 1,754 with 5 failing. Fixed at the
+  cause each time: trace heads are trimmed, `install-conflict.ts` moved to `shared/` beside the module it
+  depends on, the helper renamed, the two tests rewritten for `--tier-study`. 1,759 pass.

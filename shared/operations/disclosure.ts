@@ -1975,7 +1975,7 @@ export function createRunCollector(params: {
                 ? raw.map((part) => (typeof asRecord(part)["text"] === "string" ? String(asRecord(part)["text"]) : "")).join("\n")
                 : "";
             const entry = toolTrace[at];
-            if (entry !== undefined) entry.resultHead = text.replace(/\s+/g, " ").slice(0, TOOL_TRACE_RESULT_CHARS);
+            if (entry !== undefined) entry.resultHead = text.replace(/\s+/g, " ").trim().slice(0, TOOL_TRACE_RESULT_CHARS);
           }
           const via = awaitingLoadResult.get(id);
           if (via === undefined) continue;

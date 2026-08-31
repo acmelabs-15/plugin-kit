@@ -15,7 +15,7 @@
  * exactly as it did.
  */
 
-import { warnOnInstallConflict } from "../util/install-conflict.ts";
+import { warnOnInstallConflict } from "../install-conflict.ts";
 import { availableParallelism } from "node:os";
 import { DEFAULT_NUM_WORKERS, MEASUREMENT_MODEL } from "../util/measurement.ts";
 import { proposeDescription, type ProposeHistoryEntry } from "./propose-description.ts";

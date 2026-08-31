@@ -913,6 +913,16 @@ export interface ResumeState {
  * on record. The directory has to exist: it lived under the earlier run's --results-dir,
  * which is why the workspace moved there.
  */
+/** The file behind `--resume-from`, read so a missing or non-JSON path is one plain line rather than a stack. */
+export async function readResumeFile(path: string): Promise<unknown> {
+  try {
+    return await Bun.file(path).json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${path}: cannot read it as JSON (${message}); refusing a partial resume`);
+  }
+}
+
 export function readResumeState(raw: unknown, source = "--resume-from"): ResumeState {
   const fail = (why: string): never => {
     throw new Error(`${source}: ${why}; refusing a partial resume`);
@@ -933,7 +943,14 @@ export function readResumeState(raw: unknown, source = "--resume-from"): ResumeS
   const layoutPath = raw["best_layout_path"];
   if (typeof layoutPath !== "string" || layoutPath === "") return fail("has no best_layout_path");
   if (!existsSync(layoutPath)) return fail(`best_layout_path ${layoutPath} does not exist on disk (the earlier run needs a --results-dir for its layouts to survive)`);
-  const files = Array.isArray(raw["files"]) ? (raw["files"] as FileStat[]) : [];
+  // Carried into the report untouched, so a row missing a field crashes the report of a
+  // run that already spent its budget -- the one moment a refusal is cheapest is here.
+  const files = Array.isArray(raw["files"]) ? (raw["files"] as unknown[]) : [];
+  for (const [index, file] of files.entries()) {
+    if (!isRecord(file) || typeof file["path"] !== "string" || typeof file["loadMode"] !== "string" || typeof file["verdict"] !== "string") {
+      return fail(`files[${index}] is not a file record (path, loadMode and verdict are required)`);
+    }
+  }
   const groundTruth = isRecord(raw["ground_truth"]) ? (raw["ground_truth"] as unknown as GroundTruth) : NO_GROUND_TRUTH;
   const numberOr = (value: unknown, fallback: number): number => (typeof value === "number" ? value : fallback);
   const layout = (dir: string, record: IterationRecord, bodyTokens: number, fileTable: readonly FileStat[]): MeasuredLayout => ({
@@ -947,8 +964,9 @@ export function readResumeState(raw: unknown, source = "--resume-from"): ResumeS
     groundTruth,
   });
   const skillPath = typeof raw["skill_path"] === "string" ? raw["skill_path"] : layoutPath;
-  const baseline = layout(skillPath, first, numberOr(raw["baseline_body_tokens"], first.bodyTokens), accepted === first ? files : []);
-  const current = accepted === first ? baseline : layout(layoutPath, accepted, numberOr(raw["best_body_tokens"], accepted.bodyTokens), files);
+  const fileTable = files as FileStat[];
+  const baseline = layout(skillPath, first, numberOr(raw["baseline_body_tokens"], first.bodyTokens), accepted === first ? fileTable : []);
+  const current = accepted === first ? baseline : layout(layoutPath, accepted, numberOr(raw["best_body_tokens"], accepted.bodyTokens), fileTable);
   const perLayout = numberOr(raw["train_size"], 0) + numberOr(raw["holdout_size"], 0);
   return {
     iterations: records,
@@ -1713,7 +1731,7 @@ export const OPTIMIZE_FLAGS: Spec = {
   },
   "resume-from": {
     kind: "string",
-    help: "results.json from an earlier run: its scored layouts are carried, its candidates stay tried, and the loop continues at the next iteration. Needs that run's --results-dir, where its layouts live",
+    help: "results.json from an earlier run (<results-dir>/<timestamp>/results.json): its scored layouts are carried, its candidates stay tried, and the loop continues at the next iteration. That run's layouts must still be on disk (they live under its results directory)",
   },
   // Its own flag, and a small model by default, because the grader is the one call
   // here that needs no capability: single-turn, transcript already in the prompt,
@@ -1914,7 +1932,15 @@ async function main(): Promise<void> {
 
   // Resume seed, read before anything is spent so a malformed file fails fast.
   const resumePath = flagString(flags, "resume-from");
-  const resume = resumePath === undefined ? undefined : readResumeState(await Bun.file(resumePath).json(), resumePath);
+  let resume: ResumeState | undefined;
+  try {
+    resume = resumePath === undefined ? undefined : readResumeState(await readResumeFile(resumePath), resumePath);
+  } catch (error) {
+    // An operator's file, refused before anything is spent: one line, the same exit the
+    // removed-flag guard uses, rather than a stack trace for a path typo.
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(2);
+  }
   if (resume !== undefined) {
     console.error(
       `Resuming from ${resumePath}: ${resume.iterations.length} scored layout(s) will not be re-run; continuing at iteration ${resume.nextIteration}.`,
@@ -2062,10 +2088,9 @@ async function main(): Promise<void> {
     flagString(flags, "envelope") ??
     (resultsDir === undefined ? undefined : `${resultsDir}/${ENVELOPE_FILENAME}`);
   if (envelopePath !== undefined) {
-    // A run that did not pin `--model` was answered by whatever the operator had
-    // configured, and this script cannot find out what that was. Recording `null` and
-    // saying so is the only honest option; inventing a name would make two runs on
-    // different machines look comparable, which is what the run block exists to prevent.
+    // The envelope names the model every run of record uses; a tier study says so here
+    // instead, so two runs on different tiers never look comparable -- which is what the
+    // run block exists to prevent.
     const unpinned =
       tierStudy === undefined
         ? null

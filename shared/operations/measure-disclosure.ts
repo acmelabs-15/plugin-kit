@@ -288,8 +288,8 @@ export function applyScenarioOnly(params: {
   return { scenarios: rows, subset: stamp };
 }
 
-export { warnOnInstallConflict } from "../util/install-conflict.ts";
-import { warnOnInstallConflict } from "../util/install-conflict.ts";
+export { warnOnInstallConflict } from "../install-conflict.ts";
+import { warnOnInstallConflict } from "../install-conflict.ts";
 
 /**
  * Run every scenario against the skill as it stands, once per `runsPerScenario`.
