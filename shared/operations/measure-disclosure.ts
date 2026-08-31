@@ -288,40 +288,8 @@ export function applyScenarioOnly(params: {
   return { scenarios: rows, subset: stamp };
 }
 
-/**
- * Look for a copy of this skill installed on the machine, and say so when there is one.
- *
- * The sweep needs the skill NOT to be installed. Content served to the model through the
- * skill system never produces a `Read`, so a sweep that reached an installed copy instead of
- * the directory under test scores every bundled file at a pull rate of zero -- and the output
- * is a clean-looking table of `prune` verdicts that measures nothing. `optimize-disclosure.ts`
- * has said so since it gained an envelope. This entry point is the one the documentation
- * sends people to FIRST, as the cheaper half, and it said nothing at all.
- *
- * It PRINTS rather than handing a line back for the caller to print, so that the loudness has
- * one home and one test: `measureDisclosure` spends real API time and is unreachable from the
- * suite, and a warning nothing can prove fires is the defect this closes.
- */
-export async function warnOnInstallConflict(params: {
-  readonly skillPath: string;
-  readonly skillName: string;
-  /** Where to sweep. Defaults to the process's directory, as every other call site does. */
-  readonly projectDir?: string;
-}): Promise<{ readonly state: InstallState; readonly conflict: string | null }> {
-  const sighting = await detectInstallState({
-    artifact: "skill",
-    name: params.skillName,
-    sourcePath: params.skillPath,
-    projectDir: params.projectDir,
-  });
-  const conflict = installConflict({
-    operation: "measure-disclosure",
-    needs: "absent",
-    found: sighting.state,
-  });
-  if (conflict !== null) console.error(`\nWARNING: ${conflict}`);
-  return { state: sighting.state, conflict };
-}
+export { warnOnInstallConflict } from "../util/install-conflict.ts";
+import { warnOnInstallConflict } from "../util/install-conflict.ts";
 
 /**
  * Run every scenario against the skill as it stands, once per `runsPerScenario`.
