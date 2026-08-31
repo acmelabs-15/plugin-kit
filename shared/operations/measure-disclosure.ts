@@ -136,6 +136,8 @@ export interface MeasureDisclosureParams {
    * no field to put it in, which is the whole design.
    */
   readonly tierStudy?: string | undefined;
+  /** See `MeasureParams.fixtureDir` in disclosure-measure.ts. */
+  readonly fixtureDir?: string | undefined;
   /**
    * Which slice of the scenario set `scenarios` already is, when `--only` narrowed it.
    *
@@ -358,6 +360,7 @@ export async function measureDisclosure(
     permissionMode: MEASUREMENT_PERMISSION_MODE,
     grade: true,
     logDir: params.logDir,
+    fixtureDir: params.fixtureDir,
     onIsolation: params.onIsolation,
     onProgress: params.onProgress,
     onStarted: params.onStarted,
@@ -676,6 +679,11 @@ const USAGE =
 /** The flag spec, exported so the defaults are reachable from the suite. */
 export const MEASURE_FLAGS: Spec = {
   "skill-path": { kind: "string", help: "Path to the skill directory to measure" },
+  fixture: {
+    kind: "string",
+    help:
+      "A repository to copy into every throwaway root before its child starts (its .git included, node_modules skipped), for a skill whose scenarios work on a repo",
+  },
   scenarios: {
     kind: "string",
     help: "Path to scenarios JSON: evals.json, or an array of {id, prompt, expectations}",
@@ -945,6 +953,7 @@ async function main(): Promise<void> {
       timeoutSeconds: flagNumber(flags, "timeout"),
       inlineThreshold: flagNumber(flags, "inline-threshold"),
       tierStudy,
+      fixtureDir: flagString(flags, "fixture"),
       ...(subset === null ? {} : { subset }),
       graderModel: flagString(flags, "grader-model") ?? DEFAULT_GRADER_MODEL,
       logDir: resultsDir === undefined ? undefined : `${resultsDir}/logs`,

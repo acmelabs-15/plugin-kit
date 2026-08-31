@@ -337,6 +337,8 @@ export interface OptimizeParams {
   /** Grades the assertions. Deliberately not `model`; see `DEFAULT_GRADER_MODEL`. */
   readonly graderModel?: string | undefined;
   readonly permissionMode?: string | undefined;
+  /** See `MeasureParams.fixtureDir` in disclosure-measure.ts. */
+  readonly fixtureDir?: string | undefined;
   readonly workspaceDir: string;
   readonly verbose: boolean;
   readonly liveReportPath?: string | undefined;
@@ -559,6 +561,7 @@ export async function optimizeDisclosure(params: OptimizeParams): Promise<Optimi
         permissionMode: params.permissionMode,
         grade: true,
         logDir: params.logDir,
+        fixtureDir: params.fixtureDir,
         durationHints,
         onIsolation: params.onIsolation,
         onProgress: (settled) => {
@@ -1596,6 +1599,11 @@ const USAGE =
  */
 export const OPTIMIZE_FLAGS: Spec = {
   "skill-path": { kind: "string", help: "Path to the skill directory to optimize" },
+  fixture: {
+    kind: "string",
+    help:
+      "A repository to copy into every throwaway root before its child starts (its .git included, node_modules skipped), for a skill whose scenarios work on a repo",
+  },
   scenarios: {
     kind: "string",
     help: "Path to scenarios JSON: evals.json, or an array of {id, prompt, expectations}",
@@ -1833,6 +1841,7 @@ async function main(): Promise<void> {
     model: flagString(flags, "model"),
     graderModel,
     permissionMode: flagString(flags, "permission-mode"),
+    fixtureDir: flagString(flags, "fixture"),
     workspaceDir,
     verbose: flagBoolean(flags, "verbose"),
     liveReportPath,
